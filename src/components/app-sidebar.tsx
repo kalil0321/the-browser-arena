@@ -1,0 +1,81 @@
+"use client";
+
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarHeader,
+    SidebarTrigger,
+    useSidebar,
+} from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { IconFull, IconSmall } from "./logo";
+import { TeamSwitcher } from "./team-switcher";
+import { SessionsNav, type Session } from "./nav-sessions";
+import { ThemeSwitcher } from "./theme-switcher";
+import { HelpButton } from "./help-button";
+import { Separator } from "@/components/ui/separator";
+
+const teams = [
+    { id: "1", name: "Alpha Inc.", logo: IconSmall, plan: "Free" },
+    { id: "2", name: "Beta Corp.", logo: IconSmall, plan: "Free" },
+    { id: "3", name: "Gamma Tech", logo: IconSmall, plan: "Free" },
+];
+
+// Sample sessions - replace with actual data from your backend
+const sampleSessions: Session[] = [];
+
+export function DashboardSidebar() {
+    const { state } = useSidebar();
+    const isCollapsed = state === "collapsed";
+
+    return (
+        <Sidebar variant="inset" collapsible="offcanvas">
+            {/* Header - Logo */}
+            <SidebarHeader
+                className={cn(
+                    "flex md:pt-3.5",
+                    isCollapsed
+                        ? "flex-row items-center justify-between gap-y-4 md:flex-col md:items-start md:justify-start"
+                        : "flex-row items-center justify-between"
+                )}
+            >
+                <div className="flex items-center justify-between gap-2 w-full">
+                    <a href="/" className="flex items-center gap-2">
+                        <IconFull dark={true} width={80} height={60} />
+                    </a>
+                    <motion.div
+                        key={isCollapsed ? "header-collapsed" : "header-expanded"}
+                        className={cn(
+                            "flex items-center gap-2",
+                            isCollapsed ? "flex-row md:flex-col-reverse" : "flex-row"
+                        )}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.8 }}
+                    >
+                        <SidebarTrigger />
+                    </motion.div>
+                </div>
+            </SidebarHeader>
+
+
+
+            {/* Content - Sessions */}
+            <SidebarContent className="flex flex-col gap-4 px-0 flex-1 overflow-y-auto">
+                {!isCollapsed && (
+                    <SessionsNav sessions={sampleSessions} />
+                )}
+            </SidebarContent>
+
+            {/* Footer - Help & Theme Switcher */}
+            <SidebarFooter className="px-2 pb-2 gap-2">
+                <HelpButton />
+                <ThemeSwitcher />
+                <Separator className="mx-2" />
+                <TeamSwitcher teams={teams} />
+            </SidebarFooter>
+        </Sidebar>
+    );
+}
