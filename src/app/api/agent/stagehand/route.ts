@@ -1,9 +1,14 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { Stagehand } from "@browserbasehq/stagehand";
 import AnchorBrowser from "anchorbrowser";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../../../convex/_generated/api";
+import { getToken } from "@/lib/auth/server";
 
 // Initialize the client
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 // For explicit headfull session configuration (optional, default to false)
 const config = {
@@ -34,12 +39,22 @@ const determineKey = (model: string | undefined) => {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model } = await request.json();
+        const { instruction, model, sessionId: existingSessionId } = await request.json();
 
-        const session = await browser.sessions.create(config);
-        const liveViewUrl = session.data?.live_view_url ?? "";
-        const sessionId = session.data?.id ?? "";
-        const cdpUrl = session.data?.cdp_url ?? "";
+        // Get user token for auth (works with anonymous auth)
+        const token = await getToken();
+        console.log("Auth token:", token ? "Present" : "Missing");
+
+        if (!token) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        convex.setAuth(token);
+
+        // Create browser session first (external API call)
+        const browserSession = await browser.sessions.create(config);
+        const liveViewUrl = browserSession.data?.live_view_url ?? "";
+        const browserSessionId = browserSession.data?.id ?? "";
+        const cdpUrl = browserSession.data?.cdp_url ?? "";
 
         if (!liveViewUrl) {
             console.error("❌ Failed to create session - no live_view_url");
@@ -51,46 +66,120 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Failed to create session - missing cdp_url" }, { status: 500 });
         }
 
-        const stagehand = new Stagehand({
-            env: "LOCAL",
-            modelName: model ?? "google/gemini-2.5-flash",
-            modelClientOptions: {
-                apiKey: determineKey(model),
-            },
-            localBrowserLaunchOptions: {
-                cdpUrl: cdpUrl,
-            },
-        });
+        let dbSessionId: string;
+        let agentId: any; // Use any to avoid type conflicts with Convex ID types
+
+        // If sessionId is provided, add agent to existing session
+        // Otherwise, create a new session
+        if (existingSessionId) {
+            agentId = await convex.mutation(api.mutations.createAgent, {
+                sessionId: existingSessionId,
+                name: "stagehand",
+                model: model ?? "google/gemini-2.5-flash",
+                browser: {
+                    sessionId: browserSessionId,
+                    url: liveViewUrl,
+                },
+            });
+            dbSessionId = existingSessionId;
+        } else {
+            // Create both session and agent in the database at the same time
+            const result = await convex.mutation(api.mutations.createSession, {
+                instruction,
+                browserData: {
+                    sessionId: browserSessionId,
+                    url: liveViewUrl,
+                },
+                agentName: "stagehand",
+                model: model ?? "google/gemini-2.5-flash",
+            });
+            dbSessionId = result.sessionId;
+            agentId = result.agentId!;
+        }
+
+        if (!agentId) {
+            return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
+        }
 
         after(async () => {
+            const startTime = Date.now();
             try {
+                const stagehand = new Stagehand({
+                    env: "LOCAL",
+                    modelName: model ?? "google/gemini-2.5-flash",
+                    modelClientOptions: {
+                        apiKey: determineKey(model),
+                    },
+                    localBrowserLaunchOptions: {
+                        cdpUrl: cdpUrl,
+                    },
+                });
+
                 await stagehand.init();
                 const agent = await stagehand.agent();
 
-                const { message, actions, usage } = await agent.execute({
+                const { message, actions, usage, success, completed, metadata } = await agent.execute({
                     highlightCursor: true,
                     instruction,
                 });
 
                 await stagehand.close();
+                const endTime = Date.now();
+                const duration = (endTime - startTime) / 1000; // Convert to seconds
 
-                await browser.sessions.delete(sessionId);
-                const {
-                    duration
-                } = await browser.sessions.retrieve(sessionId)
+                // Get recording before deleting
+                let recordingUrl = "";
+                try {
+                    const recording = await browser.sessions.recordings.primary.get(browserSessionId);
+                    const arrayBuffer = await recording.arrayBuffer();
+                    const base64 = Buffer.from(arrayBuffer).toString('base64');
+                    recordingUrl = `data:video/mp4;base64,${base64}`;
+                    console.log("Recording captured, length:", recordingUrl.length);
+                } catch (recordingError) {
+                    console.error("Failed to get recording:", recordingError);
+                }
+
+                // Delete browser session
+                await browser.sessions.delete(browserSessionId);
 
                 const payload = {
-                    usage,
+                    usage: usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 },
                     duration,
                     message,
-                    actions
+                    actions,
+                    success,
+                    agent: "stagehand",
+                    completed,
+                    metadata,
+                }
+
+                // Save result to Convex database
+                // Note: token is already set from initial request
+                await convex.mutation(api.mutations.updateAgentResult, {
+                    agentId,
+                    result: payload,
+                });
+
+                // Save recording URL if available
+                if (recordingUrl) {
+                    await convex.mutation(api.mutations.updateAgentRecordingUrl, {
+                        agentId,
+                        recordingUrl,
+                    });
                 }
 
                 console.log(JSON.stringify(payload, null, 2));
             } catch (error) {
                 console.error("❌ Error in background execution:", error);
                 try {
-                    await browser.sessions.delete(sessionId);
+                    // Update agent status to failed
+                    // Note: token is already set from initial request
+                    await convex.mutation(api.mutations.updateAgentStatus, {
+                        agentId,
+                        status: "failed",
+                    });
+
+                    await browser.sessions.delete(browserSessionId);
                 } catch (cleanupError) {
                     console.error("❌ Error cleaning up session:", cleanupError);
                 }
@@ -100,10 +189,9 @@ export async function POST(request: NextRequest) {
         // return session object and live view url
         return NextResponse.json({
             session: {
-                id: sessionId,
-                liveViewUrl: liveViewUrl,
-                cdpUrl: cdpUrl ? `${cdpUrl.substring(0, 50)}...` : "missing"
+                id: dbSessionId,
             },
+            agentId,
             liveViewUrl: liveViewUrl,
         });
     } catch (error) {

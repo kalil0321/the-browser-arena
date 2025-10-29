@@ -11,11 +11,13 @@ import {
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { IconFull, IconSmall } from "./logo";
-import { TeamSwitcher } from "./team-switcher";
+import { UserInfo } from "./user-info";
 import { SessionsNav, type Session } from "./nav-sessions";
 import { ThemeSwitcher } from "./theme-switcher";
 import { HelpButton } from "./help-button";
 import { Separator } from "@/components/ui/separator";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 const teams = [
     { id: "1", name: "Alpha Inc.", logo: IconSmall, plan: "Free" },
@@ -23,12 +25,10 @@ const teams = [
     { id: "3", name: "Gamma Tech", logo: IconSmall, plan: "Free" },
 ];
 
-// Sample sessions - replace with actual data from your backend
-const sampleSessions: Session[] = [];
-
 export function DashboardSidebar() {
     const { state } = useSidebar();
     const isCollapsed = state === "collapsed";
+    const sessions = useQuery(api.queries.getUserSessions);
 
     return (
         <Sidebar variant="inset" collapsible="offcanvas">
@@ -65,7 +65,7 @@ export function DashboardSidebar() {
             {/* Content - Sessions */}
             <SidebarContent className="flex flex-col gap-4 px-0 flex-1 overflow-y-auto">
                 {!isCollapsed && (
-                    <SessionsNav sessions={sampleSessions} />
+                    <SessionsNav sessions={sessions} />
                 )}
             </SidebarContent>
 
@@ -74,7 +74,7 @@ export function DashboardSidebar() {
                 <HelpButton />
                 <ThemeSwitcher />
                 <Separator className="mx-2" />
-                <TeamSwitcher teams={teams} />
+                <UserInfo />
             </SidebarFooter>
         </Sidebar>
     );

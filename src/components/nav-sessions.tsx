@@ -7,19 +7,40 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Plus } from "lucide-react";
+import { MessageSquare, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React from "react";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 
 export type Session = {
-  id: string;
-  title: string;
-  date: string;
+  _id: Id<"sessions">;
+  _creationTime: number;
+  userId: string;
+  instruction: string;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export function SessionsNav({ sessions }: { sessions?: Session[] }) {
   const { isMobile } = useSidebar();
+  const router = useRouter();
   const isEmpty = !sessions || sessions.length === 0;
+  const deleteSession = useMutation(api.mutations.deleteSession);
+
+  const handleDelete = async (e: React.MouseEvent, sessionId: Id<"sessions">) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirm("Are you sure you want to delete this session?")) {
+      await deleteSession({ sessionId });
+    }
+  };
+
+  const handleNewSession = () => {
+    router.push("/");
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -31,6 +52,7 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
           <button
             className="inline-flex items-center justify-center rounded-md p-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
             title="New session"
+            onClick={handleNewSession}
           >
             <Plus className="size-4" />
           </button>
@@ -48,7 +70,10 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
               Start a new conversation to get going
             </p>
           </div>
-          <button className="mt-2 inline-flex items-center justify-center rounded-md bg-sidebar-accent px-3 py-1.5 text-xs font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent/90 transition-colors">
+          <button
+            className="mt-2 inline-flex items-center justify-center rounded-md bg-sidebar-accent px-3 py-1.5 text-xs font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent/90 transition-colors"
+            onClick={handleNewSession}
+          >
             <Plus className="size-3 mr-1" />
             New Session
           </button>
@@ -56,17 +81,26 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
       ) : (
         <SidebarMenu className="px-2">
           {sessions.map((session) => (
-            <SidebarMenuItem key={session.id}>
-              <SidebarMenuButton tooltip={session.title} asChild>
-                <Link
-                  href={`/chat/${session.id}`}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors truncate"
-                  )}
-                >
-                  <MessageSquare className="size-4 shrink-0" />
-                  <span className="truncate">{session.title}</span>
-                </Link>
+            <SidebarMenuItem key={session._id}>
+              <SidebarMenuButton tooltip={session.instruction} asChild>
+                <div className="flex items-center gap-1 group">
+                  <Link
+                    href={`/session/${session._id}`}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors truncate flex-1"
+                    )}
+                  >
+                    <MessageSquare className="size-4 shrink-0" />
+                    <span className="truncate">{session.instruction}</span>
+                  </Link>
+                  <button
+                    onClick={(e) => handleDelete(e, session._id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    title="Delete session"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
