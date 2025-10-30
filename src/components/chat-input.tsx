@@ -394,13 +394,13 @@ export function ChatInput() {
                                                                     {AGENT_LABELS[agentType]}
                                                                 </Label>
                                                                 {selected && (
-                                                                    <Badge variant="success" size="sm" className="ml-1">
+                                                                    <Badge variant="default" className="ml-1">
                                                                         <CheckCircle2 className="h-3 w-3" />
                                                                         <span>Active</span>
                                                                     </Badge>
                                                                 )}
                                                                 {isDisabled && (
-                                                                    <Badge variant="outline" size="sm" className="ml-1">
+                                                                    <Badge variant="outline" className="ml-1">
                                                                         <XCircle className="h-3 w-3" />
                                                                         <span>Unavailable</span>
                                                                     </Badge>
