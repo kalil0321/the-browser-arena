@@ -9,6 +9,8 @@ import { getToken } from "@/lib/auth/server";
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+// Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
+const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 // For explicit headfull session configuration (optional, default to false)
 const config = {
@@ -202,16 +204,16 @@ export async function POST(request: NextRequest) {
                     metadata,
                 }
 
-                // Save result to Convex database
-                // Note: token is already set from initial request
-                await convex.mutation(api.mutations.updateAgentResult, {
+                // Save result to Convex database using backend mutation (no auth required)
+                await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
                     agentId,
                     result: payload,
+                    status: success ? "completed" as const : "failed" as const,
                 });
 
                 // Save recording URL if available
                 if (recordingUrl) {
-                    await convex.mutation(api.mutations.updateAgentRecordingUrl, {
+                    await convexBackend.mutation(api.mutations.updateAgentRecordingUrlFromBackend, {
                         agentId,
                         recordingUrl,
                     });
@@ -221,9 +223,8 @@ export async function POST(request: NextRequest) {
             } catch (error) {
                 console.error("❌ Error in background execution:", error);
                 try {
-                    // Update agent status to failed
-                    // Note: token is already set from initial request
-                    await convex.mutation(api.mutations.updateAgentStatus, {
+                    // Update agent status to failed using backend mutation
+                    await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
                         agentId,
                         status: "failed",
                     });

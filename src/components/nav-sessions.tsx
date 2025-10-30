@@ -86,6 +86,7 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
                 <div className="flex items-center gap-1 group">
                   <Link
                     href={`/session/${session._id}`}
+                    prefetch={true}
                     className={cn(
                       "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors truncate flex-1"
                     )}

@@ -18,9 +18,7 @@ interface Cloud {
 export function LoadingDino() {
     const [isJumping, setIsJumping] = useState(false);
     const [isDucking, setIsDucking] = useState(false);
-    const [obstacles, setObstacles] = useState<Obstacle[]>([
-        { position: 110, height: 12, type: 'cactus', scored: false }
-    ]);
+    const [obstacles, setObstacles] = useState<Obstacle[]>([]);
     const [clouds, setClouds] = useState<Cloud[]>([
         { position: 20, yPosition: 20, speed: 0.3 },
         { position: 60, yPosition: 35, speed: 0.2 },
@@ -33,6 +31,7 @@ export function LoadingDino() {
     const [obstacleSpeed, setObstacleSpeed] = useState(1.5);
     const gameContainerRef = useRef<HTMLDivElement>(null);
     const scoreRef = useRef(0);
+    const obstacleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Collision detection function
     const checkCollision = useCallback(() => {
@@ -53,12 +52,12 @@ export function LoadingDino() {
         const dinoBottomPx = containerHeight - dinoBottomFromBottom;
 
         for (const obstacle of obstacles) {
-            // Obstacle uses right percentage (right: X%), so convert to left edge position
-            // When right: 10%, the right edge is at containerWidth - (10% * containerWidth)
-            const obstacleRightPercent = obstacle.position;
+            // Obstacle uses left percentage (left: X%)
+            // position: 100 means at right edge, position: 0 means at left edge
+            const obstacleLeftPercent = obstacle.position;
             const obstacleWidth = obstacle.type === 'cactus' ? 30 : 40;
-            const obstacleRightPx = containerWidth - (obstacleRightPercent / 100) * containerWidth;
-            const obstacleLeftPx = obstacleRightPx - obstacleWidth;
+            const obstacleLeftPx = (obstacleLeftPercent / 100) * containerWidth;
+            const obstacleRightPx = obstacleLeftPx + obstacleWidth;
 
             // Obstacle vertical position
             // Cactus: bottom: 64px, Bird: bottom: 100px
@@ -95,12 +94,13 @@ export function LoadingDino() {
         setGameOver(false);
         setScore(0);
         scoreRef.current = 0;
-        setObstacles([{ position: 110, height: 12, type: 'cactus', scored: false }]);
+        setObstacles([]);
         setObstacleSpeed(1.5);
         setIsJumping(false);
         setIsDucking(false);
     }, []);
 
+    // Handle animation loop
     useEffect(() => {
         if (gameOver) return;
 
@@ -153,38 +153,6 @@ export function LoadingDino() {
             }
         }, 50);
 
-        // Add new obstacles more frequently (reduced from 2000ms to 1200ms)
-        // And adjust frequency based on score to make it progressively harder
-        const getObstacleInterval = () => {
-            const baseInterval = 1200;
-            const scoreMultiplier = Math.max(0.7, 1 - (scoreRef.current / 100) * 0.3); // Gets faster as score increases
-            return baseInterval * scoreMultiplier;
-        };
-
-        const addObstacle = () => {
-            const random = Math.random();
-            const obstacleType: 'cactus' | 'bird' = random > 0.7 ? 'bird' : 'cactus';
-            const height = obstacleType === 'bird' ? (random > 0.8 ? 20 : 14) : 12;
-
-            setObstacles((prev) => [
-                ...prev,
-                { position: 110, height, type: obstacleType, scored: false }
-            ]);
-        };
-
-        // Start the obstacle generation chain
-        let obstacleTimeoutId: NodeJS.Timeout;
-        const startObstacleChain = () => {
-            const nextInterval = getObstacleInterval();
-            obstacleTimeoutId = setTimeout(() => {
-                if (!gameOver) {
-                    addObstacle();
-                    startObstacleChain();
-                }
-            }, nextInterval);
-        };
-        startObstacleChain();
-
         // Handle keyboard
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.code === "Space" || e.code === "ArrowUp") {
@@ -212,13 +180,48 @@ export function LoadingDino() {
 
         return () => {
             clearInterval(interval);
-            if (obstacleTimeoutId) {
-                clearTimeout(obstacleTimeoutId);
-            }
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
         };
     }, [handleJump, handleDuck, checkCollision, obstacleSpeed, gameOver, resetGame]);
+
+    // Handle obstacle spawning separately
+    useEffect(() => {
+        if (gameOver) return;
+
+        const getObstacleInterval = () => {
+            const baseInterval = 1200;
+            const scoreMultiplier = Math.max(0.7, 1 - (scoreRef.current / 100) * 0.3);
+            return baseInterval * scoreMultiplier;
+        };
+
+        const addObstacle = () => {
+            const random = Math.random();
+            const obstacleType: 'cactus' | 'bird' = random > 0.7 ? 'bird' : 'cactus';
+            const height = obstacleType === 'bird' ? (random > 0.8 ? 20 : 14) : 12;
+
+            setObstacles((prev) => [
+                ...prev,
+                { position: 100, height, type: obstacleType, scored: false }
+            ]);
+        };
+
+        const scheduleNextObstacle = () => {
+            const nextInterval = getObstacleInterval();
+            obstacleTimeoutRef.current = setTimeout(() => {
+                addObstacle();
+                scheduleNextObstacle();
+            }, nextInterval);
+        };
+
+        scheduleNextObstacle();
+
+        return () => {
+            if (obstacleTimeoutRef.current) {
+                clearTimeout(obstacleTimeoutRef.current);
+            }
+        };
+    }, [gameOver]);
 
     return (
         <div
@@ -356,7 +359,7 @@ export function LoadingDino() {
                                 key={index}
                                 className="absolute transition-all duration-50"
                                 style={{
-                                    right: `${obstacle.position}%`,
+                                    left: `${obstacle.position}%`,
                                     bottom: obstacle.type === 'bird' ? '100px' : '64px',
                                 }}
                             >

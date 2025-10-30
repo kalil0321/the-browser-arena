@@ -100,33 +100,55 @@ export async function POST(request: NextRequest) {
                     ? `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${endpoint}`
                     : endpoint;
 
-                const response = await fetch(fetchUrl, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        // Forward the authorization cookie for local endpoints
-                        ...(isLocalEndpoint && request.headers.get('cookie')
-                            ? { 'cookie': request.headers.get('cookie')! }
-                            : {}
-                        ),
-                    },
-                    body: JSON.stringify(payload),
-                });
+                // Create an AbortController for timeout handling
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`❌ Error launching ${agentConfig.agent}:`, errorText);
-                    throw new Error(`Failed to launch ${agentConfig.agent}: ${errorText}`);
+                try {
+                    const response = await fetch(fetchUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            // Forward the authorization cookie for local endpoints
+                            ...(isLocalEndpoint && request.headers.get('cookie')
+                                ? { 'cookie': request.headers.get('cookie')! }
+                                : {}
+                            ),
+                        },
+                        body: JSON.stringify(payload),
+                        signal: controller.signal,
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(`❌ Error launching ${agentConfig.agent}:`, errorText);
+                        throw new Error(`Failed to launch ${agentConfig.agent}: ${errorText}`);
+                    }
+
+                    const agentData = await response.json();
+                    console.log(`✅ ${agentConfig.agent} agent started:`, agentData);
+
+                    return {
+                        agent: agentConfig.agent,
+                        agentId: agentData.agentId,
+                        success: true
+                    };
+                } catch (fetchError: any) {
+                    clearTimeout(timeoutId);
+
+                    // Handle timeout errors specifically
+                    if (fetchError.name === 'AbortError' || fetchError.code === 'UND_ERR_HEADERS_TIMEOUT') {
+                        const errorMsg = `Timeout while connecting to ${agentConfig.agent} agent server. ` +
+                            `Make sure the Python agent server is running at ${AGENT_SERVER_URL}`;
+                        console.error(`❌ ${errorMsg}`);
+                        throw new Error(errorMsg);
+                    }
+
+                    // Re-throw other errors
+                    throw fetchError;
                 }
-
-                const agentData = await response.json();
-                console.log(`✅ ${agentConfig.agent} agent started:`, agentData);
-
-                return {
-                    agent: agentConfig.agent,
-                    agentId: agentData.agentId,
-                    success: true
-                };
             } catch (error) {
                 console.error(`❌ Error launching ${agentConfig.agent}:`, error);
                 return {

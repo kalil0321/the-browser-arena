@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useConvexAuth } from "convex/react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -65,7 +65,7 @@ const getProviderName = (provider: string) => {
 
 export function ChatInput() {
     // Use this as default input
-    const [input, setInput] = useState("Find which companies raised more than $10M in the US this month");
+    const [input, setInput] = useState("Find top hacker news post");
     const [isLoading, setIsLoading] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
@@ -158,16 +158,32 @@ export function ChatInput() {
                 }
 
                 const data = await response.json();
+                console.log("Session created, response data:", data);
 
                 // Redirect to the session page
-                if (data.session?.id) {
-                    router.push(`/session/${data.session.id}`);
+                const sessionId = data.session?.id;
+                if (!sessionId) {
+                    console.error("No session ID in response:", data);
+                    throw new Error("Session created but no ID returned");
                 }
+
+                // Ensure sessionId is a string
+                const sessionIdString = String(sessionId);
+                console.log("Redirecting to session:", sessionIdString);
+
+                // Clear loading state before redirect
+                setIsLoading(false);
+
+                // Use startTransition for better React 18 concurrent rendering
+                // and ensure navigation happens properly
+                startTransition(() => {
+                    router.push(`/session/${sessionIdString}`);
+                });
             } catch (error) {
                 console.error("Error submitting:", error);
                 alert(`Failed to create session: ${error instanceof Error ? error.message : "Unknown error"}`);
-            } finally {
                 setIsLoading(false);
+            } finally {
                 setInput("");
             }
         }

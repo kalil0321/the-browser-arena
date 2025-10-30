@@ -73,9 +73,20 @@ export default function SessionPage() {
             {/* Header */}
             <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-4 shrink-0">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100">
-                        {session.instruction}
-                    </h1>
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100">
+                            {session.instruction}
+                        </h1>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Created {new Date(session.createdAt).toLocaleDateString(undefined, {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            })}
+                        </p>
+                    </div>
                     <div className="flex items-center gap-4">
                         {agents && agents.length > 0 && (
                             <div className="text-xs text-gray-500 dark:text-gray-400">

@@ -109,7 +109,7 @@ export default function ArenaPage() {
                     </p>
                 </div>
                 <Button asChild>
-                    <Link href="/">New Session</Link>
+                    <Link href="/" prefetch={true}>New Session</Link>
                 </Button>
             </header>
 
@@ -314,7 +314,7 @@ export default function ArenaPage() {
                                                         Start a new session to see it listed here once agents finish running.
                                                     </p>
                                                     <Button asChild size="sm">
-                                                        <Link href="/">Create session</Link>
+                                                        <Link href="/" prefetch={true}>Create session</Link>
                                                     </Button>
                                                 </>
                                             )}
@@ -335,6 +335,7 @@ export default function ArenaPage() {
                                             <TableCell className="font-mono text-xs">
                                                 <Link
                                                     href={`/session/${session._id}`}
+                                                    prefetch={true}
                                                     className="text-primary underline-offset-2 hover:underline"
                                                 >
                                                     {session._id.slice(-8)}
@@ -343,6 +344,7 @@ export default function ArenaPage() {
                                             <TableCell className="max-w-xl">
                                                 <Link
                                                     href={`/session/${session._id}`}
+                                                    prefetch={true}
                                                     className="text-foreground hover:text-primary transition-colors"
                                                 >
                                                     <div className="truncate font-default">{session.instruction}</div>

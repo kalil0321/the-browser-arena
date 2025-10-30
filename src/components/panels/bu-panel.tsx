@@ -28,7 +28,10 @@ interface Action {
     url?: string;
     action?: string;
     reasoning?: string;
-    result?: any;
+    result?: {
+        extractedContent?: string;
+        [key: string]: any;
+    };
 }
 
 export function BUPanel({ agent }: BUPanelProps) {
@@ -66,6 +69,84 @@ export function BUPanel({ agent }: BUPanelProps) {
         }
     };
 
+    const parseExtractedContent = (content: string) => {
+        // Check if content contains XML-like tags
+        // Using a regex that works with older ES targets
+        const xmlTagRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+        const matches: RegExpMatchArray[] = [];
+        let match;
+
+        // Collect all matches (re-using regex with while loop for compatibility)
+        const regex = new RegExp(xmlTagRegex.source, xmlTagRegex.flags);
+        regex.lastIndex = 0; // Reset to start from beginning
+        while ((match = regex.exec(content)) !== null) {
+            matches.push(match);
+            // Prevent infinite loop if regex doesn't advance
+            if (match.index === regex.lastIndex) {
+                regex.lastIndex++;
+            }
+        }
+
+        if (matches.length > 0) {
+            const parsed: Record<string, string> = {};
+            const ignoredTags = new Set(['content']); // Tags to ignore (wrapper tags)
+
+            // First pass: Extract all XML-like tags, filtering out wrapper tags
+            matches.forEach((match) => {
+                const [, tag, value] = match;
+                // Skip wrapper/container tags like <content>
+                if (ignoredTags.has(tag.toLowerCase())) {
+                    return;
+                }
+
+                const trimmedValue = value.trim();
+                // Only add if not empty and accumulate if tag appears multiple times
+                if (trimmedValue) {
+                    parsed[tag] = parsed[tag]
+                        ? parsed[tag] + '\n' + trimmedValue
+                        : trimmedValue;
+                }
+            });
+
+            // Extract markdown content from result tag
+            let markdownContent = parsed.result || '';
+
+            // If no result tag, try to extract from remaining content after removing all tags
+            if (!parsed.result || parsed.result.trim() === '') {
+                // Remove all matched tags and get what's left
+                let remaining = content;
+                // Remove tags in reverse order to avoid index issues
+                const sortedMatches = [...matches].sort((a, b) => (b.index || 0) - (a.index || 0));
+                sortedMatches.forEach((match) => {
+                    // Use replace with exact match to avoid regex issues
+                    remaining = remaining.replace(match[0], '');
+                });
+                const trimmedRemaining = remaining.trim();
+                // Only use remaining if it's not just the leading description
+                if (trimmedRemaining && !trimmedRemaining.startsWith('Read from file')) {
+                    markdownContent = trimmedRemaining;
+                }
+            }
+
+            // Ensure we have some content to display
+            if (!markdownContent || markdownContent.trim() === '') {
+                markdownContent = content; // Fallback to full content
+            }
+
+            return {
+                hasStructuredData: true,
+                metadata: parsed,
+                markdownContent,
+            };
+        }
+
+        return {
+            hasStructuredData: false,
+            metadata: undefined,
+            markdownContent: content,
+        };
+    };
+
     return (
         <div className="space-y-4">
             {/* Status Badge */}
@@ -99,7 +180,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                         <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide">Result</h4>
                         <div className="font-default prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0">
                             <ReactMarkdown
-                                
+
                                 remarkPlugins={[remarkGfm]}
                                 components={{
                                     table: ({ children }) => (
@@ -269,26 +350,167 @@ export function BUPanel({ agent }: BUPanelProps) {
                                     </svg>
                                 </button>
 
-                                {expandedActions.has(index) && (
-                                    <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-3">
-                                        {action.reasoning && (
-                                            <div>
-                                                <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 uppercase tracking-wide">Reasoning</h5>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                                                    {action.reasoning}
-                                                </p>
+                                {expandedActions.has(index) && (() => {
+                                    // Normalize action name - handle camelCase, kebab-case, snake_case, etc.
+                                    const rawActionName = (action.name || action.type || "");
+                                    const normalizedActionName = rawActionName
+                                        .replace(/([a-z\d])([A-Z])/g, '$1_$2') // Handle camelCase: insert underscore before uppercase letters
+                                        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2') // Handle consecutive capitals: ABCDef -> ABC_Def
+                                        .replace(/[_-]/g, '_') // Normalize separators (kebab-case, snake_case) to underscore
+                                        .toLowerCase()
+                                        .trim();
+                                    const isSpecialAction = ["navigate", "extract", "evaluate", "read_file", "readfile"].includes(normalizedActionName);
+                                    const extractedContent = action.result?.extractedContent;
+
+                                    // For navigate, extract, evaluate, read_file - only show extractedContent
+                                    if (isSpecialAction) {
+                                        return (
+                                            <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                                                {extractedContent ? (() => {
+                                                    const contentStr = typeof extractedContent === 'string' ? extractedContent : JSON.stringify(extractedContent, null, 2);
+                                                    const parsed = parseExtractedContent(contentStr);
+
+                                                    return (
+                                                        <div className="space-y-3">
+                                                            {/* Show metadata (url, query, etc.) if present */}
+                                                            {parsed.hasStructuredData && parsed.metadata && Object.keys(parsed.metadata).filter(k => k !== 'result').length > 0 && (
+                                                                <div className="space-y-2 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                                                    {parsed.metadata.url && (
+                                                                        <div>
+                                                                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">URL:</span>
+                                                                            <p className="text-sm text-gray-900 dark:text-gray-100 mt-1 break-all">
+                                                                                {parsed.metadata.url}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                    {parsed.metadata.query && (
+                                                                        <div>
+                                                                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Query:</span>
+                                                                            <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
+                                                                                {parsed.metadata.query}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                    {/* Show other metadata fields */}
+                                                                    {parsed.metadata && Object.entries(parsed.metadata).map(([key, value]) => {
+                                                                        if (key === 'result' || key === 'url' || key === 'query') return null;
+                                                                        return (
+                                                                            <div key={key}>
+                                                                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">{key}:</span>
+                                                                                <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
+                                                                                    {value}
+                                                                                </p>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Show markdown content - always show if we have any content */}
+                                                            {(() => {
+                                                                const contentToRender = parsed.markdownContent || (!parsed.hasStructuredData ? contentStr : '');
+                                                                return contentToRender ? (
+                                                                    <div>
+                                                                        <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
+                                                                            {parsed.hasStructuredData ? 'Result' : 'Content'}
+                                                                        </h5>
+                                                                        <div className="font-default prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0">
+                                                                            <ReactMarkdown
+                                                                                remarkPlugins={[remarkGfm]}
+                                                                                components={{
+                                                                                    p: ({ children }) => (
+                                                                                        <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                                                                            {children}
+                                                                                        </p>
+                                                                                    ),
+                                                                                    pre: ({ children }) => (
+                                                                                        <pre className="font-mono text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded overflow-auto">
+                                                                                            {children}
+                                                                                        </pre>
+                                                                                    ),
+                                                                                    code: ({ children, className }) => {
+                                                                                        const isInline = !className;
+                                                                                        return isInline ? (
+                                                                                            <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-800 dark:text-gray-200">
+                                                                                                {children}
+                                                                                            </code>
+                                                                                        ) : (
+                                                                                            <code>{children}</code>
+                                                                                        );
+                                                                                    },
+                                                                                    table: ({ children }) => (
+                                                                                        <div className="overflow-x-auto -mx-2 my-4">
+                                                                                            <div className="inline-block min-w-full align-middle px-2">
+                                                                                                <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                                                                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                                                                                                        {children}
+                                                                                                    </table>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ),
+                                                                                    thead: ({ children }) => (
+                                                                                        <thead className="bg-gray-50 dark:bg-gray-800">{children}</thead>
+                                                                                    ),
+                                                                                    th: ({ children }) => (
+                                                                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                                                                                            {children}
+                                                                                        </th>
+                                                                                    ),
+                                                                                    td: ({ children }) => (
+                                                                                        <td className="px-4 py-3 text-sm text-gray-800 dark:text-gray-200 whitespace-normal border-b border-gray-100 dark:border-gray-800">
+                                                                                            {children}
+                                                                                        </td>
+                                                                                    ),
+                                                                                    tbody: ({ children }) => (
+                                                                                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                                                                            {children}
+                                                                                        </tbody>
+                                                                                    ),
+                                                                                    tr: ({ children }) => (
+                                                                                        <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                                                            {children}
+                                                                                        </tr>
+                                                                                    ),
+                                                                                }}
+                                                                            >
+                                                                                {contentToRender}
+                                                                            </ReactMarkdown>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : null;
+                                                            })()}
+                                                        </div>
+                                                    );
+                                                })() : (
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400 italic">No content extracted</p>
+                                                )}
                                             </div>
-                                        )}
-                                        {action.result && typeof action.result === 'object' && (
-                                            <div>
-                                                <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Result</h5>
-                                                <pre className="font-mono text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded overflow-auto">
-                                                    {JSON.stringify(action.result, null, 2)}
-                                                </pre>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                        );
+                                    }
+
+                                    // For other actions, show reasoning and result as before
+                                    return (
+                                        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-3">
+                                            {action.reasoning && (
+                                                <div>
+                                                    <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 uppercase tracking-wide">Reasoning</h5>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                                        {action.reasoning}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {action.result && typeof action.result === 'object' && (
+                                                <div>
+                                                    <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Result</h5>
+                                                    <pre className="font-mono text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded overflow-auto">
+                                                        {JSON.stringify(action.result, null, 2)}
+                                                    </pre>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         ))}
                     </div>

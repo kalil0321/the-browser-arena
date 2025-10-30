@@ -5,6 +5,8 @@ import { getToken } from "@/lib/auth/server";
 
 const smoothUrl = 'https://api.smooth.sh/api/v1/task';
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+// Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
+const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 /**
  * Get the API key to use - prioritize user key, fallback to server key
@@ -195,7 +197,8 @@ export async function POST(request: NextRequest) {
                         if (!liveUrlUpdated && status.live_url) {
                             console.log("Smooth: Updating agent live URL:", status.live_url);
                             try {
-                                await convex.mutation(api.mutations.updateAgentBrowserUrl, {
+                                // Use backend mutation (no auth required) - safe because we're updating our own agent
+                                await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
                                     agentId,
                                     url: status.live_url,
                                 });
@@ -231,18 +234,24 @@ export async function POST(request: NextRequest) {
                             : taskResult.status === 'cancelled'
                                 ? "Task was cancelled"
                                 : "Task completed",
+                    // Include live_url in the result payload
+                    live_url: taskResult.live_url || liveViewUrl,
                 };
 
-                // Save result to Convex database
-                // Note: token is already set from initial request
-                await convex.mutation(api.mutations.updateAgentResult, {
+                // Save result to Convex database using backend mutation (no auth required)
+                const finalStatus = taskResult.status === 'done' ? 'completed' as const :
+                    taskResult.status === 'failed' ? 'failed' as const :
+                        'completed' as const;
+
+                await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
                     agentId,
                     result: payload,
+                    status: finalStatus,
                 });
 
                 // Save recording URL if available
                 if (taskResult.recording_url) {
-                    await convex.mutation(api.mutations.updateAgentRecordingUrl, {
+                    await convexBackend.mutation(api.mutations.updateAgentRecordingUrlFromBackend, {
                         agentId,
                         recordingUrl: taskResult.recording_url,
                     });
@@ -252,9 +261,8 @@ export async function POST(request: NextRequest) {
             } catch (error) {
                 console.error("❌ Error in background execution:", error);
                 try {
-                    // Update agent status to failed
-                    // Note: token is already set from initial request
-                    await convex.mutation(api.mutations.updateAgentStatus, {
+                    // Update agent status to failed using backend mutation
+                    await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
                         agentId,
                         status: "failed",
                     });

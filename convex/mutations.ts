@@ -421,3 +421,26 @@ export const updateAgentRecordingUrlFromBackend = mutation({
         });
     },
 });
+
+/**
+ * Update agent browser URL from backend - no auth required
+ */
+export const updateAgentBrowserUrlFromBackend = mutation({
+    args: {
+        agentId: v.id("agents"),
+        url: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const agent = await ctx.db.get(args.agentId);
+        if (!agent) {
+            throw new Error("Agent not found");
+        }
+        await ctx.db.patch(args.agentId, {
+            browser: {
+                sessionId: agent.browser.sessionId,
+                url: args.url,
+            },
+            updatedAt: Date.now(),
+        });
+    },
+});

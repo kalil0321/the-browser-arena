@@ -38,7 +38,7 @@ export default function SessionsPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/">New Session</Link>
+          <Link href="/" prefetch={true}>New Session</Link>
         </Button>
       </header>
 
@@ -75,7 +75,7 @@ export default function SessionsPage() {
                         Start a new session to see it listed here once agents finish running.
                       </p>
                       <Button asChild size="sm">
-                        <Link href="/">Create session</Link>
+                        <Link href="/" prefetch={true}>Create session</Link>
                       </Button>
                     </div>
                   </TableCell>
@@ -88,6 +88,7 @@ export default function SessionsPage() {
                     <TableCell className="font-mono text-xs">
                       <Link
                         href={`/session/${session._id}`}
+                        prefetch={true}
                         className="text-primary underline-offset-2 hover:underline"
                       >
                         {session._id}
@@ -96,6 +97,7 @@ export default function SessionsPage() {
                     <TableCell className="max-w-xl truncate">
                       <Link
                         href={`/session/${session._id}`}
+                        prefetch={true}
                         className="text-foreground hover:text-primary transition-colors"
                       >
                         {session.instruction}
