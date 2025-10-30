@@ -14,6 +14,7 @@ export const createSession = mutation({
         })),
         agentName: v.optional(v.string()),
         model: v.optional(v.string()),
+        isPrivate: v.optional(v.boolean()), // Default to false if not provided
     },
     handler: async (ctx, args) => {
         const user = await getUser(ctx);
@@ -27,6 +28,7 @@ export const createSession = mutation({
         const sessionId = await ctx.db.insert("sessions", {
             userId: user._id,
             instruction: args.instruction,
+            isPrivate: args.isPrivate ?? false, // Default to public (false)
             createdAt: now,
             updatedAt: now,
         });
@@ -397,5 +399,25 @@ export const updateAgentStatusFromBackend = mutation({
         }
 
         await ctx.db.patch(args.agentId, updateData);
+    },
+});
+
+/**
+ * Update agent recording URL from Python backend - no auth required
+ */
+export const updateAgentRecordingUrlFromBackend = mutation({
+    args: {
+        agentId: v.id("agents"),
+        recordingUrl: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const agent = await ctx.db.get(args.agentId);
+        if (!agent) {
+            throw new Error("Agent not found");
+        }
+        await ctx.db.patch(args.agentId, {
+            recordingUrl: args.recordingUrl,
+            updatedAt: Date.now(),
+        });
     },
 });

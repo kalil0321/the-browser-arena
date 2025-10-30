@@ -15,9 +15,17 @@ import { UserInfo } from "./user-info";
 import { SessionsNav, type Session } from "./nav-sessions";
 import { ThemeSwitcher } from "./theme-switcher";
 import { HelpButton } from "./help-button";
+import { SettingsButton } from "./settings-button";
 import { Separator } from "@/components/ui/separator";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { Trophy } from "lucide-react";
+import Link from "next/link";
+import {
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
 const teams = [
     { id: "1", name: "Alpha Inc.", logo: IconSmall, plan: "Free" },
@@ -43,7 +51,7 @@ export function DashboardSidebar() {
             >
                 <div className="flex items-center justify-between gap-2 w-full">
                     <a href="/" className="flex items-center gap-2">
-                        <IconFull dark={true} width={80} height={60} />
+                        <IconFull dark={false} width={80} height={60} />
                     </a>
                     <motion.div
                         key={isCollapsed ? "header-collapsed" : "header-expanded"}
@@ -62,8 +70,25 @@ export function DashboardSidebar() {
 
 
 
-            {/* Content - Sessions */}
+            {/* Content - Arena & Sessions */}
             <SidebarContent className="flex flex-col gap-4 px-0 flex-1 overflow-y-auto">
+                {/* Arena Link */}
+                <div className="px-2">
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton tooltip="Arena" asChild>
+                                <Link
+                                    href="/arena"
+                                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors"
+                                >
+                                    <Trophy className="size-4" />
+                                    {!isCollapsed && <span>Arena</span>}
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </div>
+
                 {!isCollapsed && (
                     <SessionsNav sessions={sessions} />
                 )}
@@ -71,6 +96,7 @@ export function DashboardSidebar() {
 
             {/* Footer - Help & Theme Switcher */}
             <SidebarFooter className="px-2 pb-2 gap-2">
+                <SettingsButton />
                 <HelpButton />
                 <ThemeSwitcher />
                 <Separator className="mx-2" />

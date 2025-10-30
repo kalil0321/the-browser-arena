@@ -61,7 +61,7 @@ async def run_browser_use(
     result = await agent.run()
     usage = await agent.token_cost_service.get_usage_summary()
     print("USAGE", usage)
-    browser.sessions.delete(session_id)
+    # Session deletion is handled in server.py after recording is saved
     return result, usage
 
 

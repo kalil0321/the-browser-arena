@@ -6,7 +6,25 @@ import { getToken } from "@/lib/auth/server";
 const smoothUrl = 'https://api.smooth.sh/api/v1/task';
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-async function runTask(task: string) {
+/**
+ * Get the API key to use - prioritize user key, fallback to server key
+ */
+function getSmoothApiKey(userApiKey?: string): string {
+    if (userApiKey && userApiKey.trim()) {
+        console.log("✅ Using user-provided Smooth API key (length:", userApiKey.trim().length, "characters)");
+        return userApiKey.trim();
+    }
+
+    // Fallback to server key
+    const serverKey = process.env.SMOOTH_API_KEY;
+    if (!serverKey) {
+        throw new Error("No Smooth API key available. Please provide your API key in settings.");
+    }
+    console.log("ℹ️ Using server Smooth API key (fallback)");
+    return serverKey;
+}
+
+async function runTask(task: string, apiKey: string) {
     try {
         const payload = {
             task,
@@ -17,7 +35,7 @@ async function runTask(task: string) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'apikey': process.env.SMOOTH_API_KEY!
+                'apikey': apiKey
             },
             body: JSON.stringify(payload)
         });
@@ -36,13 +54,13 @@ async function runTask(task: string) {
     }
 }
 
-async function getTaskStatus(taskId: string): Promise<TaskStatus> {
+async function getTaskStatus(taskId: string, apiKey: string): Promise<TaskStatus> {
     try {
         const response = await fetch(`${smoothUrl}/${taskId}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'apikey': process.env.SMOOTH_API_KEY!
+                'apikey': apiKey
             }
         });
 
@@ -73,12 +91,13 @@ type TaskStatus = {
 
 async function pollTaskUntilComplete(
     taskId: string,
+    apiKey: string,
     onUpdate?: (status: TaskStatus) => Promise<void>,
     maxAttempts: number = 100_000,
     intervalMs: number = 3_000
 ): Promise<TaskStatus> {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const taskStatus = await getTaskStatus(taskId);
+        const taskStatus = await getTaskStatus(taskId, apiKey);
 
         // Invoke update callback so callers can react to intermediate updates (e.g., live_url)
         if (onUpdate) {
@@ -102,9 +121,9 @@ async function pollTaskUntilComplete(
 
 export async function POST(request: NextRequest) {
     try {
-        const { task, sessionId: existingSessionId } = await request.json();
+        const { task, sessionId: existingSessionId, apiKey: userApiKey } = await request.json();
 
-        // Get user token for auth (works with anonymous auth)
+        // Get user token for auth
         const token = await getToken();
         console.log("Auth token:", token ? "Present" : "Missing");
 
@@ -113,8 +132,12 @@ export async function POST(request: NextRequest) {
         }
         convex.setAuth(token);
 
+        // Get API key to use (user key or fallback to server key)
+        const apiKey = getSmoothApiKey(userApiKey);
+
         // Submit task to Smooth API
-        const taskData = await runTask(task);
+        console.log("🚀 Submitting task to Smooth API...");
+        const taskData = await runTask(task, apiKey);
         const { id: smoothTaskId, live_url } = taskData;
 
         if (!smoothTaskId) {
@@ -163,9 +186,11 @@ export async function POST(request: NextRequest) {
         after(async () => {
             try {
                 // Poll for task completion and update DB as soon as live_url becomes available
+                // Note: apiKey is captured from outer scope
                 let liveUrlUpdated = !!liveViewUrl;
                 const taskResult = await pollTaskUntilComplete(
                     smoothTaskId,
+                    apiKey,
                     async (status) => {
                         if (!liveUrlUpdated && status.live_url) {
                             console.log("Smooth: Updating agent live URL:", status.live_url);

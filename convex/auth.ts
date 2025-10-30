@@ -1,6 +1,5 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
-import { anonymous } from "better-auth/plugins";
 import { components } from "./_generated/api";
 import { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
@@ -41,10 +40,6 @@ export const createAuth = (
         plugins: [
             // The Convex plugin is required for Convex compatibility
             convex(),
-            // Allow anonymous authentication
-            anonymous({
-                disableDeleteAnonymousUser: true,
-            }),
         ],
     });
 };
@@ -65,5 +60,9 @@ export const getCurrentUser = query({
 
 // Helper function to get current user (can be called from mutations/queries)
 export async function getUser(ctx: GenericCtx<DataModel>) {
-    return authComponent.getAuthUser(ctx);
+    try {
+        return await authComponent.getAuthUser(ctx);
+    } catch (error) {
+        return null;
+    }
 }

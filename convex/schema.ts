@@ -6,6 +6,7 @@ export default defineSchema({
     sessions: defineTable({
         userId: v.string(),
         instruction: v.string(),
+        isPrivate: v.optional(v.boolean()), // Private sessions are only visible to the owner
         createdAt: v.number(),
         updatedAt: v.number(),
     })

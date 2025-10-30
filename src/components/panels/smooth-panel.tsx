@@ -119,6 +119,14 @@ export function SmoothPanel({ agent }: SmoothPanelProps) {
                 </div>
             )}
 
+            {/* Output Text */}
+            {agentResult.output && typeof agentResult.output === 'string' && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide">Result</h4>
+                    <p className="text-sm font-default text-gray-900 dark:text-gray-100">{agentResult.output}</p>
+                </div>
+            )}
+
             {/* Metrics Grid */}
             <div className="grid grid-cols-2 gap-2">
                 {/* Duration */}
@@ -130,7 +138,7 @@ export function SmoothPanel({ agent }: SmoothPanelProps) {
                             </svg>
                             <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration</h4>
                         </div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <p className="text-sm font-default font-semibold text-gray-900 dark:text-gray-100">
                             {agentResult.metadata.duration.toFixed(1)}s
                         </p>
                     </div>
@@ -145,7 +153,7 @@ export function SmoothPanel({ agent }: SmoothPanelProps) {
                             </svg>
                             <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Cost</h4>
                         </div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <p className="text-sm font-default font-semibold text-gray-900 dark:text-gray-100">
                             ${agentResult.cost.toFixed(4)}
                         </p>
                     </div>
@@ -160,7 +168,7 @@ export function SmoothPanel({ agent }: SmoothPanelProps) {
                             </svg>
                             <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Credits</h4>
                         </div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <p className="text-sm font-default font-semibold text-gray-900 dark:text-gray-100">
                             {agentResult.credits_used}
                         </p>
                     </div>

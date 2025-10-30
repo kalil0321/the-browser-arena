@@ -37,11 +37,56 @@ const determineKey = (model: string | undefined) => {
     return process.env.OPENAI_API_KEY;
 }
 
+// LLM pricing per 1M tokens
+const pricing: Record<string, { in: number; out: number; cached: number }> = {
+    "google/gemini-2.5-flash": {
+        in: 0.3 / 1_000_000,
+        out: 2.5 / 1_000_000,
+        cached: 0.03 / 1_000_000,
+    },
+    "google/gemini-2.5-pro": {
+        in: 1.25 / 1_000_000,
+        out: 10.0 / 1_000_000,
+        cached: 0.3125 / 1_000_000,
+    },
+    "openai/gpt-4.1": {
+        in: 2.0 / 1_000_000,
+        out: 8.0 / 1_000_000,
+        cached: 0.5 / 1_000_000,
+    },
+    "anthropic/claude-4.5-haiku": {
+        in: 1.0 / 1_000_000,
+        out: 5.0 / 1_000_000,
+        cached: 0.1 / 1_000_000,
+    },
+};
+
+function computeCost(model: string | undefined, usage: any): number {
+    if (!usage) return 0;
+
+    const modelKey = model ?? "google/gemini-2.5-flash";
+    const price = pricing[modelKey] || {
+        in: 0.5 / 1_000_000,
+        out: 3.0 / 1_000_000,
+        cached: 0.1 / 1_000_000,
+    };
+
+    const inputTokens = usage.input_tokens || 0;
+    const outputTokens = usage.output_tokens || 0;
+    const cachedTokens = usage.cached_tokens || usage.input_tokens_cached || 0;
+
+    return (
+        inputTokens * price.in +
+        outputTokens * price.out +
+        cachedTokens * price.cached
+    );
+}
+
 export async function POST(request: NextRequest) {
     try {
         const { instruction, model, sessionId: existingSessionId } = await request.json();
 
-        // Get user token for auth (works with anonymous auth)
+        // Get user token for auth
         const token = await getToken();
         console.log("Auth token:", token ? "Present" : "Missing");
 
@@ -142,8 +187,12 @@ export async function POST(request: NextRequest) {
                 // Delete browser session
                 await browser.sessions.delete(browserSessionId);
 
+                const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
+                const cost = computeCost(model, usageData);
+
                 const payload = {
-                    usage: usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 },
+                    usage: usageData,
+                    cost,
                     duration,
                     message,
                     actions,

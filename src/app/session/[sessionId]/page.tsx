@@ -71,9 +71,9 @@ export default function SessionPage() {
     return (
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
             {/* Header */}
-            <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-6 py-4 shrink-0">
+            <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-4 shrink-0">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                    <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100">
                         {session.instruction}
                     </h1>
                     <div className="flex items-center gap-4">
@@ -88,7 +88,7 @@ export default function SessionPage() {
                                     variant={viewMode === "grid" ? "default" : "ghost"}
                                     size="sm"
                                     onClick={() => setViewMode("grid")}
-                                    className="h-7 px-3 text-xs"
+                                    className="h-7 px-3 text-xs dark:text-white dark:hover:text-white text-black hover:text-black"
                                 >
                                     <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
@@ -99,7 +99,7 @@ export default function SessionPage() {
                                     variant={viewMode === "tabs" ? "default" : "ghost"}
                                     size="sm"
                                     onClick={() => setViewMode("tabs")}
-                                    className="h-7 px-3 text-xs"
+                                    className="h-7 px-3 text-xs dark:text-white dark:hover:text-white text-black hover:text-black"
                                 >
                                     <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -116,8 +116,8 @@ export default function SessionPage() {
             <div className="flex-1 overflow-auto">
                 {viewMode === "grid" ? (
                     // Grid View
-                    <div className="p-4 h-full">
-                        <div className={`grid ${getGridCols()} gap-4 h-full`}>
+                    <div className="h-full">
+                        <div className={`grid ${getGridCols()} h-full`}>
                             {agents && agents.length > 0 ? (
                                 agents.map((agent) => (
                                     <div key={agent._id} className="min-h-[400px]">
@@ -135,12 +135,12 @@ export default function SessionPage() {
                     // Tabs View
                     <div className="h-full">
                         {agents && agents.length > 0 ? (
-                            <Tabs defaultValue={agents[0]._id} className="h-full flex flex-col">
-                                <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 shrink-0">
+                            <Tabs defaultValue={agents[0]._id} className="h-full flex flex-col gap-0">
+                                <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 dark:bg-gray-900 px-4 shrink-0">
                                     {agents.map((agent) => (
-                                        <TabsTrigger key={agent._id} value={agent._id} className="capitalize">
+                                        <TabsTrigger key={agent._id} value={agent._id} className="capitalize text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:text-white data-[state=active]:underline">
                                             <div className="flex items-center gap-2">
-                                                <span>{agent.name}</span>
+                                                <span className="data-[state=active]:border-current transition-colors">{agent.name}</span>
                                                 {agent.status === "completed" && (
                                                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -159,7 +159,7 @@ export default function SessionPage() {
                                     ))}
                                 </TabsList>
                                 {agents.map((agent) => (
-                                    <TabsContent key={agent._id} value={agent._id} className="flex-1 m-0 p-4">
+                                    <TabsContent key={agent._id} value={agent._id} className="flex-1 m-0">
                                         <div className="h-full">
                                             <AgentPanel agent={agent} />
                                         </div>

@@ -97,8 +97,9 @@ export function BUPanel({ agent }: BUPanelProps) {
                 return (
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
                         <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide">Result</h4>
-                        <div className="prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0">
+                        <div className="font-default prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0">
                             <ReactMarkdown
+                                
                                 remarkPlugins={[remarkGfm]}
                                 components={{
                                     table: ({ children }) => (
@@ -140,6 +141,21 @@ export function BUPanel({ agent }: BUPanelProps) {
                                             {children}
                                         </p>
                                     ),
+                                    ol: ({ children }) => (
+                                        <ol className="list-decimal list-inside text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                            {children}
+                                        </ol>
+                                    ),
+                                    ul: ({ children }) => (
+                                        <ul className="list-disc list-inside text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                            {children}
+                                        </ul>
+                                    ),
+                                    li: ({ children }) => (
+                                        <li className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                            {children}
+                                        </li>
+                                    ),
                                 }}
                             >
                                 {normalizedText}
@@ -159,32 +175,18 @@ export function BUPanel({ agent }: BUPanelProps) {
                                 <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration (ours - agent setup)</h4>
+                                <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration</h4>
                             </div>
                             {(() => {
                                 const ourSeconds = (agent.updatedAt - agent.createdAt) / 1000;
                                 const agentSeconds = typeof agentResult.duration === 'number' ? agentResult.duration : undefined;
                                 const displaySeconds = agentSeconds !== undefined ? (ourSeconds - agentSeconds) : ourSeconds;
                                 return (
-                                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                        {displaySeconds.toFixed(1)}s
+                                    <p className="text-sm font-default text-gray-900 dark:text-gray-100">
+                                        {displaySeconds.toFixed(1)}s + {agentResult.duration.toFixed(1)}s = {ourSeconds.toFixed(1)}s
                                     </p>
                                 );
                             })()}
-                        </div>
-                    )}
-                    {/* Browser-use duration */}
-                    {agentResult.duration !== undefined && (
-                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration (agent)</h4>
-                            </div>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                {agentResult.duration.toFixed(1)}s
-                            </p>
                         </div>
                     )}
                     {agentResult.usage?.total_cost !== undefined && (
@@ -195,7 +197,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                                 </svg>
                                 <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Cost</h4>
                             </div>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            <p className="text-sm font-default text-gray-900 dark:text-gray-100">
                                 ${agentResult.usage.total_cost.toFixed(4)}
                             </p>
                         </div>
@@ -208,7 +210,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                                 </svg>
                                 <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Tokens</h4>
                             </div>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            <p className="text-sm font-default text-gray-900 dark:text-gray-100">
                                 {agentResult.usage.total_tokens.toLocaleString()}
                             </p>
                         </div>
@@ -220,7 +222,7 @@ export function BUPanel({ agent }: BUPanelProps) {
             {actions.length > 0 && (
                 <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
                     <div className="bg-gray-50 dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-                        <h4 className="text-xs font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wide">
+                        <h4 className="text-xs text-gray-900 dark:text-gray-100 uppercase tracking-wide">
                             Actions ({actions.length})
                         </h4>
                     </div>
@@ -280,7 +282,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                                         {action.result && typeof action.result === 'object' && (
                                             <div>
                                                 <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Result</h5>
-                                                <pre className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded overflow-auto">
+                                                <pre className="font-mono text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded overflow-auto">
                                                     {JSON.stringify(action.result, null, 2)}
                                                 </pre>
                                             </div>

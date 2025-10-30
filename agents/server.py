@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from typing import Optional
+import aiohttp
 
 import uvicorn
 from anchorbrowser import Anchorbrowser
@@ -84,19 +85,24 @@ pricing = {
         "cached": 0.10 / 1_000_000,
     },
     "google/gemini-2.5-flash": {
-        "in": 0.50 / 1_000_000,
-        "out": 2.50 / 1_000_000,
-        "cached": 0.10 / 1_000_000,
+        "in": 0.3 / 1_000_000,
+        "out": 2.5 / 1_000_000,
+        "cached": 0.03 / 1_000_000,
+    },
+    "google/gemini-2.5-pro": {
+        "in": 1.25 / 1_000_000,
+        "out": 10.0 / 1_000_000,
+        "cached": 0.3125 / 1_000_000,
     },
     "openai/gpt-4.1": {
-        "in": 2.50 / 1_000_000,
-        "out": 10.00 / 1_000_000,
-        "cached": 0.10 / 1_000_000,
+        "in": 2.0 / 1_000_000,
+        "out": 8.0 / 1_000_000,
+        "cached": 0.5 / 1_000_000,
     },
     "anthropic/claude-4.5-haiku": {
         "in": 1.0 / 1_000_000,
-        "out": 5.00 / 1_000_000,
-        "cached": 0.10 / 1_000_000,
+        "out": 5.0 / 1_000_000,
+        "cached": 0.1 / 1_000_000,
     },
 }
 
@@ -120,6 +126,67 @@ def compute_cost(model: str, usage: dict) -> float:
         )
         return cost
     return total_cost
+
+
+async def upload_recording_to_convex(
+    agent_id: str, recording_content: bytes
+) -> Optional[str]:
+    """
+    Upload recording to Convex storage via HTTP action.
+
+    Args:
+        agent_id: Convex agent ID
+        recording_content: Raw bytes of the recording file
+
+    Returns:
+        Recording URL if successful, None otherwise
+    """
+    try:
+        # Get the base URL for Convex HTTP actions
+        # Convex URL format: https://xxx.convex.cloud (WebSocket URL)
+        # HTTP endpoint format: https://xxx.convex.site/upload-recording
+        # Extract deployment name from CONVEX_URL
+        if ".convex.cloud" in CONVEX_URL:
+            convex_http_url = (
+                CONVEX_URL.replace(".convex.cloud", ".convex.site")
+                + "/upload-recording"
+            )
+        elif ".convex.site" in CONVEX_URL:
+            convex_http_url = CONVEX_URL + "/upload-recording"
+        else:
+            # Fallback: try to construct from deployment name
+            # CONVEX_URL might be just the deployment name or full URL
+            raise ValueError(f"Unsupported CONVEX_URL format: {CONVEX_URL}")
+
+        # Create form data for multipart upload
+        form_data = aiohttp.FormData()
+        form_data.add_field("agentId", agent_id)
+        form_data.add_field(
+            "file",
+            recording_content,
+            filename=f"recording-{agent_id}.mp4",
+            content_type="video/mp4",
+        )
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(convex_http_url, data=form_data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    recording_url = result.get("recordingUrl")
+                    print(f"✅ Recording uploaded successfully: {recording_url}")
+                    return recording_url
+                else:
+                    error_text = await response.text()
+                    print(
+                        f"⚠️  Failed to upload recording: {response.status} - {error_text}"
+                    )
+                    return None
+    except Exception as e:
+        print(f"⚠️  Error uploading recording: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        return None
 
 
 def to_jsonable(value):
@@ -197,6 +264,48 @@ async def run_skyvern_task(
             provider_model=provider_model,
         )
 
+        # Fetch and upload recording before deleting session
+        recording_url = None
+        try:
+            print(f"📹 Fetching recording for session {browser_session_id}...")
+            recording = anchor_browser.sessions.recordings.primary.get(
+                browser_session_id
+            )
+
+            # Get recording content as bytes
+            # Anchor Browser SDK returns recording with .content property
+            if hasattr(recording, "content"):
+                recording_content = recording.content
+            elif hasattr(recording, "read"):
+                recording_content = recording.read()
+            elif isinstance(recording, bytes):
+                recording_content = recording
+            else:
+                # Try to get bytes directly
+                recording_content = (
+                    bytes(recording) if hasattr(recording, "__bytes__") else None
+                )
+
+            if recording_content:
+                print(f"📦 Recording size: {len(recording_content)} bytes")
+                recording_url = await upload_recording_to_convex(
+                    agent_id, recording_content
+                )
+            else:
+                print("⚠️  Could not extract recording content")
+        except Exception as e:
+            print(f"⚠️  Failed to fetch/upload recording: {str(e)}")
+            import traceback
+
+            traceback.print_exc()
+
+        # Delete browser session (can happen anytime, doesn't affect recording)
+        try:
+            anchor_browser.sessions.delete(browser_session_id)
+            print(f"🗑️  Deleted browser session {browser_session_id}")
+        except Exception as e:
+            print(f"⚠️  Failed to delete browser session: {str(e)}")
+
         # Update with result
         print("💾 Saving Skyvern results to Convex...")
         convex_client.mutation(
@@ -211,6 +320,9 @@ async def run_skyvern_task(
                 "status": "completed",
             },
         )
+
+        if recording_url:
+            print(f"✅ Recording saved: {recording_url}")
 
         print(f"✅ Skyvern agent {agent_id} completed successfully")
 
@@ -263,6 +375,48 @@ async def run_browser_use_task(
             browser=anchor_browser,
             session_id=browser_session_id,
         )
+
+        # Fetch and upload recording before deleting session
+        recording_url = None
+        try:
+            print(f"📹 Fetching recording for session {browser_session_id}...")
+            recording = anchor_browser.sessions.recordings.primary.get(
+                browser_session_id
+            )
+
+            # Get recording content as bytes
+            # Anchor Browser SDK returns recording with .content property
+            if hasattr(recording, "content"):
+                recording_content = recording.content
+            elif hasattr(recording, "read"):
+                recording_content = recording.read()
+            elif isinstance(recording, bytes):
+                recording_content = recording
+            else:
+                # Try to get bytes directly
+                recording_content = (
+                    bytes(recording) if hasattr(recording, "__bytes__") else None
+                )
+
+            if recording_content:
+                print(f"📦 Recording size: {len(recording_content)} bytes")
+                recording_url = await upload_recording_to_convex(
+                    agent_id, recording_content
+                )
+            else:
+                print("⚠️  Could not extract recording content")
+        except Exception as e:
+            print(f"⚠️  Failed to fetch/upload recording: {str(e)}")
+            import traceback
+
+            traceback.print_exc()
+
+        # Delete browser session (can happen anytime, doesn't affect recording)
+        try:
+            anchor_browser.sessions.delete(browser_session_id)
+            print(f"🗑️  Deleted browser session {browser_session_id}")
+        except Exception as e:
+            print(f"⚠️  Failed to delete browser session: {str(e)}")
 
         # Debug logging
         print(f"📊 Result type: {type(result)}")
@@ -393,6 +547,9 @@ async def run_browser_use_task(
                 "status": "completed",
             },
         )
+
+        if recording_url:
+            print(f"✅ Recording saved: {recording_url}")
 
         print(f"✅ Browser-Use agent {agent_id} completed successfully")
 

@@ -25,7 +25,7 @@ async def run_skyvern(
     """
     skyvern_client = Skyvern(cdp_url=cdp_url)
     task = await skyvern_client.run_task(prompt=prompt)
-    browser.sessions.delete(session_id)
+    # Session deletion is handled in server.py after recording is saved
     return task
 
 

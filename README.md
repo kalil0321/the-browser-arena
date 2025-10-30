@@ -1,36 +1,163 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Browser Agent Arena
 
-## Getting Started
+A platform for comparing AI browser agents in real-time. Watch different AI agents compete to complete the same task and see which performs better.
 
-First, run the development server:
+![Next.js](https://img.shields.io/badge/Next.js-16.0-black)
+![React](https://img.shields.io/badge/React-19.2-blue)
+![Better Auth](https://img.shields.io/badge/Better%20Auth-Latest-green)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
+
+## Features
+
+- 🎭 **Anonymous Authentication** - No login required, powered by Better Auth
+- ⚡ **Real-time Comparison** - Watch two AI agents work simultaneously
+- 🎨 **Refined UI** - Clean design with shadcn components and subtle contrast
+- 📊 **Performance Metrics** - Track speed, steps, and success rates
+- 💾 **PostgreSQL + Drizzle** - Production-ready database setup
+- 📝 **Session History** - Review past agent competitions (coming soon)
+
+## Quick Start
+
+### Installation
 
 ```bash
+# Install dependencies
+npm install
+
+# Run the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file:
 
-## Learn More
+```env
+DATABASE_URL=postgresql://user:password@host:5432/database
+BETTER_AUTH_SECRET=your-secret-key-here
+BETTER_AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+**Database Setup:**
+```bash
+# Push schema to database
+npm run db:push
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# View database in Drizzle Studio
+npm run db:studio
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See `DATABASE_SETUP.md` and `BETTER_AUTH_SETUP.md` for detailed instructions.
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+arena/
+├── app/
+│   ├── api/
+│   │   ├── auth/[...all]/     # Better Auth endpoints
+│   │   └── session/            # Session management API
+│   ├── session/[id]/          # Session view page
+│   ├── page.tsx               # Home page with chat UI
+│   └── layout.tsx             # Root layout
+├── components/
+│   ├── sidebar.tsx            # Navigation sidebar
+│   └── chat-interface.tsx     # Prompt input interface
+├── lib/
+│   ├── auth.ts                # Server-side auth config
+│   └── auth-client.ts         # Client-side auth utilities
+├── middleware.ts              # Request middleware
+└── PROJECT.md                 # Detailed project documentation
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Usage
+
+1. **Enter a Prompt**: Type a task on the home page
+2. **Start Arena**: Click "Start Arena" to create a new session
+3. **Watch Agents**: View both agents working in split-screen
+4. **Compare Results**: See metrics and determine which agent performed better
+
+### Example Prompts
+
+- "Find the top 3 trending AI tools on Product Hunt"
+- "Research TypeScript best practices and create a comparison"
+- "Look up weather in San Francisco and find nearby coffee shops"
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **UI**: React 19, Tailwind CSS, shadcn/ui
+- **Database**: PostgreSQL with Drizzle ORM
+- **Authentication**: Better Auth (Anonymous)
+- **Components**: Radix UI primitives via shadcn
+- **TypeScript**: Full type safety
+- **Styling**: Tailwind CSS with semantic color system
+
+## Better Auth Integration
+
+This project uses Better Auth with anonymous authentication:
+
+- ✅ **Zero-friction UX** - Users can start immediately
+- ✅ **Session Management** - Automatic session tracking
+- ✅ **Upgrade Path** - Can convert to authenticated users later
+- ✅ **Secure** - Industry-standard security practices
+
+See `BETTER_AUTH_SETUP.md` for detailed authentication documentation.
+
+## Development
+
+### Running Locally
+
+```bash
+npm run dev     # Start development server
+npm run build   # Build for production
+npm run start   # Run production server
+npm run lint    # Run ESLint
+```
+
+### Adding Features
+
+Current routes are set up but external API logic is not yet implemented:
+
+- [ ] Connect to actual browser automation services
+- [ ] Implement agent selection
+- [ ] Add database persistence
+- [ ] Create session history
+- [ ] Add result sharing
+
+## Documentation
+
+- `PROJECT.md` - Complete project overview and architecture
+- `BETTER_AUTH_SETUP.md` - Better Auth configuration guide
+- [Better Auth Docs](https://www.better-auth.com/docs)
+- [Next.js Docs](https://nextjs.org/docs)
+
+## Contributing
+
+This is a starter template. Feel free to:
+- Add more agent providers
+- Implement actual browser automation
+- Enhance the UI/UX
+- Add analytics and tracking
+- Implement session sharing
+
+## License
+
+MIT
+
+## What's Next?
+
+To complete the implementation:
+
+1. **Database Setup** - Add PostgreSQL or your preferred database
+2. **Agent Integration** - Connect to browser automation APIs
+3. **Real-time Updates** - Add WebSocket or SSE for live updates
+4. **Session Storage** - Persist sessions and results
+5. **User Preferences** - Save favorite agents and settings
+
+---
+
+Built with ❤️ using Next.js and Better Auth

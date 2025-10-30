@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     try {
         const { instruction, model } = await request.json();
 
-        // Get user token for auth (works with anonymous auth)
+        // Get user token for auth
         const token = await getToken();
         console.log("Auth token:", token ? "Present" : "Missing");
 

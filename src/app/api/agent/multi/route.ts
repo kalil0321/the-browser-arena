@@ -15,9 +15,11 @@ interface AgentConfig {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, agents } = await request.json() as {
+        const { instruction, agents, smoothApiKey, isPrivate } = await request.json() as {
             instruction: string;
             agents: AgentConfig[];
+            smoothApiKey?: string;
+            isPrivate?: boolean;
         };
 
         if (!agents || agents.length === 0) {
@@ -28,7 +30,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Maximum 4 agents allowed" }, { status: 400 });
         }
 
-        // Get user token for auth (works with anonymous auth)
+        // Get user token for auth
         const token = await getToken();
         console.log("Auth token:", token ? "Present" : "Missing");
 
@@ -40,6 +42,7 @@ export async function POST(request: NextRequest) {
         // Create session in Convex first
         const { sessionId: dbSessionId } = await convex.mutation(api.mutations.createSession, {
             instruction,
+            isPrivate: isPrivate ?? false,
         });
 
         console.log(`✅ Created Convex session: ${dbSessionId}`);
@@ -59,6 +62,7 @@ export async function POST(request: NextRequest) {
                         payload = {
                             task: instruction,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            apiKey: smoothApiKey, // Pass user's API key if provided
                         };
                         break;
                     case "skyvern":
