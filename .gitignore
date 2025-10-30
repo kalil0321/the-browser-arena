@@ -48,3 +48,8 @@ downloads/
 **/Local State
 **/Preferences
 **/Network Persistent State
+
+_playwright_cache/
+**/*.pyc
+**/__pycache__/**/*
+**/**/_pycache_/**/* */
