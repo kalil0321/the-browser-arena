@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Browser automation temp files
+agents/tmp/
+agents/log/
+downloads/
+**/user_data_dir/
+**/Local State
+**/Preferences
+**/Network Persistent State
