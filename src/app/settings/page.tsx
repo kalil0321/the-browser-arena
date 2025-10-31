@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useConvexAuth } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { getApiKey, setApiKey, removeApiKey, hasApiKey, maskApiKey } from "@/lib/api-keys";
-import { Eye, EyeOff, CheckCircle2, XCircle, Key, DollarSign, Zap, Smartphone } from "lucide-react";
+import { getApiKey, setApiKey, removeApiKey, hasApiKey } from "@/lib/api-keys";
+import { CheckCircle2, XCircle, Key, DollarSign, Zap, Smartphone } from "lucide-react";
 
 export default function SettingsPage() {
   const { isAuthenticated } = useConvexAuth();
@@ -33,11 +34,8 @@ export default function SettingsPage() {
 
   // API Keys state
   const [smoothApiKey, setSmoothApiKey] = useState("");
-  const [smoothKeyVisible, setSmoothKeyVisible] = useState(false);
   const [smoothKeyDisplay, setSmoothKeyDisplay] = useState<string | null>(null);
-  const [smoothKeyFull, setSmoothKeyFull] = useState<string | null>(null); // Full decrypted key
   const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
 
   // Load existing key on mount
@@ -56,8 +54,7 @@ export default function SettingsPage() {
       if (hasApiKey("smooth")) {
         const key = await getApiKey("smooth", user._id);
         if (key) {
-          setSmoothKeyFull(key);
-          setSmoothKeyDisplay(maskApiKey(key));
+          setSmoothKeyDisplay("***"); // Just indicate key exists, don't show it
           console.log("🔑 Loaded user's Smooth API key from localStorage");
         }
       } else {
@@ -72,33 +69,36 @@ export default function SettingsPage() {
 
   const handleSaveSmoothKey = async () => {
     if (!user?._id) {
-      setSaveMessage({ type: "error", text: "Please sign in to save API keys" });
+      toast.error("Please sign in to save API keys", {
+        duration: 5000,
+      });
       return;
     }
 
     if (!smoothApiKey.trim()) {
-      setSaveMessage({ type: "error", text: "API key cannot be empty" });
+      toast.error("API key cannot be empty", {
+        duration: 5000,
+      });
       return;
     }
 
     setIsSaving(true);
-    setSaveMessage(null);
 
+    const isReplacing = !!smoothKeyDisplay;
     try {
       await setApiKey("smooth", smoothApiKey, user._id);
-      setSmoothKeyFull(smoothApiKey);
-      setSmoothKeyDisplay(maskApiKey(smoothApiKey));
+      setSmoothKeyDisplay("***"); // Just indicate key exists
       setSmoothApiKey("");
-      setSmoothKeyVisible(false);
       console.log("✅ Smooth API key saved to localStorage (encrypted). Your key will be used for future Smooth API calls.");
-      setSaveMessage({ type: "success", text: "Smooth API key saved successfully" });
-
-      // Clear message after 3 seconds
-      setTimeout(() => setSaveMessage(null), 3000);
+      toast.success(isReplacing ? "Smooth API key replaced successfully" : "Smooth API key saved successfully", {
+        duration: 3000,
+        description: "Your key will be used for future Smooth API calls."
+      });
     } catch (error) {
-      setSaveMessage({
-        type: "error",
-        text: error instanceof Error ? error.message : "Failed to save API key"
+      const errorMsg = error instanceof Error ? error.message : "Failed to save API key";
+      toast.error("Failed to save API key", {
+        description: errorMsg,
+        duration: 5000,
       });
     } finally {
       setIsSaving(false);
@@ -111,34 +111,17 @@ export default function SettingsPage() {
     try {
       removeApiKey("smooth");
       setSmoothKeyDisplay(null);
-      setSmoothKeyFull(null);
       setSmoothApiKey("");
-      setSmoothKeyVisible(false);
-      setSaveMessage({ type: "success", text: "Smooth API key removed" });
-
-      // Clear message after 3 seconds
-      setTimeout(() => setSaveMessage(null), 3000);
+      toast.success("Smooth API key removed", {
+        duration: 3000,
+      });
     } catch (error) {
-      setSaveMessage({
-        type: "error",
-        text: "Failed to remove API key"
+      toast.error("Failed to remove API key", {
+        duration: 5000,
       });
     }
   };
 
-  const handleToggleSmoothKeyVisibility = async () => {
-    if (!user?._id || !smoothKeyFull) return;
-
-    if (smoothKeyVisible) {
-      // Hide - show masked version
-      setSmoothKeyDisplay(maskApiKey(smoothKeyFull));
-      setSmoothKeyVisible(false);
-    } else {
-      // Show - display full key
-      setSmoothKeyDisplay(smoothKeyFull);
-      setSmoothKeyVisible(true);
-    }
-  };
 
   return (
     <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
@@ -270,36 +253,19 @@ export default function SettingsPage() {
                     If not provided, the default server key will be used.
                   </p>
 
-                  {/* Current Key Display */}
+                  {/* Current Key Status */}
                   {isLoadingKey ? (
                     <div className="text-sm text-muted-foreground">Loading...</div>
                   ) : smoothKeyDisplay ? (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                        <span className="text-muted-foreground">Key is set</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="text"
-                          value={smoothKeyDisplay || ""}
-                          readOnly
-                          className="font-mono text-sm"
-                        />
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={handleToggleSmoothKeyVisibility}
-                          title={smoothKeyVisible ? "Hide key" : "Show key"}
-                        >
-                          {smoothKeyVisible ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm">
+                          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <span className="text-muted-foreground">Key is set</span>
+                        </div>
                         <Button
                           variant="destructive"
+                          size="sm"
                           onClick={handleRemoveSmoothKey}
                         >
                           Remove
@@ -313,11 +279,11 @@ export default function SettingsPage() {
                     </div>
                   )}
 
-                  {/* Save New/Update Key */}
+                  {/* Add New Key */}
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label htmlFor="smooth-api-key">
-                        {smoothKeyDisplay ? "Update Smooth API Key" : "Add Smooth API Key"}
+                        {smoothKeyDisplay ? "Replace Smooth API Key" : "Add Smooth API Key"}
                       </Label>
                       <Input
                         id="smooth-api-key"
@@ -332,28 +298,9 @@ export default function SettingsPage() {
                       onClick={handleSaveSmoothKey}
                       disabled={isSaving || !smoothApiKey.trim() || !user?._id}
                     >
-                      {isSaving ? "Saving..." : smoothKeyDisplay ? "Update Key" : "Save Key"}
+                      {isSaving ? "Saving..." : smoothKeyDisplay ? "Replace Key" : "Save Key"}
                     </Button>
                   </div>
-
-                  {/* Status Message */}
-                  {saveMessage && (
-                    <div
-                      className={`rounded-lg border p-3 text-sm ${saveMessage.type === "success"
-                        ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100"
-                        : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100"
-                        }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {saveMessage.type === "success" ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : (
-                          <XCircle className="h-4 w-4" />
-                        )}
-                        <span>{saveMessage.text}</span>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm">
                     <p className="text-blue-900 dark:text-blue-100">

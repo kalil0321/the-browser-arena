@@ -4,6 +4,7 @@ import AnchorBrowser from "anchorbrowser";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
+import { missingKey, serverMisconfigured, unauthorized, badRequest, providerUnavailable } from "@/lib/http-errors";
 
 // Initialize the client
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
@@ -86,20 +87,37 @@ function computeCost(model: string | undefined, usage: any): number {
 export async function POST(request: NextRequest) {
     try {
         const { instruction, model, sessionId: existingSessionId } = await request.json();
+        if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
+            return badRequest("Field 'instruction' is required");
+        }
 
         // Get user token for auth
         const token = await getToken();
 
         if (!token) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            return unauthorized();
         }
 
         // Create Convex client per request for better isolation
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
+        // Ensure required server env keys exist
+        if (!process.env.ANCHOR_API_KEY) {
+            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
+        }
+        const providerKey = determineKey(model);
+        if (!providerKey) {
+            return serverMisconfigured("Missing LLM provider API key", { model });
+        }
+
         // Create browser session (external API call) - this is the main bottleneck
-        const browserSession = await browser.sessions.create(config);
+        const browserSession = await browser.sessions.create(config).catch((e: any) => {
+            if (e?.status === 401 || e?.status === 403) {
+                return Promise.reject(missingKey("Anchor Browser", true));
+            }
+            return Promise.reject(e);
+        });
         const liveViewUrl = browserSession.data?.live_view_url ?? "";
         const browserSessionId = browserSession.data?.id ?? "";
         const cdpUrl = browserSession.data?.cdp_url ?? "";

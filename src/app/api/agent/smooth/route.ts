@@ -2,27 +2,20 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
+import { badRequest, mapProviderError, missingKey, providerUnavailable, unauthorized } from "@/lib/http-errors";
 
 const smoothUrl = 'https://api.smooth.sh/api/v1/task';
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-/**
- * Get the API key to use - prioritize user key, fallback to server key
- */
-function getSmoothApiKey(userApiKey?: string): string {
-    if (userApiKey && userApiKey.trim()) {
-        console.log("✅ Using user-provided Smooth API key (length:", userApiKey.trim().length, "characters)");
-        return userApiKey.trim();
+// Require a user-provided Smooth API key; no server fallback
+function requireSmoothApiKey(userApiKey?: string): string {
+    const key = userApiKey?.trim();
+    if (!key) {
+        throw new Error("Missing Smooth API key. Please add your key in Settings.");
     }
-
-    // Fallback to server key
-    const serverKey = process.env.SMOOTH_API_KEY;
-    if (!serverKey) {
-        throw new Error("No Smooth API key available. Please provide your API key in settings.");
-    }
-    console.log("ℹ️ Using server Smooth API key (fallback)");
-    return serverKey;
+    console.log("✅ Using user-provided Smooth API key (length:", key.length, "characters)");
+    return key;
 }
 
 async function runTask(task: string, apiKey: string) {
@@ -123,15 +116,21 @@ async function pollTaskUntilComplete(
 export async function POST(request: NextRequest) {
     try {
         const { task, sessionId: existingSessionId, apiKey: userApiKey } = await request.json();
+        if (!task || typeof task !== 'string' || !task.trim()) {
+            return badRequest("Field 'task' is required");
+        }
 
         // Get user token for auth and API key in parallel where possible
-        const [token, apiKey] = await Promise.all([
-            getToken(),
-            Promise.resolve(getSmoothApiKey(userApiKey))
-        ]);
+        let apiKey: string;
+        const token = await getToken();
+        try {
+            apiKey = requireSmoothApiKey(userApiKey);
+        } catch (e) {
+            return missingKey('Smooth', false);
+        }
 
         if (!token) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            return unauthorized();
         }
 
         // Create Convex client per request for better isolation
@@ -139,7 +138,20 @@ export async function POST(request: NextRequest) {
         convex.setAuth(token);
 
         // Submit task to Smooth API
-        const taskData = await runTask(task, apiKey);
+        let taskData: any;
+        try {
+            taskData = await runTask(task, apiKey);
+        } catch (e: any) {
+            if (e instanceof Error && /HTTP error! status: (\d+)/.test(e.message)) {
+                const status = Number(e.message.match(/(\d+)/)?.[1]);
+                const fake = new Response(null as any, { status });
+                return await mapProviderError(fake, 'smooth');
+            }
+            if (e?.name === 'AbortError' || e?.code === 'UND_ERR_HEADERS_TIMEOUT') {
+                return providerUnavailable('smooth', { reason: 'timeout' });
+            }
+            throw e;
+        }
         const { id: smoothTaskId, live_url } = taskData;
 
         if (!smoothTaskId) {
