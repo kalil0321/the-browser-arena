@@ -28,6 +28,9 @@ interface Action {
     url?: string;
     action?: string;
     reasoning?: string;
+    stepNumber?: number;
+    screenshotUrl?: string | null;
+    memory?: string;
     result?: {
         extractedContent?: string;
         [key: string]: any;
@@ -38,7 +41,38 @@ export function BUPanel({ agent }: BUPanelProps) {
     const [expandedActions, setExpandedActions] = useState<Set<number>>(new Set());
     const agentResult = agent.result;
     const isCompleted = agent.status === "completed" || agent.status === "failed";
-    const actions: Action[] = agentResult?.actions || [];
+
+    // Handle both old format (actions array) and Browser Use Cloud format (steps array)
+    let actions: Action[] = [];
+    if (agentResult?.steps && Array.isArray(agentResult.steps)) {
+        // Browser Use Cloud format: steps with actions
+        actions = agentResult.steps.flatMap((step: any, stepIndex: number) => {
+            const stepActions = step.actions || [];
+            return stepActions.map((actionStr: string, actionIndex: number) => {
+                try {
+                    const parsed = typeof actionStr === 'string' ? JSON.parse(actionStr) : actionStr;
+                    return {
+                        ...parsed,
+                        stepNumber: step.number || stepIndex + 1,
+                        url: step.url,
+                        screenshotUrl: step.screenshotUrl,
+                        memory: step.memory,
+                    };
+                } catch {
+                    return {
+                        name: actionStr,
+                        stepNumber: step.number || stepIndex + 1,
+                        url: step.url,
+                        screenshotUrl: step.screenshotUrl,
+                        memory: step.memory,
+                    };
+                }
+            });
+        });
+    } else {
+        // Old format: direct actions array
+        actions = agentResult?.actions || [];
+    }
 
     if (!isCompleted || !agentResult) {
         return null;
@@ -170,7 +204,8 @@ export function BUPanel({ agent }: BUPanelProps) {
 
             {/* Markdown Result */}
             {(() => {
-                const textOutput = agentResult.finalResult || agentResult.message;
+                // Handle both old format and Browser Use Cloud format
+                const textOutput = agentResult.output || agentResult.finalResult || agentResult.message;
                 if (!textOutput || typeof textOutput !== "string") return null;
 
                 const normalizedText = textOutput.replace(/\\n/g, "\n");
@@ -247,7 +282,7 @@ export function BUPanel({ agent }: BUPanelProps) {
             })()}
 
             {/* Metrics Grid */}
-            {(agentResult.duration || agentResult.usage || (agent.createdAt && agent.updatedAt)) && (
+            {((agentResult.duration || agentResult.metadata?.duration) || agentResult.usage || (agent.createdAt && agent.updatedAt)) && (
                 <div className="grid grid-cols-2 gap-2">
                     {/* Our computed duration minus agent duration if available */}
                     {agent.createdAt && agent.updatedAt && (
@@ -260,13 +295,33 @@ export function BUPanel({ agent }: BUPanelProps) {
                             </div>
                             {(() => {
                                 const ourSeconds = (agent.updatedAt - agent.createdAt) / 1000;
-                                const agentSeconds = typeof agentResult.duration === 'number' ? agentResult.duration : undefined;
+                                // Handle both old format (agentResult.duration) and Browser Use Cloud format (metadata.duration)
+                                const agentDuration = agentResult.duration ?? agentResult.metadata?.duration;
+                                const agentSeconds = typeof agentDuration === 'number' ? agentDuration : undefined;
                                 const displaySeconds = agentSeconds !== undefined ? (ourSeconds - agentSeconds) : ourSeconds;
-                                return (
-                                    <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                        {displaySeconds.toFixed(1)}s + {agentResult.duration.toFixed(1)}s = {ourSeconds.toFixed(1)}s
-                                    </p>
-                                );
+
+                                // For browser-use-cloud, only show cloud time
+                                if (agent.name === "browser-use-cloud" && agentSeconds !== undefined) {
+                                    return (
+                                        <p className="text-sm font-default text-gray-900 dark:text-gray-100">
+                                            {agentSeconds.toFixed(1)}s
+                                        </p>
+                                    );
+                                }
+
+                                if (agentSeconds !== undefined) {
+                                    return (
+                                        <p className="text-sm font-default text-gray-900 dark:text-gray-100">
+                                            {displaySeconds.toFixed(1)}s + {agentSeconds.toFixed(1)}s = {ourSeconds.toFixed(1)}s
+                                        </p>
+                                    );
+                                } else {
+                                    return (
+                                        <p className="text-sm font-default text-gray-900 dark:text-gray-100">
+                                            {ourSeconds.toFixed(1)}s
+                                        </p>
+                                    );
+                                }
                             })()}
                         </div>
                     )}
@@ -283,7 +338,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                             </p>
                         </div>
                     )}
-                    {agentResult.usage?.total_tokens !== undefined && (
+                    {agentResult.usage?.total_tokens !== undefined && agent.name !== "browser-use-cloud" && (
                         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                             <div className="flex items-center gap-2 mb-1">
                                 <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -326,7 +381,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                                                 {action.type || action.name || "Action"}
                                             </span>
                                             <span className="text-xs text-gray-500 dark:text-gray-500">
-                                                Step {index + 1}
+                                                Step {action.stepNumber || index + 1}
                                             </span>
                                         </div>
                                         {action.name && action.name !== action.type && (
@@ -334,10 +389,27 @@ export function BUPanel({ agent }: BUPanelProps) {
                                                 {action.name}
                                             </p>
                                         )}
-                                        {action.url && (
-                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
-                                                {action.url}
-                                            </p>
+                                        {(action.url || action.screenshotUrl) && (
+                                            <div className="mt-1 space-y-1">
+                                                {action.url && (
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                                        {action.url}
+                                                    </p>
+                                                )}
+                                                {action.screenshotUrl && (
+                                                    <a
+                                                        href={action.screenshotUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                        Screenshot
+                                                    </a>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                     <svg
@@ -492,6 +564,14 @@ export function BUPanel({ agent }: BUPanelProps) {
                                     // For other actions, show reasoning and result as before
                                     return (
                                         <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-3">
+                                            {action.memory && (
+                                                <div>
+                                                    <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 uppercase tracking-wide">Memory</h5>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                                        {action.memory}
+                                                    </p>
+                                                </div>
+                                            )}
                                             {action.reasoning && (
                                                 <div>
                                                     <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 uppercase tracking-wide">Reasoning</h5>

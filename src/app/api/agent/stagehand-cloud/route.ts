@@ -1,23 +1,25 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { Stagehand } from "@browserbasehq/stagehand";
-import AnchorBrowser from "anchorbrowser";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 
-// Initialize the client
-const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
-
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-// For explicit headfull session configuration (optional, default to false)
-const config = {
-    browser: {
-        headless: {
-            active: false
-        }
+// Initialize Browserbase client helper
+const getBrowserbaseConfig = () => {
+    const apiKey = process.env.BROWSERBASE_API_KEY;
+    const projectId = process.env.BROWSERBASE_PROJECT_ID;
+
+    if (!apiKey) {
+        throw new Error("BROWSERBASE_API_KEY environment variable is required");
     }
+    if (!projectId) {
+        throw new Error("BROWSERBASE_PROJECT_ID environment variable is required");
+    }
+
+    return { apiKey, projectId };
 };
 
 const determineKey = (model: string | undefined) => {
@@ -98,21 +100,13 @@ export async function POST(request: NextRequest) {
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
-        // Create browser session (external API call) - this is the main bottleneck
-        const browserSession = await browser.sessions.create(config);
-        const liveViewUrl = browserSession.data?.live_view_url ?? "";
-        const browserSessionId = browserSession.data?.id ?? "";
-        const cdpUrl = browserSession.data?.cdp_url ?? "";
+        // Get Browserbase config
+        const browserbaseConfig = getBrowserbaseConfig();
+        const modelString = model ?? "google/gemini-2.5-flash";
 
-        if (!liveViewUrl) {
-            console.error("❌ Failed to create session - no live_view_url");
-            return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
-        }
-
-        if (!cdpUrl) {
-            console.error("❌ Failed to create session - no cdp_url");
-            return NextResponse.json({ error: "Failed to create session - missing cdp_url" }, { status: 500 });
-        }
+        // Browserbase manages sessions internally, so we don't create a browser session manually
+        // The live view URL will be available from Stagehand after init
+        let liveViewUrl = "";
 
         let dbSessionId: string;
         let agentId: any; // Use any to avoid type conflicts with Convex ID types
@@ -122,10 +116,10 @@ export async function POST(request: NextRequest) {
         if (existingSessionId) {
             agentId = await convex.mutation(api.mutations.createAgent, {
                 sessionId: existingSessionId,
-                name: "stagehand",
-                model: model ?? "google/gemini-2.5-flash",
+                name: "stagehand-cloud",
+                model: modelString,
                 browser: {
-                    sessionId: browserSessionId,
+                    sessionId: "", // Browserbase session ID will be set after init
                     url: liveViewUrl,
                 },
             });
@@ -135,11 +129,11 @@ export async function POST(request: NextRequest) {
             const result = await convex.mutation(api.mutations.createSession, {
                 instruction,
                 browserData: {
-                    sessionId: browserSessionId,
+                    sessionId: "", // Browserbase session ID will be set after init
                     url: liveViewUrl,
                 },
-                agentName: "stagehand",
-                model: model ?? "google/gemini-2.5-flash",
+                agentName: "stagehand-cloud",
+                model: modelString,
             });
             dbSessionId = result.sessionId;
             agentId = result.agentId!;
@@ -152,19 +146,18 @@ export async function POST(request: NextRequest) {
         after(async () => {
             const startTime = Date.now();
             try {
-                const modelString = model ?? "google/gemini-2.5-flash";
                 const stagehand = new Stagehand({
-                    env: "LOCAL",
+                    env: "BROWSERBASE",
+                    apiKey: browserbaseConfig.apiKey,
+                    projectId: browserbaseConfig.projectId,
                     model: {
                         modelName: modelString,
                         apiKey: determineKey(model),
                     },
-                    localBrowserLaunchOptions: {
-                        cdpUrl: cdpUrl,
-                    },
                 });
 
                 await stagehand.init();
+
                 const agent = await stagehand.agent();
 
                 const { message, actions, usage, success, completed, metadata } = await agent.execute({
@@ -172,24 +165,37 @@ export async function POST(request: NextRequest) {
                     instruction,
                 });
 
+                // Try to get metrics to retrieve session info if available
+                let browserbaseSessionId = "";
+                try {
+                    const metrics = await stagehand.metrics;
+                    // Browserbase session info might be in metadata
+                    browserbaseSessionId = (metadata as any)?.sessionId || "";
+                } catch (e) {
+                    console.log("Could not retrieve metrics/session info");
+                }
+
+                // Try to update live URL from stagehand context if available
+                try {
+                    // Browserbase may expose live URL through different means
+                    // This might need to be adjusted based on actual Browserbase API
+                    const updatedLiveUrl = (metadata as any)?.liveUrl ||
+                        (metadata as any)?.live_view_url ||
+                        "";
+                    if (updatedLiveUrl && updatedLiveUrl !== liveViewUrl) {
+                        liveViewUrl = updatedLiveUrl;
+                        await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
+                            agentId,
+                            url: liveViewUrl,
+                        });
+                    }
+                } catch (e) {
+                    console.log("Could not update live URL");
+                }
+
                 await stagehand.close();
                 const endTime = Date.now();
                 const duration = (endTime - startTime) / 1000; // Convert to seconds
-
-                // Get recording before deleting
-                let recordingUrl = "";
-                try {
-                    const recording = await browser.sessions.recordings.primary.get(browserSessionId);
-                    const arrayBuffer = await recording.arrayBuffer();
-                    const base64 = Buffer.from(arrayBuffer).toString('base64');
-                    recordingUrl = `data:video/mp4;base64,${base64}`;
-                    console.log("Recording captured, length:", recordingUrl.length);
-                } catch (recordingError) {
-                    console.error("Failed to get recording:", recordingError);
-                }
-
-                // Delete browser session
-                await browser.sessions.delete(browserSessionId);
 
                 const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
                 const cost = computeCost(model, usageData);
@@ -201,9 +207,12 @@ export async function POST(request: NextRequest) {
                     message,
                     actions,
                     success,
-                    agent: "stagehand",
+                    agent: "stagehand-cloud",
                     completed,
-                    metadata,
+                    metadata: {
+                        ...metadata,
+                        browserbaseSessionId,
+                    },
                 }
 
                 // Save result to Convex database using backend mutation (no auth required)
@@ -213,11 +222,11 @@ export async function POST(request: NextRequest) {
                     status: success ? "completed" as const : "failed" as const,
                 });
 
-                // Save recording URL if available
-                if (recordingUrl) {
-                    await convexBackend.mutation(api.mutations.updateAgentRecordingUrlFromBackend, {
+                // Update browser session ID if we got it
+                if (browserbaseSessionId) {
+                    await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
                         agentId,
-                        recordingUrl,
+                        url: liveViewUrl || "",
                     });
                 }
 
@@ -230,15 +239,13 @@ export async function POST(request: NextRequest) {
                         agentId,
                         status: "failed",
                     });
-
-                    await browser.sessions.delete(browserSessionId);
                 } catch (cleanupError) {
-                    console.error("❌ Error cleaning up session:", cleanupError);
+                    console.error("❌ Error updating agent status:", cleanupError);
                 }
             }
         });
 
-        // return session object and live view url
+        // Return session object and live view url (may be empty initially)
         return NextResponse.json({
             session: {
                 id: dbSessionId,
@@ -257,3 +264,4 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+

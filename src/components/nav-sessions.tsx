@@ -81,14 +81,14 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
       ) : (
         <SidebarMenu className="px-2">
           {sessions.map((session) => (
-            <SidebarMenuItem key={session._id}>
+            <SidebarMenuItem key={session._id} className="px-0">
               <SidebarMenuButton tooltip={session.instruction} asChild>
                 <div className="flex items-center gap-1 group">
                   <Link
                     href={`/session/${session._id}`}
                     prefetch={true}
                     className={cn(
-                      "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors truncate flex-1"
+                      "flex items-center gap-2 rounded-lg py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors truncate flex-1"
                     )}
                   >
                     <MessageSquare className="size-4 shrink-0" />

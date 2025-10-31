@@ -18,6 +18,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { User, LogIn, LogOut, Loader2, Mail } from "lucide-react";
+import Link from "next/link";
 
 export function UserInfo() {
     const { isAuthenticated, isLoading } = useConvexAuth();
@@ -302,6 +303,18 @@ export function UserInfo() {
                                     <span className="text-xs">{user.email}</span>
                                 </DropdownMenuItem>
                             )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild className="px-2 py-1.5">
+                                <Link href="/privacy" className="text-xs w-full">
+                                    Privacy
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild className="px-2 py-1.5">
+                                <Link href="/terms" className="text-xs w-full">
+                                    Terms
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 onClick={handleSignOut}
                                 className="px-2 py-1.5 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"

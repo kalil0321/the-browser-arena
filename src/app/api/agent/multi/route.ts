@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
+import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
+// Initialize browser client for browser-use agents
+const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
+
 interface AgentConfig {
-    agent: "stagehand" | "smooth" | "skyvern" | "browser-use";
+    agent: "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
     model: string;
 }
 
@@ -32,22 +34,42 @@ export async function POST(request: NextRequest) {
 
         // Get user token for auth
         const token = await getToken();
-        console.log("Auth token:", token ? "Present" : "Missing");
 
         if (!token) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        // Create Convex client per request for better isolation
+        const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
-        // Create session in Convex first
-        const { sessionId: dbSessionId } = await convex.mutation(api.mutations.createSession, {
-            instruction,
-            isPrivate: isPrivate ?? false,
-        });
+        // Check if we need browser sessions for browser-use agents (not browser-use-cloud)
+        const browserUseAgents = agents.filter(a => a.agent === "browser-use");
+        const needsBrowserSessions = browserUseAgents.length > 0;
 
-        console.log(`✅ Created Convex session: ${dbSessionId}`);
+        // Create session in Convex, and browser sessions in parallel if needed
+        const parallelPromises: Promise<any>[] = [
+            convex.mutation(api.mutations.createSession, {
+                instruction,
+                isPrivate: isPrivate ?? false,
+            })
+        ];
+
+        // Create browser sessions for all browser-use agents in parallel
+        if (needsBrowserSessions) {
+            browserUseAgents.forEach(() => {
+                parallelPromises.push(browser.sessions.create());
+            });
+        }
+
+        const parallelResults = await Promise.all(parallelPromises);
+        const { sessionId: dbSessionId } = parallelResults[0] as { sessionId: string };
+        const browserSessions = needsBrowserSessions
+            ? parallelResults.slice(1) as any[]
+            : [];
 
         // Launch all agents in parallel
+        let browserSessionIndex = 0;
         const agentPromises = agents.map(async (agentConfig) => {
             try {
                 let endpoint: string;
@@ -65,20 +87,43 @@ export async function POST(request: NextRequest) {
                             apiKey: smoothApiKey, // Pass user's API key if provided
                         };
                         break;
-                    case "skyvern":
-                        endpoint = `${AGENT_SERVER_URL}/agent/skyvern`;
+                    case "stagehand-bb-cloud":
+                        // Stagehand BrowserBase Cloud is a Next.js route
+                        endpoint = `/api/agent/stagehand-cloud`;
+                        isLocalEndpoint = true;
                         payload = {
-                            sessionId: dbSessionId,
                             instruction,
-                            providerModel: agentConfig.model
+                            model: agentConfig.model,
+                            sessionId: dbSessionId, // Pass the shared session ID
                         };
                         break;
                     case "browser-use":
                         endpoint = `${AGENT_SERVER_URL}/agent/browser-use`;
+                        // Use pre-created browser session for performance
+                        const browserSession = browserSessions[browserSessionIndex++];
+                        const browserSessionId = browserSession?.data?.id ?? "";
+                        const cdpUrl = browserSession?.data?.cdp_url ?? "";
+                        const liveViewUrl = browserSession?.data?.live_view_url ?? "";
+
                         payload = {
                             sessionId: dbSessionId,
                             instruction,
-                            providerModel: agentConfig.model
+                            providerModel: agentConfig.model,
+                            ...(browserSessionId && cdpUrl && liveViewUrl ? {
+                                browserSessionId,
+                                cdpUrl,
+                                liveViewUrl,
+                            } : {})
+                        };
+                        break;
+                    case "browser-use-cloud":
+                        // Browser Use Cloud is a Next.js route
+                        endpoint = `/api/agent/browser-use-cloud`;
+                        isLocalEndpoint = true;
+                        payload = {
+                            instruction,
+                            model: agentConfig.model,
+                            sessionId: dbSessionId, // Pass the shared session ID
                         };
                         break;
                     case "stagehand":
@@ -123,12 +168,10 @@ export async function POST(request: NextRequest) {
 
                     if (!response.ok) {
                         const errorText = await response.text();
-                        console.error(`❌ Error launching ${agentConfig.agent}:`, errorText);
                         throw new Error(`Failed to launch ${agentConfig.agent}: ${errorText}`);
                     }
 
                     const agentData = await response.json();
-                    console.log(`✅ ${agentConfig.agent} agent started:`, agentData);
 
                     return {
                         agent: agentConfig.agent,
@@ -142,7 +185,6 @@ export async function POST(request: NextRequest) {
                     if (fetchError.name === 'AbortError' || fetchError.code === 'UND_ERR_HEADERS_TIMEOUT') {
                         const errorMsg = `Timeout while connecting to ${agentConfig.agent} agent server. ` +
                             `Make sure the Python agent server is running at ${AGENT_SERVER_URL}`;
-                        console.error(`❌ ${errorMsg}`);
                         throw new Error(errorMsg);
                     }
 
@@ -150,7 +192,6 @@ export async function POST(request: NextRequest) {
                     throw fetchError;
                 }
             } catch (error) {
-                console.error(`❌ Error launching ${agentConfig.agent}:`, error);
                 return {
                     agent: agentConfig.agent,
                     success: false,

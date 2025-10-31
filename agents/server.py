@@ -41,6 +41,10 @@ class AgentRequest(BaseModel):
     sessionId: str  # Convex session ID
     instruction: str
     providerModel: Optional[str] = ""
+    # Optional browser session info (if provided, skip browser session creation)
+    browserSessionId: Optional[str] = None
+    cdpUrl: Optional[str] = None
+    liveViewUrl: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -368,13 +372,23 @@ async def run_browser_use_task(
 
         # Run the agent
         print(f"🤖 Starting Browser-Use execution for: {instruction}")
-        result, usage = await run_browser_use(
+        result, usage, timings = await run_browser_use(
             prompt=instruction,
             cdp_url=cdp_url,
             provider_model=provider_model,
             browser=anchor_browser,
             session_id=browser_session_id,
         )
+
+        # Log timing information
+        if timings:
+            print("\n📊 Browser-Use Agent Timing Summary:")
+            print(f"  Total: {timings.get('total', 0):.2f}s")
+            print(f"  - LLM Init: {timings.get('llm_initialization', 0):.2f}s")
+            print(f"  - Browser Init: {timings.get('browser_initialization', 0):.2f}s")
+            print(f"  - Agent Init: {timings.get('agent_initialization', 0):.2f}s")
+            print(f"  - Agent Execution: {timings.get('agent_execution', 0):.2f}s")
+            print(f"  - Usage Summary: {timings.get('usage_summary', 0):.2f}s")
 
         # Fetch and upload recording before deleting session
         recording_url = None
@@ -410,13 +424,6 @@ async def run_browser_use_task(
             import traceback
 
             traceback.print_exc()
-
-        # Delete browser session (can happen anytime, doesn't affect recording)
-        try:
-            anchor_browser.sessions.delete(browser_session_id)
-            print(f"🗑️  Deleted browser session {browser_session_id}")
-        except Exception as e:
-            print(f"⚠️  Failed to delete browser session: {str(e)}")
 
         # Debug logging
         print(f"📊 Result type: {type(result)}")
@@ -530,6 +537,7 @@ async def run_browser_use_task(
             print(f"⚠️  Warning: Failed to serialize actions: {e}")
             actions = []
 
+        # Send payload to backend first
         convex_client.mutation(
             "mutations:updateAgentResultFromBackend",
             {
@@ -552,6 +560,13 @@ async def run_browser_use_task(
             print(f"✅ Recording saved: {recording_url}")
 
         print(f"✅ Browser-Use agent {agent_id} completed successfully")
+
+        # Delete browser session after payload is sent to backend
+        try:
+            anchor_browser.sessions.delete(browser_session_id)
+            print(f"🗑️  Deleted browser session {browser_session_id}")
+        except Exception as e:
+            print(f"⚠️  Failed to delete browser session: {str(e)}")
 
     except Exception as e:
         print(f"❌ Browser-Use agent {agent_id} failed: {str(e)}")
@@ -628,19 +643,29 @@ async def run_browser_use_agent(
     Start a Browser-Use agent task in the background
 
     Returns immediately with session info and browser URL
+
+    If browserSessionId, cdpUrl, and liveViewUrl are provided, uses those instead of creating a new session.
+    This allows the Next.js API to create the browser session in parallel, saving 3-5 seconds.
     """
     try:
-        # Create browser session
-        browser_session = anchor_browser.sessions.create()
-        browser_session_id = browser_session.data.id
-        cdp_url = browser_session.data.cdp_url
-        live_view_url = browser_session.data.live_view_url
+        # Use provided browser session if available, otherwise create new one
+        if request.browserSessionId and request.cdpUrl and request.liveViewUrl:
+            # Browser session already created by Next.js API (parallelized for performance)
+            browser_session_id = request.browserSessionId
+            cdp_url = request.cdpUrl
+            live_view_url = request.liveViewUrl
+        else:
+            # Fallback: create browser session here (slower path)
+            browser_session = anchor_browser.sessions.create()
+            browser_session_id = browser_session.data.id
+            cdp_url = browser_session.data.cdp_url
+            live_view_url = browser_session.data.live_view_url
 
-        if not live_view_url:
-            raise ValueError("Failed to create browser session - no live_view_url")
+            if not live_view_url:
+                raise ValueError("Failed to create browser session - no live_view_url")
 
-        if not cdp_url:
-            raise ValueError("Failed to create browser session - no cdp_url")
+            if not cdp_url:
+                raise ValueError("Failed to create browser session - no cdp_url")
 
         # Create agent in Convex
         agent_id = convex_client.mutation(

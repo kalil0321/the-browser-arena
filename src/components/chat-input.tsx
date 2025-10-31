@@ -18,9 +18,13 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { getApiKey } from "@/lib/api-keys";
+import { Switch } from "@/components/ui/switch";
+import { OpenAI } from "@/components/logos/openai";
+import { GeminiLogo } from "@/components/logos/gemini";
+import { ClaudeLogo } from "@/components/logos/claude";
 
-type AgentType = "stagehand" | "smooth" | "skyvern" | "browser-use";
-type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-4.5-haiku" | "browser-use/bu-1.0";
+type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
+type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-4.5-haiku" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
 
 interface AgentConfig {
     agent: AgentType;
@@ -30,15 +34,17 @@ interface AgentConfig {
 const AGENT_LABELS: Record<AgentType, string> = {
     "stagehand": "Stagehand",
     "smooth": "Smooth",
-    "skyvern": "Skyvern",
-    "browser-use": "Browser-Use"
+    "stagehand-bb-cloud": "Stagehand BrowserBase Cloud",
+    "browser-use": "Browser-Use",
+    "browser-use-cloud": "Browser-Use Cloud"
 };
 
 const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
-    "browser-use": ["browser-use/bu-1.0"],
+    "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"],
+    "browser-use-cloud": ["browser-use-llm", "gemini-flash-latest", "gpt-4.1", "o3", "claude-sonnet-4"],
     "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"],
     "smooth": [], // Smooth uses its own models
-    "skyvern": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"]
+    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"]
 };
 
 // Helper to format model names
@@ -49,6 +55,7 @@ const formatModelName = (model: string) => {
         const modelName = parts.slice(1).join("/");
         return { provider, modelName };
     }
+    // Models without "/" (like Browser Use Cloud models)
     return { provider: "", modelName: model };
 };
 
@@ -60,7 +67,25 @@ const getProviderName = (provider: string) => {
         "anthropic": "Anthropic",
         "browser-use": "Browser-Use"
     };
+    // Handle Browser Use Cloud models that don't have provider prefix
+    if (provider === "" || !provider) {
+        return "Browser-Use Cloud";
+    }
     return providerMap[provider] || provider;
+};
+
+// Helper to get provider logo
+const ProviderLogo: React.FC<{ provider: string; className?: string }> = ({ provider, className }) => {
+    switch (provider) {
+        case "openai":
+            return <OpenAI className={cn("h-4 w-4", className)} />;
+        case "google":
+            return <GeminiLogo className={cn("h-4 w-4", className)} />;
+        case "anthropic":
+            return <ClaudeLogo className={cn("h-4 w-4", className)} />;
+        default:
+            return <Bot className={cn("h-4 w-4 text-muted-foreground", className)} />;
+    }
 };
 
 export function ChatInput() {
@@ -295,7 +320,7 @@ export function ChatInput() {
                         <button
                             type="submit"
                             disabled={!input.trim() || isLoading}
-                            className="absolute right-0 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black transition duration-200 disabled:bg-gray-100 dark:bg-zinc-900 dark:disabled:bg-zinc-800"
+                            className="absolute right-0 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black transition duration-200 hover:opacity-90 disabled:bg-gray-100 dark:bg-zinc-900 dark:disabled:bg-zinc-800"
                         >
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -318,35 +343,33 @@ export function ChatInput() {
                     </form>
 
                     <div className="flex h-10 w-full items-center justify-between">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                             <Button
                                 type="button"
                                 onClick={handleDialogOpen}
                                 disabled={isLoading}
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
-                                className="text-xs"
+                                className="h-8 px-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-primary hover:text-primary"
                             >
-                                Configure Agents ({agentConfigs.length})
+                                <Settings className="mr-1.5 h-4 w-4" />
+                                Agents
+                                <span className="ml-1 rounded-full bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-1.5 py-0.5 text-[10px]">
+                                    {agentConfigs.length}
+                                </span>
                             </Button>
-                            <div className="flex items-center gap-2">
-                                <Checkbox
+                            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900">
+                                <Label htmlFor="private-session" className="text-[11px] text-muted-foreground">Private</Label>
+                                <Switch
                                     id="private-session"
                                     checked={isPrivate}
                                     onCheckedChange={(checked) => setIsPrivate(checked === true)}
                                     disabled={isLoading}
                                 />
-                                <Label
-                                    htmlFor="private-session"
-                                    className="text-xs text-muted-foreground cursor-pointer"
-                                >
-                                    Private session
-                                </Label>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4">
-                        </div>
+                        <div className="flex items-center gap-4" />
                     </div>
 
                     {/* Agent Configuration Dialog */}
@@ -370,7 +393,7 @@ export function ChatInput() {
                                     {(Object.keys(AGENT_LABELS) as AgentType[]).map((agentType) => {
                                         const selected = isAgentSelected(agentType);
                                         const currentModel = getAgentModel(agentType);
-                                        const isDisabled = agentType === "skyvern"; // Skyvern is disabled due to dependency conflicts
+                                        const isDisabled = false; // All agents are now enabled
                                         const isMaxReached = !selected && tempAgentConfigs.length >= 4;
 
                                         return (
@@ -433,8 +456,16 @@ export function ChatInput() {
                                                                     >
                                                                         <SelectTrigger className="w-full h-9 bg-background">
                                                                             <div className="flex items-center gap-2 w-full">
-                                                                                <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-                                                                                <SelectValue placeholder="Select model" />
+                                                                                {(() => {
+                                                                                    const { provider, modelName } = formatModelName(currentModel || "");
+                                                                                    return (
+                                                                                        <>
+                                                                                            <ProviderLogo provider={provider} />
+                                                                                            <span className="truncate text-sm">{modelName || "Select model"}</span>
+                                                                                            <span className="ml-auto text-xs text-muted-foreground">{getProviderName(provider)}</span>
+                                                                                        </>
+                                                                                    );
+                                                                                })()}
                                                                             </div>
                                                                         </SelectTrigger>
                                                                         <SelectContent>
@@ -442,11 +473,14 @@ export function ChatInput() {
                                                                                 const { provider, modelName } = formatModelName(model);
                                                                                 return (
                                                                                     <SelectItem key={model} value={model}>
-                                                                                        <div className="flex flex-col py-0.5">
-                                                                                            <span className="font-medium leading-tight">{modelName}</span>
-                                                                                            <span className="text-xs text-muted-foreground leading-tight">
-                                                                                                {getProviderName(provider)}
-                                                                                            </span>
+                                                                                        <div className="flex items-center gap-2 py-0.5">
+                                                                                            <ProviderLogo provider={provider} />
+                                                                                            <div className="flex flex-col">
+                                                                                                <span className="font-medium leading-tight">{modelName}</span>
+                                                                                                <span className="text-xs text-muted-foreground leading-tight">
+                                                                                                    {getProviderName(provider)}
+                                                                                                </span>
+                                                                                            </div>
                                                                                         </div>
                                                                                     </SelectItem>
                                                                                 );

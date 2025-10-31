@@ -5,6 +5,7 @@ import "./globals.css";
 import { ConvexClientProvider } from "@/components/providers/convex";
 import { DashboardSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
+import { ThemeProvider } from "next-themes";
 
 const appSans = Pixelify_Sans({
   variable: "--font-sans",
@@ -104,14 +105,17 @@ export default async function RootLayout({
       <body
         className={`${appSans.variable} ${appMono.variable} ${defaultFont.variable} antialiased relative min-h-screen`}
       >
-        <ConvexClientProvider>
-          <SidebarProvider defaultOpen={defaultOpen}>
-            <div className="relative flex h-screen w-full">
-              <DashboardSidebar />
-              {children}
-            </div>
-          </SidebarProvider>
-        </ConvexClientProvider>
+        {/* @ts-ignore */}
+        {/* <ThemeProvider forcedTheme="light" suppressHydrationWarning> */}
+          <ConvexClientProvider>
+            <SidebarProvider defaultOpen={defaultOpen}>
+              <div className="relative flex h-screen w-full">
+                <DashboardSidebar />
+                {children}
+              </div>
+            </SidebarProvider>
+          </ConvexClientProvider>
+        {/* </ThemeProvider> */}
       </body>
     </html>
   );

@@ -1,8 +1,15 @@
-from browser_use import Agent
-from browser_use import Browser
-from browser_use import Agent, ChatBrowserUse
+from browser_use import (
+    Agent,
+    Browser,
+    ChatBrowserUse,
+    ChatOpenAI,
+    ChatAnthropic,
+    ChatGoogle,
+)
 from anchorbrowser import Anchorbrowser
 import os
+import time
+from typing import Dict
 
 
 def parse_provider_model(provider_model: str):
@@ -13,12 +20,29 @@ def parse_provider_model(provider_model: str):
 
 
 def get_llm(provider: str, model: str):
-    # if provider.lower() == "openai":
-    #     return ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
-    # if provider.lower() == "google":
-    #     return ChatGoogle(model=model, api_key=os.getenv("GOOGLE_API_KEY"))
-    # if provider.lower() == "anthropic":
-    #     return ChatAnthropic(model=model, api_key=os.getenv("ANTHROPIC_API_KEY"))
+    provider_lower = provider.lower()
+
+    if provider_lower == "browser-use":
+        return ChatBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
+
+    if provider_lower == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        return ChatOpenAI(model=model, api_key=api_key)
+
+    if provider_lower == "google":
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable is required")
+        return ChatGoogle(model=model, api_key=api_key)
+
+    if provider_lower == "anthropic":
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+
+        return ChatAnthropic(model=model, api_key=api_key)
 
     return ChatBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
 
@@ -41,35 +65,83 @@ async def run_browser_use(
         session_id: Browser session ID
 
     Returns:
-        Browser-Use agent result
+        Tuple of (Browser-Use agent result, usage summary, timings dict)
     """
+    timings: Dict[str, float] = {}
+    overall_start = time.time()
+
+    # Time LLM initialization
+    llm_start = time.time()
     provider, model = parse_provider_model(provider_model)
     llm = get_llm(provider, model)
+    timings["llm_initialization"] = time.time() - llm_start
+    print(f"⏱️  LLM initialization: {timings['llm_initialization']:.2f}s")
 
+    # Time Browser initialization
+    browser_start = time.time()
     automation_browser = Browser(
         headless=False,
         cdp_url=cdp_url,
     )
+    timings["browser_initialization"] = time.time() - browser_start
+    print(f"⏱️  Browser initialization: {timings['browser_initialization']:.2f}s")
 
+    # Time Agent initialization
+    agent_start = time.time()
     agent = Agent(
         task=prompt,
         llm=llm,
         browser=automation_browser,
         calculate_cost=True,
     )
+    timings["agent_initialization"] = time.time() - agent_start
+    print(f"⏱️  Agent initialization: {timings['agent_initialization']:.2f}s")
 
+    # Time Agent execution (this is typically the longest part)
+    agent_run_start = time.time()
     result = await agent.run()
+    timings["agent_execution"] = time.time() - agent_run_start
+    print(f"⏱️  Agent execution: {timings['agent_execution']:.2f}s")
+
+    # Time usage summary retrieval
+    usage_start = time.time()
     usage = await agent.token_cost_service.get_usage_summary()
-    print("USAGE", usage)
+    timings["usage_summary"] = time.time() - usage_start
+    print(f"⏱️  Usage summary retrieval: {timings['usage_summary']:.2f}s")
+
+    # Calculate total time
+    timings["total"] = time.time() - overall_start
+    print(f"⏱️  Total time: {timings['total']:.2f}s")
+
+    # Log timing breakdown
+    print("\n📊 Timing Breakdown:")
+    print(
+        f"  LLM Init:       {timings['llm_initialization']:.2f}s ({timings['llm_initialization'] / timings['total'] * 100:.1f}%)"
+    )
+    print(
+        f"  Browser Init:   {timings['browser_initialization']:.2f}s ({timings['browser_initialization'] / timings['total'] * 100:.1f}%)"
+    )
+    print(
+        f"  Agent Init:     {timings['agent_initialization']:.2f}s ({timings['agent_initialization'] / timings['total'] * 100:.1f}%)"
+    )
+    print(
+        f"  Agent Execution: {timings['agent_execution']:.2f}s ({timings['agent_execution'] / timings['total'] * 100:.1f}%)"
+    )
+    print(
+        f"  Usage Summary:  {timings['usage_summary']:.2f}s ({timings['usage_summary'] / timings['total'] * 100:.1f}%)"
+    )
+    print("  ───────────────────────────────")
+    print(f"  Total:          {timings['total']:.2f}s\n")
+
     # Session deletion is handled in server.py after recording is saved
-    return result, usage
+    return result, usage, timings
 
 
 async def main():
     browser = Anchorbrowser(api_key=os.getenv("ANCHOR_API_KEY"))
     session = browser.sessions.create()
 
-    result = await run_browser_use(
+    result, usage, timings = await run_browser_use(
         prompt="Find companies that raised more than $10M in the US this month",
         cdp_url=session.data.cdp_url,
         provider_model="",
@@ -78,8 +150,6 @@ async def main():
     )
 
     browser.sessions.delete(session.data.id)
-
-    print(result.final_result())
 
 
 if __name__ == "__main__":

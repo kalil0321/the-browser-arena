@@ -18,5 +18,8 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "registries": {}
+  "registries": {
+    "@elements": "https://tryelements.dev/r/{name}.json",
+    "@ncdai": "https://chanhdai.com/r/{name}.json"
+  }
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Key, UserCog, Shield, Wrench } from "lucide-react";
+import { Webhook, Key, UserCog, Shield, Wrench, Upload } from "lucide-react";
 
 export const metadata: Metadata = {
     title: "Roadmap",
@@ -11,6 +11,32 @@ export const metadata: Metadata = {
 
 export default function RoadmapPage() {
     const features = [
+        {
+            icon: Upload,
+            title: "File Upload",
+            description:
+                "Upload files for agents to process in sessions and tasks. Support large files, secure storage, and easy referencing from prompts.",
+            status: "upcoming",
+            details: [
+                "Drag & drop and paste to upload",
+                "Upload from chat input and API",
+                "Secure storage with access control",
+                "Refer to files in prompts and tools",
+            ],
+        },
+        {
+            icon: UserCog,
+            title: "Browser Profiles",
+            description:
+                "Create and manage custom browser profiles with persistent settings, cookies, and user agents. Maintain separate identities across automation sessions.",
+            status: "upcoming",
+            details: [
+                "Custom user agent strings",
+                "Persistent cookies and storage",
+                "Profile templates and presets",
+                "Profile isolation and privacy",
+            ],
+        },
         {
             icon: Webhook,
             title: "Webhooks",
@@ -33,18 +59,6 @@ export default function RoadmapPage() {
                 "API key management and rotation",
                 "Usage analytics and rate limiting",
                 "OpenAPI/Swagger documentation",
-            ],
-        },
-        {
-            icon: UserCog,
-            title: "Browser Profiles",
-            description: "Create and manage custom browser profiles with persistent settings, cookies, and user agents. Maintain separate identities across automation sessions.",
-            status: "upcoming",
-            details: [
-                "Custom user agent strings",
-                "Persistent cookies and storage",
-                "Profile templates and presets",
-                "Profile isolation and privacy",
             ],
         },
         {

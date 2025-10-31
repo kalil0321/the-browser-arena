@@ -4,7 +4,6 @@ import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 
 const smoothUrl = 'https://api.smooth.sh/api/v1/task';
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -125,20 +124,21 @@ export async function POST(request: NextRequest) {
     try {
         const { task, sessionId: existingSessionId, apiKey: userApiKey } = await request.json();
 
-        // Get user token for auth
-        const token = await getToken();
-        console.log("Auth token:", token ? "Present" : "Missing");
+        // Get user token for auth and API key in parallel where possible
+        const [token, apiKey] = await Promise.all([
+            getToken(),
+            Promise.resolve(getSmoothApiKey(userApiKey))
+        ]);
 
         if (!token) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        // Create Convex client per request for better isolation
+        const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
-        // Get API key to use (user key or fallback to server key)
-        const apiKey = getSmoothApiKey(userApiKey);
-
         // Submit task to Smooth API
-        console.log("🚀 Submitting task to Smooth API...");
         const taskData = await runTask(task, apiKey);
         const { id: smoothTaskId, live_url } = taskData;
 

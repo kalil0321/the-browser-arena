@@ -3,8 +3,6 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
@@ -14,22 +12,24 @@ export async function POST(request: NextRequest) {
 
         // Get user token for auth
         const token = await getToken();
-        console.log("Auth token:", token ? "Present" : "Missing");
 
         if (!token) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        // Create Convex client per request for better isolation and set auth
+        const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
-        // Create session in Convex first
+        // Prepare Python server request data
+        const providerModel = model || "";
+
+        // Create session in Convex
         const { sessionId: dbSessionId } = await convex.mutation(api.mutations.createSession, {
             instruction,
-            // Don't provide browserData yet - Python server will create it
         });
 
-        console.log(`✅ Created Convex session: ${dbSessionId}`);
-
-        // Call Python agent server
+        // Call Python agent server immediately after session is created
         const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/skyvern`, {
             method: "POST",
             headers: {
@@ -38,13 +38,12 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
                 sessionId: dbSessionId,
                 instruction,
-                providerModel: model || "",
+                providerModel,
             }),
         });
 
         if (!agentResponse.ok) {
             const errorText = await agentResponse.text();
-            console.error(`❌ Agent server error: ${errorText}`);
             return NextResponse.json(
                 { error: `Agent server error: ${errorText}` },
                 { status: agentResponse.status }
@@ -52,9 +51,8 @@ export async function POST(request: NextRequest) {
         }
 
         const agentData = await agentResponse.json();
-        console.log(`✅ Skyvern agent started:`, agentData);
 
-        // Return session info with live URL
+        // Return session info with live URL immediately
         return NextResponse.json({
             session: {
                 id: dbSessionId,

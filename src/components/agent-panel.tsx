@@ -70,9 +70,11 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                         </span>
                     )}
                 </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                    {agent.status}
-                </span>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                        {agent.status}
+                    </span>
+                </div>
             </div>
 
             {/* Content */}
@@ -115,11 +117,11 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                         {agentResult && (
                             <div className="p-4">
                                 {agent.name === "smooth" && <SmoothPanel agent={agent} />}
-                                {(agent.name === "browser-use" || agent.name === "browser_use") && <BUPanel agent={agent} />}
-                                {agent.name === "stagehand" && <StagehandPanel agent={agent} />}
+                                {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && <BUPanel agent={agent} />}
+                                {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && <StagehandPanel agent={agent} />}
 
                                 {/* Fallback for unknown agents */}
-                                {!["smooth", "browser-use", "browser_use", "stagehand"].includes(agent.name) && (
+                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "stagehand-bb-cloud", "stagehand-cloud"].includes(agent.name) && (
                                     <div className="space-y-3">
                                         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
                                             <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Result</h4>

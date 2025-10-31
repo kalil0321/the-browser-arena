@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { SidebarInset } from "@/components/ui/sidebar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConvexAuth } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -130,97 +130,125 @@ export default function SettingsPage() {
   };
 
   return (
-    <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground p-4" >
+    <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
       <div className="flex-1 overflow-y-auto">
-        <div className="container py-8 space-y-8 mx-auto">
-          <div>
+        <div className="container py-8 mx-auto max-w-6xl">
+          <div className="mb-8">
             <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
             <p className="text-muted-foreground mt-2">
               Manage your account settings and preferences
             </p>
           </div>
 
-          <Separator />
-
-          <Tabs defaultValue="profile" className="space-y-6">
-            <TabsList>
-              <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="account">Account</TabsTrigger>
-              <TabsTrigger value="api-keys">API Keys</TabsTrigger>
-              <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="profile" className="space-y-6">
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold">Profile Information</h2>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input
-                      id="name"
-                      placeholder="Your name"
-                      defaultValue={user?.name || ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      defaultValue={user?.email || ""}
-                    />
-                  </div>
-                  <Button>Save Changes</Button>
+          <div className="space-y-16">
+            {/* Personal Information Section */}
+            <div className="grid grid-cols-12 gap-8">
+              <div className="col-span-4 space-y-2">
+                <h2 className="text-xl font-semibold">Personal information</h2>
+                <p className="text-sm text-muted-foreground">
+                  Update your personal details and account information.
+                </p>
+              </div>
+              <div className="col-span-1 flex justify-center">
+                <div className="w-px h-full border-l border-dashed border-border"></div>
+              </div>
+              <div className="col-span-7 space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="first-name">First name</Label>
+                  <Input
+                    id="first-name"
+                    placeholder="Emma"
+                    defaultValue={user?.name?.split(" ")[0] || ""}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="last-name">Last name</Label>
+                  <Input
+                    id="last-name"
+                    placeholder="Crown"
+                    defaultValue={user?.name?.split(" ").slice(1).join(" ") || ""}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="emma@company.com"
+                    defaultValue={user?.email || ""}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="birth-year">Birth year</Label>
+                  <Input
+                    id="birth-year"
+                    type="number"
+                    placeholder="1990"
+                    min="1900"
+                    max={new Date().getFullYear()}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Input
+                    id="role"
+                    placeholder="Senior Manager"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Roles can only be changed by system admin.
+                  </p>
                 </div>
               </div>
-            </TabsContent>
+            </div>
 
-            <TabsContent value="account" className="space-y-6">
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold">Account Settings</h2>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <Input id="current-password" type="password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <Input id="new-password" type="password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm Password</Label>
-                    <Input id="confirm-password" type="password" />
-                  </div>
-                  <Button>Update Password</Button>
-                </div>
-                <Separator />
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-destructive">Danger Zone</h3>
-                  <div className="rounded-lg border border-destructive/50 p-4">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Once you delete your account, there is no going back. Please be certain.
-                    </p>
-                    <Button variant="destructive">Delete Account</Button>
-                  </div>
-                </div>
+            <Separator />
+
+            {/* Workspace Settings Section */}
+            <div className="grid grid-cols-12 gap-8">
+              <div className="col-span-4 space-y-2">
+                <h2 className="text-xl font-semibold">Workspace settings</h2>
+                <p className="text-sm text-muted-foreground">
+                  Manage your API keys and workspace configuration.
+                </p>
               </div>
-            </TabsContent>
-
-            <TabsContent value="api-keys" className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-semibold">API Keys</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Manage your API keys for external services. Keys are encrypted and stored locally on this device.
+              <div className="col-span-1 flex justify-center">
+                <div className="w-px h-full border-l border-dashed border-border"></div>
+              </div>
+              <div className="col-span-7 space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="workspace-name">Workspace name</Label>
+                  <Input
+                    id="workspace-name"
+                    placeholder="Test workspace"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="visibility">Visibility</Label>
+                  <Select defaultValue="private">
+                    <SelectTrigger id="visibility">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="private">Private</SelectItem>
+                      <SelectItem value="public">Public</SelectItem>
+                      <SelectItem value="team">Team</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="workspace-description">Workspace description</Label>
+                  <textarea
+                    id="workspace-description"
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-input/30 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Enter a description for your workspace"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Note: description provided will not be displayed externally.
                   </p>
                 </div>
 
-                <Separator />
-
-                {/* Smooth API Key Section */}
-                <div className="space-y-4">
+                {/* API Keys Section */}
+                <div className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-2">
                     <Key className="h-5 w-5 text-muted-foreground" />
                     <h3 className="text-lg font-medium">Smooth API Key</h3>
@@ -324,37 +352,56 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
-            </TabsContent>
+            </div>
 
-            <TabsContent value="appearance" className="space-y-6">
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold">Appearance</h2>
+            <Separator />
+
+            {/* Notification Settings Section */}
+            <div className="grid grid-cols-12 gap-8">
+              <div className="col-span-4 space-y-2">
+                <h2 className="text-xl font-semibold">Notification settings</h2>
+                <p className="text-sm text-muted-foreground">
+                  Configure how and when you receive notifications.
+                </p>
+              </div>
+              <div className="col-span-1 flex justify-center">
+                <div className="w-px h-full border-l border-dashed border-border"></div>
+              </div>
+              <div className="col-span-7 space-y-6">
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Theme</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Use the theme switcher in the sidebar to change your theme preference.
+                  <div>
+                    <h3 className="text-base font-medium mb-1">Newsletter</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Change how often you want to receive updates from our newsletter.
                     </p>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="newsletter-weekly"
+                          name="newsletter"
+                          value="weekly"
+                          className="h-4 w-4"
+                        />
+                        <Label htmlFor="newsletter-weekly" className="font-normal cursor-pointer">
+                          Every week
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="newsletter-monthly"
+                          name="newsletter"
+                          value="monthly"
+                          className="h-4 w-4"
+                        />
+                        <Label htmlFor="newsletter-monthly" className="font-normal cursor-pointer">
+                          Every month
+                        </Label>
+                      </div>
+                    </div>
                   </div>
                   <Separator />
-                  <div className="space-y-2">
-                    <Label htmlFor="font-size">Font Size</Label>
-                    <Input
-                      id="font-size"
-                      type="number"
-                      placeholder="14"
-                      min="12"
-                      max="20"
-                    />
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="notifications" className="space-y-6">
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold">Notification Preferences</h2>
-                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Email Notifications</Label>
@@ -364,7 +411,6 @@ export default function SettingsPage() {
                     </div>
                     <input type="checkbox" className="h-4 w-4" />
                   </div>
-                  <Separator />
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Session Alerts</Label>
@@ -376,8 +422,8 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
         </div>
       </div>
     </SidebarInset>
