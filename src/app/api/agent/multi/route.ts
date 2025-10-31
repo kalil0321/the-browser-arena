@@ -155,6 +155,7 @@ export async function POST(request: NextRequest) {
                             openaiApiKey,
                             googleApiKey,
                             anthropicApiKey,
+                            ...(browserUseApiKey ? { browserUseApiKey } : {}),
                             ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                             ...(browserSessionId && cdpUrl && liveViewUrl ? {
                                 browserSessionId,
