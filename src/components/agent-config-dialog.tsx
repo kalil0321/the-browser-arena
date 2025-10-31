@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2 } from "lucide-react";
 
 type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
-type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-4.5-haiku" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
+type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
 
 interface AgentConfig {
     agent: AgentType;
@@ -27,11 +27,11 @@ interface AgentConfig {
 }
 
 const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
-    "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"],
+    "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
     "browser-use-cloud": ["browser-use-llm", "gemini-flash-latest", "gpt-4.1", "o3", "claude-sonnet-4"],
-    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"],
+    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
     "smooth": [],
-    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"]
+    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"]
 };
 
 interface AgentConfigDialogProps {
@@ -65,7 +65,7 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
 
     if (!agentConfig) return null;
 
-    const isBrowserUse = agentConfig.agent === "browser-use"  || agentConfig.agent === "browser-use-cloud";
+    const isBrowserUse = agentConfig.agent === "browser-use" || agentConfig.agent === "browser-use-cloud";
     const isStagehand = agentConfig.agent === "stagehand" || agentConfig.agent === "stagehand-bb-cloud";
     const isSmooth = agentConfig.agent === "smooth";
 
