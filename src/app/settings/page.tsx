@@ -387,8 +387,8 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground">Total Cost</p>
                       <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                     </div>
-                    <p className="text-2xl font-bold">
-                      ${usageStats?.totalCost.toFixed(4) ?? "0.0000"}
+                    <p className="text-2xl font-bold font-default">
+                      ${typeof usageStats?.totalCost === "number" ? usageStats.totalCost.toFixed(2) : "0.00"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">USD</p>
                   </div>
@@ -399,7 +399,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground">Sessions</p>
                       <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <p className="text-2xl font-bold">
+                    <p className="text-2xl font-bold font-default">
                       {usageStats?.totalSessions ?? 0}
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">total sessions</p>
@@ -411,7 +411,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground">Agents Run</p>
                       <Smartphone className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                     </div>
-                    <p className="text-2xl font-bold">
+                    <p className="text-2xl font-bold font-default">
                       {usageStats?.totalAgents ?? 0}
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">total agents</p>
@@ -433,7 +433,7 @@ export default function SettingsPage() {
                             className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                           >
                             <span className="text-sm capitalize">{agent}</span>
-                            <span className="font-mono font-semibold">
+                            <span className="font-default font-semibold">
                               ${(cost as number).toFixed(4)}
                             </span>
                           </div>
@@ -452,7 +452,7 @@ export default function SettingsPage() {
                               className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                             >
                               <span className="text-sm truncate">{model}</span>
-                              <span className="font-mono font-semibold">
+                              <span className="font-default font-semibold">
                                 ${(cost as number).toFixed(4)}
                               </span>
                             </div>
@@ -478,7 +478,7 @@ export default function SettingsPage() {
                 {/* Last Session Info */}
                 {usageStats?.lastSessionAt && (
                   <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm">
-                    <p className="text-blue-900 dark:text-blue-100">
+                    <p className="text-blue-900 dark:text-blue-100 font-default">
                       <strong>Last Session:</strong>{" "}
                       {new Date(usageStats.lastSessionAt).toLocaleDateString("en-US", {
                         year: "numeric",
