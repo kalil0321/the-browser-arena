@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { OpenAI } from "@/components/logos/openai";
 import { GeminiLogo } from "@/components/logos/gemini";
 import { ClaudeLogo } from "@/components/logos/claude";
+import { AgentConfigDialog } from "./agent-config-dialog";
 
 type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
 type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-4.5-haiku" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
@@ -29,6 +30,9 @@ type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/g
 interface AgentConfig {
     agent: AgentType;
     model: ModelType;
+    secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
+    thinkingModel?: ModelType; // For stagehand: model used for thinking/planning
+    executionModel?: ModelType; // For stagehand: model used for execution
 }
 
 const AGENT_LABELS: Record<AgentType, string> = {
@@ -94,6 +98,7 @@ export function ChatInput() {
     const [isLoading, setIsLoading] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+    const [propertiesDialogAgent, setPropertiesDialogAgent] = useState<AgentConfig | null>(null);
     const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
     const router = useRouter();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -292,6 +297,13 @@ export function ChatInput() {
         return tempAgentConfigs.find(c => c.agent === agent)?.model;
     };
 
+    const handlePropertiesSave = (updatedConfig: AgentConfig) => {
+        setAgentConfigs(agentConfigs.map(c => 
+            c.agent === updatedConfig.agent ? updatedConfig : c
+        ));
+        setPropertiesDialogAgent(null);
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -343,7 +355,7 @@ export function ChatInput() {
                     </form>
 
                     <div className="flex h-10 w-full items-center justify-between">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <Button
                                 type="button"
                                 onClick={handleDialogOpen}
@@ -358,6 +370,34 @@ export function ChatInput() {
                                     {agentConfigs.length}
                                 </span>
                             </Button>
+                            {/* Agent Pills */}
+                            {agentConfigs.map((config, index) => {
+                                const hasProperties = config.agent !== "smooth";
+                                return (
+                                    <button
+                                        key={`${config.agent}-${index}`}
+                                        type="button"
+                                        onClick={() => hasProperties && setPropertiesDialogAgent({ ...config })}
+                                        disabled={isLoading || !hasProperties}
+                                        className={cn(
+                                            "h-7 px-2.5 text-xs rounded-full transition-colors flex items-center gap-1.5",
+                                            hasProperties
+                                                ? "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700"
+                                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 cursor-default",
+                                            isLoading && "opacity-50 cursor-not-allowed"
+                                        )}
+                                        title={hasProperties ? `Configure ${AGENT_LABELS[config.agent]}` : AGENT_LABELS[config.agent]}
+                                    >
+                                        <span className="capitalize">{AGENT_LABELS[config.agent]}</span>
+                                        {hasProperties && (
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                );
+                            })}
                             <div className="flex items-center gap-2 rounded-full px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900">
                                 <Label htmlFor="private-session" className="text-[11px] text-muted-foreground">Private</Label>
                                 <Switch
@@ -541,6 +581,14 @@ export function ChatInput() {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    {/* Agent Properties Dialog */}
+                    <AgentConfigDialog
+                        agentConfig={propertiesDialogAgent}
+                        open={propertiesDialogAgent !== null}
+                        onOpenChange={(open) => !open && setPropertiesDialogAgent(null)}
+                        onSave={handlePropertiesSave}
+                    />
 
                     {/* Login Dialog */}
                     <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
