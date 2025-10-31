@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
+import { badRequest, mapProviderError, serverMisconfigured, unauthorized, providerUnavailable } from "@/lib/http-errors";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
@@ -13,12 +14,15 @@ const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 export async function POST(request: NextRequest) {
     try {
         const { instruction, model } = await request.json();
+        if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
+            return badRequest("Field 'instruction' is required");
+        }
 
         // Get user token for auth
         const token = await getToken();
 
         if (!token) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            return unauthorized();
         }
 
         // Create Convex client per request for better isolation and set auth
@@ -28,6 +32,9 @@ export async function POST(request: NextRequest) {
         // Prepare Python server request data
         const providerModel = model || "browser-use/bu-1.0";
 
+        if (!process.env.ANCHOR_API_KEY) {
+            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
+        }
         // CRITICAL: Parallelize browser session creation with Convex session creation
         // This saves 3-5 seconds by not blocking on browser session creation
         const [sessionResult, browserSession] = await Promise.all([
@@ -67,11 +74,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (!agentResponse.ok) {
-            const errorText = await agentResponse.text();
-            return NextResponse.json(
-                { error: `Agent server error: ${errorText}` },
-                { status: agentResponse.status }
-            );
+            return await mapProviderError(agentResponse, 'python-agent');
         }
 
         const agentData = await agentResponse.json();

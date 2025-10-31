@@ -79,7 +79,7 @@ const pricing: Record<string, { in: number; out: number; cached: number }> = {
         out: 8.0 / 1_000_000,
         cached: 0.5 / 1_000_000,
     },
-    "anthropic/claude-4.5-haiku": {
+    "anthropic/claude-haiku-4.5": {
         in: 1.0 / 1_000_000,
         out: 5.0 / 1_000_000,
         cached: 0.1 / 1_000_000,
@@ -126,9 +126,28 @@ export async function POST(request: NextRequest) {
         const browserbaseConfig = getBrowserbaseConfig();
         const modelString = model ?? "google/gemini-2.5-flash";
 
+        const stagehand = new Stagehand({
+            env: "BROWSERBASE",
+            apiKey: browserbaseConfig.apiKey,
+            projectId: browserbaseConfig.projectId,
+            model: {
+                modelName: modelString,
+                apiKey: determineKey(model, { openai: openaiApiKey, google: googleApiKey, anthropic: anthropicApiKey }),
+            },
+        });
+
         // Browserbase manages sessions internally, so we don't create a browser session manually
         // The live view URL will be available from Stagehand after init
         let liveViewUrl = "";
+
+        // @ts-ignore
+        const result: { debugUrl?: string, sessionUrl?: string, sessionId?: string } = await stagehand.init();
+        console.log("Stagehand init result:", result);
+        liveViewUrl = result?.debugUrl ?? "";
+
+        if (!liveViewUrl) {
+            return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
+        }
 
         let dbSessionId: string;
         let agentId: any; // Use any to avoid type conflicts with Convex ID types
@@ -183,52 +202,35 @@ export async function POST(request: NextRequest) {
                     },
                 });
 
-                await stagehand.init();
-
-                const agent = await stagehand.agent();
+                const agent = await stagehand.agent({
+                    model: modelString,
+                    executionModel: modelString, // TODO: later allow to choose different model for execution
+                    // TODO: add tools later
+                });
 
                 const { message, actions, usage, success, completed, metadata } = await agent.execute({
                     highlightCursor: true,
                     instruction,
                 });
 
-                // Try to get metrics to retrieve session info if available
-                let browserbaseSessionId = "";
-                try {
-                    const metrics = await stagehand.metrics;
-                    // Browserbase session info might be in metadata
-                    browserbaseSessionId = (metadata as any)?.sessionId || "";
-                } catch (e) {
-                    console.log("Could not retrieve metrics/session info");
-                }
-
-                // Try to update live URL from stagehand context if available
-                try {
-                    // Browserbase may expose live URL through different means
-                    // This might need to be adjusted based on actual Browserbase API
-                    const updatedLiveUrl = (metadata as any)?.liveUrl ||
-                        (metadata as any)?.live_view_url ||
-                        "";
-                    if (updatedLiveUrl && updatedLiveUrl !== liveViewUrl) {
-                        liveViewUrl = updatedLiveUrl;
-                        await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
-                            agentId,
-                            url: liveViewUrl,
-                        });
-                    }
-                } catch (e) {
-                    console.log("Could not update live URL");
-                }
-
                 await stagehand.close();
                 const endTime = Date.now();
                 const duration = (endTime - startTime) / 1000; // Convert to seconds
 
                 const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
-                const cost = computeCost(model, usageData);
+                const llmCost = computeCost(model, usageData);
+                // Browserbase pricing: $0.2 per hour
+                const hours = Math.max(duration / 3600, 0);
+                const browserCost = 0.2 * hours;
+                const cost = llmCost + browserCost;
 
                 const payload = {
-                    usage: usageData,
+                    usage: {
+                        ...usageData,
+                        total_cost: cost,
+                        browser_cost: browserCost,
+                        llm_cost: llmCost,
+                    },
                     cost,
                     duration,
                     message,
@@ -238,7 +240,7 @@ export async function POST(request: NextRequest) {
                     completed,
                     metadata: {
                         ...metadata,
-                        browserbaseSessionId,
+                        browserbaseSessionId: result?.sessionId ?? "",
                     },
                 }
 
@@ -248,14 +250,6 @@ export async function POST(request: NextRequest) {
                     result: payload,
                     status: success ? "completed" as const : "failed" as const,
                 });
-
-                // Update browser session ID if we got it
-                if (browserbaseSessionId) {
-                    await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
-                        agentId,
-                        url: liveViewUrl || "",
-                    });
-                }
 
                 console.log(JSON.stringify(payload, null, 2));
             } catch (error) {

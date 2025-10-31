@@ -108,7 +108,7 @@ pricing = {
         "out": 8.0 / 1_000_000,
         "cached": 0.5 / 1_000_000,
     },
-    "anthropic/claude-4.5-haiku": {
+    "anthropic/claude-haiku-4.5": {
         "in": 1.0 / 1_000_000,
         "out": 5.0 / 1_000_000,
         "cached": 0.1 / 1_000_000,
@@ -492,12 +492,22 @@ async def run_browser_use_task(
                     else 0,
                 }
 
+                # Base LLM cost
+                llm_cost = compute_cost(provider_model, usage_data)
+
+                # Add Anchor Browser session cost: $0.01 base + $0.05 per hour
+                total_seconds = float(timings.get("total", 0))
+                hours = max(total_seconds / 3600.0, 0.0)
+                browser_cost = 0.01 + 0.05 * hours
+
                 usage_dict = {
                     "total_tokens": usage.total_tokens,
                     "in": usage.total_prompt_tokens,
                     "out": usage.total_completion_tokens,
                     "cached": usage.total_prompt_cached_tokens,
-                    "total_cost": compute_cost(provider_model, usage_data),
+                    "total_cost": llm_cost + browser_cost,
+                    "llm_cost": llm_cost,
+                    "browser_cost": browser_cost,
                 }
             except Exception as e:
                 print(f"⚠️  Warning: Could not serialize usage: {e}")

@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
+import { badRequest, providerUnavailable, serverMisconfigured, unauthorized, mapProviderError } from "@/lib/http-errors";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
@@ -13,6 +14,9 @@ const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 interface AgentConfig {
     agent: "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
     model: string;
+    secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
+    thinkingModel?: string; // For stagehand: model used for thinking/planning
+    executionModel?: string; // For stagehand: model used for execution
 }
 
 export async function POST(request: NextRequest) {
@@ -37,8 +41,11 @@ export async function POST(request: NextRequest) {
             isPrivate?: boolean;
         };
 
+        if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
+            return badRequest("Field 'instruction' is required");
+        }
         if (!agents || agents.length === 0) {
-            return NextResponse.json({ error: "At least one agent must be selected" }, { status: 400 });
+            return badRequest("At least one agent must be selected");
         }
 
         if (agents.length > 4) {
@@ -49,12 +56,27 @@ export async function POST(request: NextRequest) {
         const token = await getToken();
 
         if (!token) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            return unauthorized();
         }
 
         // Create Convex client per request for better isolation
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
+
+        // Check global session limit (5 sessions)
+        const MAX_SESSIONS = 50;
+        const usageStats = await convex.query(api.queries.getUserUsageStats, {});
+        const currentSessionCount = usageStats?.totalSessions ?? 0;
+        if (currentSessionCount >= MAX_SESSIONS) {
+            return NextResponse.json(
+                {
+                    error: `Session limit reached. Maximum ${MAX_SESSIONS} sessions allowed.`,
+                    limit: MAX_SESSIONS,
+                    currentSessions: currentSessionCount
+                },
+                { status: 403 }
+            );
+        }
 
         // Check if we need browser sessions for browser-use agents (not browser-use-cloud)
         const browserUseAgents = agents.filter(a => a.agent === "browser-use");
@@ -70,6 +92,9 @@ export async function POST(request: NextRequest) {
 
         // Create browser sessions for all browser-use agents in parallel
         if (needsBrowserSessions) {
+            if (!process.env.ANCHOR_API_KEY) {
+                return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
+            }
             browserUseAgents.forEach(() => {
                 parallelPromises.push(browser.sessions.create());
             });
@@ -111,6 +136,8 @@ export async function POST(request: NextRequest) {
                             openaiApiKey,
                             googleApiKey,
                             anthropicApiKey,
+                            ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
+                            ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                         };
                         break;
                     case "browser-use":
@@ -128,6 +155,7 @@ export async function POST(request: NextRequest) {
                             openaiApiKey,
                             googleApiKey,
                             anthropicApiKey,
+                            ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                             ...(browserSessionId && cdpUrl && liveViewUrl ? {
                                 browserSessionId,
                                 cdpUrl,
@@ -144,6 +172,7 @@ export async function POST(request: NextRequest) {
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
                             browserUseApiKey,
+                            ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                         };
                         break;
                     case "stagehand":
@@ -157,6 +186,8 @@ export async function POST(request: NextRequest) {
                             openaiApiKey,
                             googleApiKey,
                             anthropicApiKey,
+                            ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
+                            ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                         };
                         break;
                     default:
@@ -190,8 +221,13 @@ export async function POST(request: NextRequest) {
                     clearTimeout(timeoutId);
 
                     if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Failed to launch ${agentConfig.agent}: ${errorText}`);
+                        if (isLocalEndpoint) {
+                            // Local endpoints already return standardized errors; forward as-is
+                            const text = await response.text();
+                            return Promise.reject(new Error(text || `Failed with status ${response.status}`));
+                        }
+                        const mapped = await mapProviderError(response, agentConfig.agent);
+                        return Promise.reject(new Error(JSON.stringify(await mapped.json())));
                     }
 
                     const agentData = await response.json();
@@ -243,7 +279,7 @@ export async function POST(request: NextRequest) {
             agents: results,
         });
     } catch (error) {
-        console.error("❌ Error in POST handler:", error);
+        console.error("? Error in POST handler:", error);
         return NextResponse.json(
             {
                 error: "Internal server error",

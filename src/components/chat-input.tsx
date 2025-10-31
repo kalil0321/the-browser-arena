@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useConvexAuth } from "convex/react";
+import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,29 +22,33 @@ import { Switch } from "@/components/ui/switch";
 import { OpenAI } from "@/components/logos/openai";
 import { GeminiLogo } from "@/components/logos/gemini";
 import { ClaudeLogo } from "@/components/logos/claude";
+import { AgentConfigDialog } from "./agent-config-dialog";
 
 type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
-type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-4.5-haiku" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
+type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
 
 interface AgentConfig {
     agent: AgentType;
     model: ModelType;
+    secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
+    thinkingModel?: ModelType; // For stagehand: model used for thinking/planning
+    executionModel?: ModelType; // For stagehand: model used for execution
 }
 
 const AGENT_LABELS: Record<AgentType, string> = {
     "stagehand": "Stagehand",
     "smooth": "Smooth",
-    "stagehand-bb-cloud": "Stagehand BrowserBase Cloud",
-    "browser-use": "Browser-Use",
-    "browser-use-cloud": "Browser-Use Cloud"
+    "stagehand-bb-cloud": "Stagehand Cloud",
+    "browser-use": "BU",
+    "browser-use-cloud": "BU Cloud"
 };
 
 const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
-    "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"],
+    "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
     "browser-use-cloud": ["browser-use-llm", "gemini-flash-latest", "gpt-4.1", "o3", "claude-sonnet-4"],
-    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"],
+    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
     "smooth": [], // Smooth uses its own models
-    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-4.5-haiku"]
+    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"]
 };
 
 // Helper to format model names
@@ -97,14 +101,17 @@ export interface ChatInputState {
 
 interface ChatInputProps {
     onStateChange?: (state: ChatInputState) => void;
+    onAgentPresenceChange?: (hasSmooth: boolean, hasBrowserUse: boolean) => void;
 }
 
-export function ChatInput({ onStateChange }: ChatInputProps = {}) {
+export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputProps) {
+
     // Use this as default input
     const [input, setInput] = useState("Find top hacker news post");
     const [isLoading, setIsLoading] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+    const [propertiesDialogAgent, setPropertiesDialogAgent] = useState<AgentConfig | null>(null);
     const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
     const router = useRouter();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -166,6 +173,13 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
     }, [input]);
+
+    // Notify parent when agent selection changes
+    useEffect(() => {
+        const hasSmooth = agentConfigs.some(c => c.agent === "smooth");
+        const hasBrowserUse = agentConfigs.some(c => c.agent === "browser-use" || c.agent === "browser-use-cloud");
+        onAgentPresenceChange?.(hasSmooth, hasBrowserUse);
+    }, [agentConfigs, onAgentPresenceChange]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -282,7 +296,11 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                 });
             } catch (error) {
                 console.error("Error submitting:", error);
-                alert(`Failed to create session: ${error instanceof Error ? error.message : "Unknown error"}`);
+                const errorMessage = error instanceof Error ? error.message : "Unknown error";
+                toast.error(`Failed to create session: ${errorMessage}`, {
+                    duration: 5000,
+                    description: "Please check your configuration and try again."
+                });
                 setIsLoading(false);
             } finally {
                 setInput("");
@@ -301,8 +319,16 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
             setIsLoginDialogOpen(false);
             setEmail("");
             setPassword("");
+            toast.success("Signed in successfully!", {
+                duration: 3000,
+            });
         } catch (err: any) {
-            setAuthError(err?.message || "Sign in failed");
+            const errorMsg = err?.message || "Sign in failed";
+            setAuthError(errorMsg);
+            toast.error("Sign in failed", {
+                description: errorMsg,
+                duration: 5000,
+            });
         } finally {
             setIsSubmittingAuth(false);
         }
@@ -321,8 +347,17 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
             setEmail("");
             setPassword("");
             setName("");
+            toast.success("Account created successfully!", {
+                duration: 3000,
+                description: "Welcome to The Browser Arena!"
+            });
         } catch (err: any) {
-            setAuthError(err?.message || "Sign up failed");
+            const errorMsg = err?.message || "Sign up failed";
+            setAuthError(errorMsg);
+            toast.error("Sign up failed", {
+                description: errorMsg,
+                duration: 5000,
+            });
         } finally {
             setIsSubmittingAuth(false);
         }
@@ -366,6 +401,13 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
 
     const getAgentModel = (agent: AgentType): ModelType | undefined => {
         return tempAgentConfigs.find(c => c.agent === agent)?.model;
+    };
+
+    const handlePropertiesSave = (updatedConfig: AgentConfig) => {
+        setAgentConfigs(agentConfigs.map(c =>
+            c.agent === updatedConfig.agent ? updatedConfig : c
+        ));
+        setPropertiesDialogAgent(null);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -430,15 +472,17 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                         </button>
                     </form>
 
+
+
                     <div className="flex h-10 w-full items-center justify-between">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-nowrap overflow-x-auto whitespace-nowrap max-w-full">
                             <Button
                                 type="button"
                                 onClick={handleDialogOpen}
                                 disabled={isLoading}
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 px-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-primary hover:text-primary"
+                                className="h-8 px-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-primary hover:text-primary shrink-0"
                             >
                                 <Settings className="mr-1.5 h-4 w-4" />
                                 Agents
@@ -446,7 +490,7 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                                     {agentConfigs.length}
                                 </span>
                             </Button>
-                            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900">
+                            <div className="flex items-center gap-2 rounded-full px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 shrink-0">
                                 <Label htmlFor="private-session" className="text-[11px] text-muted-foreground">Private</Label>
                                 <Switch
                                     id="private-session"
@@ -455,29 +499,58 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                                     disabled={isLoading}
                                 />
                             </div>
+
+                            {/* Agent Pills (hide Smooth) */}
+                            {agentConfigs.filter(c => c.agent !== "smooth").map((config, index) => {
+                                const hasProperties = config.agent !== "smooth";
+                                return (
+                                    <button
+                                        key={`${config.agent}-${index}`}
+                                        type="button"
+                                        onClick={() => hasProperties && setPropertiesDialogAgent({ ...config })}
+                                        disabled={isLoading || !hasProperties}
+                                        className={cn(
+                                            "h-6 px-2 text-[10px] rounded-full transition-colors flex items-center gap-1 shrink-0",
+                                            hasProperties
+                                                ? "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700"
+                                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 cursor-default",
+                                            isLoading && "opacity-50 cursor-not-allowed"
+                                        )}
+                                        title={hasProperties ? `Configure ${AGENT_LABELS[config.agent]}` : AGENT_LABELS[config.agent]}
+                                    >
+                                        <span className="capitalize">{AGENT_LABELS[config.agent]}</span>
+                                        {hasProperties && (
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
 
                         <div className="flex items-center gap-4" />
                     </div>
 
-                    {/* Agent Configuration Dialog */}
+                    {/* Agent Selection Dialog */}
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogContent className="sm:max-w-[600px]">
+                        <DialogContent className="sm:max-w-[600px] font-mono p-4">
                             <DialogHeader>
-                                <div className="flex items-center gap-2">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                                        <Settings className="h-5 w-5 text-primary" />
+                                <div className="flex items-center gap-1.5">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
+                                        <Settings className="h-4 w-4 text-primary" />
                                     </div>
                                     <div>
-                                        <DialogTitle className="text-xl">Configure Agents</DialogTitle>
-                                        <DialogDescription className="mt-1">
+                                        <DialogTitle className="text-lg font-mono">Configure Agents</DialogTitle>
+                                        <DialogDescription className="mt-0.5 text-xs">
                                             Select agents to run simultaneously ({tempAgentConfigs.length}/4)
                                         </DialogDescription>
                                     </div>
                                 </div>
                             </DialogHeader>
-                            <div className="py-4">
-                                <div className="space-y-3">
+                            <div className="py-3">
+                                <div className="space-y-2.5">
                                     {(Object.keys(AGENT_LABELS) as AgentType[]).map((agentType) => {
                                         const selected = isAgentSelected(agentType);
                                         const currentModel = getAgentModel(agentType);
@@ -488,103 +561,89 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                                             <div
                                                 key={agentType}
                                                 className={cn(
-                                                    "group relative rounded-lg border-2 p-4 transition-all",
+                                                    "group relative rounded-md border p-3 transition-all",
                                                     selected
                                                         ? "border-primary bg-primary/5 shadow-sm"
                                                         : "border-border hover:border-primary/50 hover:bg-accent/50",
                                                     (isDisabled || isMaxReached) && "opacity-50 cursor-not-allowed"
                                                 )}
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => !isDisabled && !isMaxReached && toggleAgent(agentType)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        !isDisabled && !isMaxReached && toggleAgent(agentType);
+                                                    }
+                                                }}
                                             >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                                                        <Checkbox
-                                                            id={agentType}
-                                                            checked={selected}
-                                                            onCheckedChange={() => !isDisabled && !isMaxReached && toggleAgent(agentType)}
-                                                            disabled={isDisabled || isMaxReached}
-                                                            className="mt-0.5"
-                                                        />
+                                                <div className="flex items-start justify-between gap-2.5">
+                                                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <Bot className={cn(
-                                                                    "h-4 w-4 shrink-0",
-                                                                    selected ? "text-primary" : "text-muted-foreground"
-                                                                )} />
+                                                            <div className="flex items-center gap-1.5 mb-1">
                                                                 <Label
                                                                     htmlFor={agentType}
                                                                     className={cn(
-                                                                        "text-sm font-semibold cursor-pointer",
+                                                                        "text-[13px] font-medium cursor-pointer font-default",
                                                                         selected && "text-primary",
                                                                         (isDisabled || isMaxReached) && "cursor-not-allowed"
                                                                     )}
                                                                 >
                                                                     {AGENT_LABELS[agentType]}
                                                                 </Label>
+                                                                {selected && MODEL_OPTIONS[agentType].length > 0 && (
+                                                                    <div className="ml-2 min-w-[140px] font-mono">
+                                                                        <Select
+                                                                            value={currentModel}
+                                                                            onValueChange={(v) => updateAgentModel(agentType, v as ModelType)}
+                                                                        >
+                                                                            <SelectTrigger className="h-7 bg-background text-[12px]">
+                                                                                <div className="flex items-center gap-2 w-full">
+                                                                                    {(() => {
+                                                                                        const { provider, modelName } = formatModelName(currentModel || "");
+                                                                                        return (
+                                                                                            <>
+                                                                                                <ProviderLogo provider={provider} />
+                                                                                                <span className="truncate text-[12px]">{modelName || "Select model"}</span>
+                                                                                            </>
+                                                                                        );
+                                                                                    })()}
+                                                                                </div>
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                {MODEL_OPTIONS[agentType].map((model) => {
+                                                                                    const { provider, modelName } = formatModelName(model);
+                                                                                    return (
+                                                                                        <SelectItem key={model} value={model}>
+                                                                                            <div className="flex items-center gap-2 py-0.5 font-mono">
+                                                                                                <ProviderLogo provider={provider} />
+                                                                                                <div className="flex flex-col">
+                                                                                                    <span className="font-medium leading-tight text-[12px]">{modelName}</span>
+                                                                                                    <span className="text-[11px] text-muted-foreground leading-tight">
+                                                                                                        {getProviderName(provider)}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </SelectItem>
+                                                                                    );
+                                                                                })}
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    </div>
+                                                                )}
                                                                 {selected && (
-                                                                    <Badge variant="default" className="ml-1">
+                                                                    <Badge variant="default" className="ml-1 px-1.5 py-0.5 text-[10px]">
                                                                         <CheckCircle2 className="h-3 w-3" />
                                                                         <span>Active</span>
                                                                     </Badge>
                                                                 )}
                                                                 {isDisabled && (
-                                                                    <Badge variant="outline" className="ml-1">
+                                                                    <Badge variant="outline" className="ml-1 px-1.5 py-0.5 text-[10px]">
                                                                         <XCircle className="h-3 w-3" />
                                                                         <span>Unavailable</span>
                                                                     </Badge>
                                                                 )}
                                                             </div>
-                                                            {selected && MODEL_OPTIONS[agentType].length > 0 && (
-                                                                <div className="mt-3">
-                                                                    <Label className="text-xs text-muted-foreground mb-2 block">
-                                                                        Model
-                                                                    </Label>
-                                                                    <Select
-                                                                        value={currentModel}
-                                                                        onValueChange={(v) => updateAgentModel(agentType, v as ModelType)}
-                                                                    >
-                                                                        <SelectTrigger className="w-full h-9 bg-background">
-                                                                            <div className="flex items-center gap-2 w-full">
-                                                                                {(() => {
-                                                                                    const { provider, modelName } = formatModelName(currentModel || "");
-                                                                                    return (
-                                                                                        <>
-                                                                                            <ProviderLogo provider={provider} />
-                                                                                            <span className="truncate text-sm">{modelName || "Select model"}</span>
-                                                                                            <span className="ml-auto text-xs text-muted-foreground">{getProviderName(provider)}</span>
-                                                                                        </>
-                                                                                    );
-                                                                                })()}
-                                                                            </div>
-                                                                        </SelectTrigger>
-                                                                        <SelectContent>
-                                                                            {MODEL_OPTIONS[agentType].map((model) => {
-                                                                                const { provider, modelName } = formatModelName(model);
-                                                                                return (
-                                                                                    <SelectItem key={model} value={model}>
-                                                                                        <div className="flex items-center gap-2 py-0.5">
-                                                                                            <ProviderLogo provider={provider} />
-                                                                                            <div className="flex flex-col">
-                                                                                                <span className="font-medium leading-tight">{modelName}</span>
-                                                                                                <span className="text-xs text-muted-foreground leading-tight">
-                                                                                                    {getProviderName(provider)}
-                                                                                                </span>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </SelectItem>
-                                                                                );
-                                                                            })}
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </div>
-                                                            )}
-                                                            {selected && MODEL_OPTIONS[agentType].length === 0 && (
-                                                                <div className="mt-3 flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2">
-                                                                    <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        Uses built-in models
-                                                                    </span>
-                                                                </div>
-                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -595,7 +654,7 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                                 {tempAgentConfigs.length >= 4 && (
                                     <div className="mt-4 rounded-lg bg-warning/10 border border-warning/20 p-3 flex items-start gap-2">
                                         <XCircle className="h-4 w-4 text-warning-foreground mt-0.5 shrink-0" />
-                                        <p className="text-xs text-warning-foreground">
+                                        <p className="text-xs text-warning-foreground font-default">
                                             Maximum of 4 agents allowed. Deselect an agent to add another.
                                         </p>
                                     </div>
@@ -603,14 +662,14 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                                 {tempAgentConfigs.length === 0 && (
                                     <div className="mt-4 rounded-lg bg-info/10 border border-info/20 p-3 flex items-start gap-2">
                                         <Bot className="h-4 w-4 text-info-foreground mt-0.5 shrink-0" />
-                                        <p className="text-xs text-info-foreground">
+                                        <p className="text-xs text-info-foreground font-default">
                                             Select at least one agent to continue.
                                         </p>
                                     </div>
                                 )}
                             </div>
                             <DialogFooter className="sm:justify-between">
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-xs text-muted-foreground font-default">
                                     {tempAgentConfigs.length > 0 && (
                                         <span>
                                             {tempAgentConfigs.length} agent{tempAgentConfigs.length !== 1 ? "s" : ""} selected
@@ -618,10 +677,10 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                                     )}
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button variant="outline" onClick={handleDialogCancel}>
+                                    <Button variant="outline" onClick={handleDialogCancel} className="font-mono">
                                         Cancel
                                     </Button>
-                                    <Button onClick={handleDialogSave} disabled={tempAgentConfigs.length === 0}>
+                                    <Button onClick={handleDialogSave} disabled={tempAgentConfigs.length === 0} className="font-mono">
                                         <CheckCircle2 className="mr-2 h-4 w-4" />
                                         Save Changes
                                     </Button>
@@ -629,6 +688,14 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    {/* Agent Properties Dialog */}
+                    <AgentConfigDialog
+                        agentConfig={propertiesDialogAgent}
+                        open={propertiesDialogAgent !== null}
+                        onOpenChange={(open) => !open && setPropertiesDialogAgent(null)}
+                        onSave={handlePropertiesSave}
+                    />
 
                     {/* Login Dialog */}
                     <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>

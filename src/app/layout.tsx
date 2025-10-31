@@ -6,6 +6,7 @@ import { ConvexClientProvider } from "@/components/providers/convex";
 import { DashboardSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "sonner";
 import { AppThemeApplier } from "../components/app-theme-applier";
 
 const appSans = Pixelify_Sans({
@@ -123,6 +124,7 @@ export default async function RootLayout({
                 {children}
               </div>
             </SidebarProvider>
+            <Toaster position="bottom-right" richColors />
           </ConvexClientProvider>
         </ThemeProvider>
       </body>
