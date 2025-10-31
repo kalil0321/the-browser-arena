@@ -13,6 +13,9 @@ const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 interface AgentConfig {
     agent: "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
     model: string;
+    secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
+    thinkingModel?: string; // For stagehand: model used for thinking/planning
+    executionModel?: string; // For stagehand: model used for execution
 }
 
 export async function POST(request: NextRequest) {
@@ -95,6 +98,8 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
+                            ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                         };
                         break;
                     case "browser-use":
@@ -109,6 +114,7 @@ export async function POST(request: NextRequest) {
                             sessionId: dbSessionId,
                             instruction,
                             providerModel: agentConfig.model,
+                            ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                             ...(browserSessionId && cdpUrl && liveViewUrl ? {
                                 browserSessionId,
                                 cdpUrl,
@@ -124,6 +130,7 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                         };
                         break;
                     case "stagehand":
@@ -134,6 +141,8 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
+                            ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                         };
                         break;
                     default:
@@ -220,7 +229,7 @@ export async function POST(request: NextRequest) {
             agents: results,
         });
     } catch (error) {
-        console.error("❌ Error in POST handler:", error);
+        console.error("? Error in POST handler:", error);
         return NextResponse.json(
             {
                 error: "Internal server error",
