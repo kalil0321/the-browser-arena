@@ -21,10 +21,23 @@ interface AgentConfig {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, agents, smoothApiKey, isPrivate } = await request.json() as {
+        const {
+            instruction,
+            agents,
+            smoothApiKey,
+            openaiApiKey,
+            googleApiKey,
+            anthropicApiKey,
+            browserUseApiKey,
+            isPrivate
+        } = await request.json() as {
             instruction: string;
             agents: AgentConfig[];
             smoothApiKey?: string;
+            openaiApiKey?: string;
+            googleApiKey?: string;
+            anthropicApiKey?: string;
+            browserUseApiKey?: string;
             isPrivate?: boolean;
         };
 
@@ -120,6 +133,9 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            openaiApiKey,
+                            googleApiKey,
+                            anthropicApiKey,
                             ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
                             ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                         };
@@ -136,6 +152,9 @@ export async function POST(request: NextRequest) {
                             sessionId: dbSessionId,
                             instruction,
                             providerModel: agentConfig.model,
+                            openaiApiKey,
+                            googleApiKey,
+                            anthropicApiKey,
                             ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                             ...(browserSessionId && cdpUrl && liveViewUrl ? {
                                 browserSessionId,
@@ -152,6 +171,7 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            browserUseApiKey,
                             ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                         };
                         break;
@@ -163,6 +183,9 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            openaiApiKey,
+                            googleApiKey,
+                            anthropicApiKey,
                             ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
                             ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                         };

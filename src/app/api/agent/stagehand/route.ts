@@ -21,21 +21,43 @@ const config = {
     }
 };
 
-const determineKey = (model: string | undefined) => {
+const determineKey = (model: string | undefined, userKeys: { openai?: string; google?: string; anthropic?: string }) => {
     if (!model) {
+        // Default to Google if no model specified
+        if (userKeys.google?.trim()) {
+            console.log("✅ Using user-provided Google API key");
+            return userKeys.google.trim();
+        }
         return process.env.GOOGLE_API_KEY;
     }
     const provider = model.split("/")[0];
     if (provider === "google") {
+        if (userKeys.google?.trim()) {
+            console.log("✅ Using user-provided Google API key");
+            return userKeys.google.trim();
+        }
         return process.env.GOOGLE_API_KEY;
     }
     if (provider === "openai") {
+        if (userKeys.openai?.trim()) {
+            console.log("✅ Using user-provided OpenAI API key");
+            return userKeys.openai.trim();
+        }
         return process.env.OPENAI_API_KEY;
     }
     if (provider === "anthropic") {
+        if (userKeys.anthropic?.trim()) {
+            console.log("✅ Using user-provided Anthropic API key");
+            return userKeys.anthropic.trim();
+        }
         return process.env.ANTHROPIC_API_KEY;
     }
 
+    // Fallback to OpenAI
+    if (userKeys.openai?.trim()) {
+        console.log("✅ Using user-provided OpenAI API key");
+        return userKeys.openai.trim();
+    }
     return process.env.OPENAI_API_KEY;
 }
 
@@ -86,7 +108,7 @@ function computeCost(model: string | undefined, usage: any): number {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey } = await request.json();
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
@@ -106,7 +128,7 @@ export async function POST(request: NextRequest) {
         if (!process.env.ANCHOR_API_KEY) {
             return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
         }
-        const providerKey = determineKey(model);
+        const providerKey = determineKey(model, { openai: openaiApiKey, google: googleApiKey, anthropic: anthropicApiKey });
         if (!providerKey) {
             return serverMisconfigured("Missing LLM provider API key", { model });
         }
@@ -171,11 +193,16 @@ export async function POST(request: NextRequest) {
             const startTime = Date.now();
             try {
                 const modelString = model ?? "google/gemini-2.5-flash";
+                const userKeys = {
+                    openai: openaiApiKey,
+                    google: googleApiKey,
+                    anthropic: anthropicApiKey,
+                };
                 const stagehand = new Stagehand({
                     env: "LOCAL",
                     model: {
                         modelName: modelString,
-                        apiKey: determineKey(model),
+                        apiKey: determineKey(model, userKeys),
                     },
                     localBrowserLaunchOptions: {
                         cdpUrl: cdpUrl,

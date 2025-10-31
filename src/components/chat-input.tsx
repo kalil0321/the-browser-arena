@@ -92,7 +92,20 @@ const ProviderLogo: React.FC<{ provider: string; className?: string }> = ({ prov
     }
 };
 
-export function ChatInput({ onAgentPresenceChange }: { onAgentPresenceChange?: (hasSmooth: boolean, hasBrowserUse: boolean) => void }) {
+export interface ChatInputState {
+    isPrivate: boolean;
+    agentConfigs: AgentConfig[];
+    hasSmoothApiKey: boolean;
+    hasBrowserUseApiKey: boolean;
+}
+
+interface ChatInputProps {
+    onStateChange?: (state: ChatInputState) => void;
+    onAgentPresenceChange?: (hasSmooth: boolean, hasBrowserUse: boolean) => void;
+}
+
+export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputProps) {
+
     // Use this as default input
     const [input, setInput] = useState("Find top hacker news post");
     const [isLoading, setIsLoading] = useState(false);
@@ -125,8 +138,33 @@ export function ChatInput({ onAgentPresenceChange }: { onAgentPresenceChange?: (
     // Privacy state
     const [isPrivate, setIsPrivate] = useState(false);
 
+    // API key availability state for privacy warnings
+    const [hasSmoothApiKey, setHasSmoothApiKey] = useState(false);
+    const [hasBrowserUseApiKey, setHasBrowserUseApiKey] = useState(false);
+
     // Temporary state for dialog
     const [tempAgentConfigs, setTempAgentConfigs] = useState<AgentConfig[]>(agentConfigs);
+
+    // Check if user has API keys for privacy warnings
+    useEffect(() => {
+        const checkApiKeys = async () => {
+            if (user?._id) {
+                try {
+                    const smoothKey = await getApiKey("smooth", user._id);
+                    setHasSmoothApiKey(!!smoothKey);
+
+                    const browserUseKey = await getApiKey("browser-use", user._id);
+                    setHasBrowserUseApiKey(!!browserUseKey);
+                } catch (error) {
+                    console.error("Failed to check API keys:", error);
+                }
+            } else {
+                setHasSmoothApiKey(false);
+                setHasBrowserUseApiKey(false);
+            }
+        };
+        checkApiKeys();
+    }, [user?._id]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -156,27 +194,57 @@ export function ChatInput({ onAgentPresenceChange }: { onAgentPresenceChange?: (
             try {
                 console.log("Submitting:", input, "with agents:", agentConfigs);
 
-                // Get user's Smooth API key if available (required for Smooth)
+                // Get user's API keys if available
                 let smoothApiKey: string | undefined = undefined;
-                if (user?._id && agentConfigs.some(c => c.agent === "smooth")) {
+                let openaiApiKey: string | undefined = undefined;
+                let googleApiKey: string | undefined = undefined;
+                let anthropicApiKey: string | undefined = undefined;
+                let browserUseApiKey: string | undefined = undefined;
+
+                if (user?._id) {
                     try {
-                        const key = await getApiKey("smooth", user._id);
-                        if (key) {
-                            smoothApiKey = key;
-                            console.log("🔑 Found user's Smooth API key in localStorage, will use it for API calls");
-                        } else {
-                            // Block submission if Smooth selected without a user key
-                            setIsLoading(false);
-                            const message = "Smooth requires your API key. Add it in Settings.";
-                            try { toast.error(message, { duration: 5000 }); } catch { }
-                            return;
+                        // Get Smooth API key if Smooth agent is selected
+                        if (agentConfigs.some(c => c.agent === "smooth")) {
+                            const key = await getApiKey("smooth", user._id);
+                            if (key) {
+                                smoothApiKey = key;
+                                console.log("🔑 Found user's Smooth API key in localStorage");
+                            }
+                        }
+
+                        // Get OpenAI API key if needed
+                        const key1 = await getApiKey("openai", user._id);
+                        if (key1) {
+                            openaiApiKey = key1;
+                            console.log("🔑 Found user's OpenAI API key in localStorage");
+                        }
+
+                        // Get Google API key if needed
+                        const key2 = await getApiKey("google", user._id);
+                        if (key2) {
+                            googleApiKey = key2;
+                            console.log("🔑 Found user's Google API key in localStorage");
+                        }
+
+                        // Get Anthropic API key if needed
+                        const key3 = await getApiKey("anthropic", user._id);
+                        if (key3) {
+                            anthropicApiKey = key3;
+                            console.log("🔑 Found user's Anthropic API key in localStorage");
+                        }
+
+                        // Get Browser-Use API key if Browser-Use Cloud is selected
+                        if (agentConfigs.some(c => c.agent === "browser-use-cloud")) {
+                            const key4 = await getApiKey("browser-use", user._id);
+                            if (key4) {
+                                browserUseApiKey = key4;
+                                console.log("🔑 Found user's Browser-Use API key in localStorage");
+                            }
                         }
                     } catch (error) {
-                        console.error("⚠️ Failed to get Smooth API key from localStorage:", error);
-                        setIsLoading(false);
-                        const message = "Could not access your Smooth API key. Please re-add it in Settings.";
-                        try { toast.error(message, { duration: 5000 }); } catch { }
-                        return;
+                        console.error("⚠️ Failed to get API keys from localStorage:", error);
+                        console.log("ℹ️ Will fallback to server keys");
+                        // Continue without user keys - will fallback to server keys
                     }
                 }
 
@@ -190,6 +258,10 @@ export function ChatInput({ onAgentPresenceChange }: { onAgentPresenceChange?: (
                         instruction: input,
                         agents: agentConfigs,
                         smoothApiKey: smoothApiKey,
+                        openaiApiKey: openaiApiKey,
+                        googleApiKey: googleApiKey,
+                        anthropicApiKey: anthropicApiKey,
+                        browserUseApiKey: browserUseApiKey,
                         isPrivate: isPrivate,
                     }),
                 });
@@ -345,19 +417,31 @@ export function ChatInput({ onAgentPresenceChange }: { onAgentPresenceChange?: (
         }
     };
 
+    const chatInputState: ChatInputState = {
+        isPrivate,
+        agentConfigs,
+        hasSmoothApiKey,
+        hasBrowserUseApiKey,
+    };
+
+    // Notify parent component whenever state changes
+    useEffect(() => {
+        onStateChange?.(chatInputState);
+    }, [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, onStateChange]);
+
     return (
         <>
             {isLoading && <LoadingDino />}
             <div className="container mx-auto max-w-3xl px-4 font-mono text-white">
-                <div className="bg-white rounded-4xl w-full space-y-2 px-4 py-4">
+                <div className="bg-background rounded-4xl w-full space-y-2 px-4 py-4">
                     <form
                         onSubmit={handleSubmit}
-                        className="relative mx-auto overflow-hidden transition duration-200 dark:bg-zinc-800 mb-4 min-h-12 w-full max-w-full bg-transparent shadow-none"
+                        className="relative mx-auto overflow-hidden transition duration-200 mb-2 min-h-12 w-full max-w-full bg-background shadow-none"
                     >
                         <textarea
                             ref={textareaRef}
                             placeholder="Automate your tasks..."
-                            className="sm:text font-default relative w-full border-none bg-transparent pr-20 text-sm tracking-tight text-black focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
+                            className="sm:text font-default relative w-full border-none bg-background pr-20 text-sm tracking-tight text-black focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}

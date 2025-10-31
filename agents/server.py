@@ -45,6 +45,11 @@ class AgentRequest(BaseModel):
     browserSessionId: Optional[str] = None
     cdpUrl: Optional[str] = None
     liveViewUrl: Optional[str] = None
+    # Optional user-provided API keys (BYOK - Bring Your Own Key)
+    openaiApiKey: Optional[str] = None
+    googleApiKey: Optional[str] = None
+    anthropicApiKey: Optional[str] = None
+    browserUseApiKey: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -357,6 +362,10 @@ async def run_browser_use_task(
     cdp_url: str,
     browser_session_id: str,
     provider_model: str,
+    openai_api_key: Optional[str] = None,
+    google_api_key: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
+    browser_use_api_key: Optional[str] = None,
 ):
     """Run Browser-Use agent in background and update Convex"""
     try:
@@ -378,6 +387,10 @@ async def run_browser_use_task(
             provider_model=provider_model,
             browser=anchor_browser,
             session_id=browser_session_id,
+            openai_api_key=openai_api_key,
+            google_api_key=google_api_key,
+            anthropic_api_key=anthropic_api_key,
+            browser_use_api_key=browser_use_api_key,
         )
 
         # Log timing information
@@ -700,6 +713,10 @@ async def run_browser_use_agent(
             cdp_url=cdp_url,
             browser_session_id=browser_session_id,
             provider_model=request.providerModel,
+            openai_api_key=request.openaiApiKey,
+            google_api_key=request.googleApiKey,
+            anthropic_api_key=request.anthropicApiKey,
+            browser_use_api_key=request.browserUseApiKey,
         )
 
         return AgentResponse(

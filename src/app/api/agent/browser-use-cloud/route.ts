@@ -8,17 +8,17 @@ import { getToken } from "@/lib/auth/server";
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 // Initialize Browser Use Cloud client
-const getBrowserUseClient = () => {
-    const apiKey = process.env.BROWSER_USE_API_KEY;
+const getBrowserUseClient = (userApiKey?: string) => {
+    const apiKey = userApiKey || process.env.BROWSER_USE_API_KEY;
     if (!apiKey) {
-        throw new Error("BROWSER_USE_API_KEY environment variable is required");
+        throw new Error("BROWSER_USE_API_KEY is required. Please provide your API key in Settings or set the environment variable.");
     }
     return new BrowserUseClient({ apiKey });
 };
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, browserUseApiKey } = await request.json();
 
         // Get user token for auth
         const token = await getToken();
@@ -31,8 +31,9 @@ export async function POST(request: NextRequest) {
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
-        // Initialize Browser Use Cloud client
-        const client = getBrowserUseClient();
+        // Initialize Browser Use Cloud client with user's API key if provided
+        const client = getBrowserUseClient(browserUseApiKey);
+        console.log(browserUseApiKey ? "🔑 Using user's Browser-Use API key" : "ℹ️ Using server Browser-Use API key (fallback)");
 
         // Create task in Browser Use Cloud
         const task = await client.tasks.createTask({
@@ -83,15 +84,16 @@ export async function POST(request: NextRequest) {
         }
 
         // Execute task in background and update Convex when complete
-        // Capture taskId for use in background execution
+        // Capture taskId and API key for use in background execution
         const backgroundTaskId = taskId;
         const backgroundTask = task;
+        const backgroundApiKey = browserUseApiKey;
 
         after(async () => {
             try {
                 // Poll for live URL availability instead of streaming
                 const pollForLiveUrl = async () => {
-                    const bgClient = getBrowserUseClient();
+                    const bgClient = getBrowserUseClient(backgroundApiKey);
                     const maxAttempts = 30; // ~30s
                     const delayMs = 1000;
                     const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
@@ -166,7 +168,7 @@ export async function POST(request: NextRequest) {
                 let finalLiveUrl = liveViewUrl;
                 try {
                     if (resultSessionId) {
-                        const bgClient = getBrowserUseClient();
+                        const bgClient = getBrowserUseClient(backgroundApiKey);
                         const session = await bgClient.sessions.getSession(resultSessionId);
                         finalLiveUrl = (session as any).liveUrl || (session as any).live_view_url || "";
                     }
@@ -260,7 +262,7 @@ export async function POST(request: NextRequest) {
                 // Try to get recording from session if not in result
                 if (!recordingUrl && resultSessionId) {
                     try {
-                        const bgClient = getBrowserUseClient();
+                        const bgClient = getBrowserUseClient(backgroundApiKey);
                         const session = await bgClient.sessions.getSession(resultSessionId);
                         recordingUrl = (session as any).recordingUrl ||
                             (session as any).recording_url ||

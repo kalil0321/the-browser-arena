@@ -7,6 +7,7 @@ import { DashboardSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
+import { AppThemeApplier } from "../components/app-theme-applier";
 
 const appSans = Pixelify_Sans({
   variable: "--font-sans",
@@ -20,6 +21,11 @@ const appMono = JetBrains_Mono({
 
 const defaultFont = Geist({
   variable: "--font-default",
+  subsets: ["latin"],
+});
+
+const interFont = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -101,13 +107,16 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
+  const appThemeCookie = cookieStore.get("appTheme")?.value;
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning data-theme={appThemeCookie === "pro" ? "pro" : undefined}>
+      <head></head>
       <body
-        className={`${appSans.variable} ${appMono.variable} ${defaultFont.variable} antialiased relative min-h-screen`}
+        className={`${appSans.variable} ${appMono.variable} ${defaultFont.variable} ${interFont.variable} antialiased relative min-h-screen`}
       >
         {/* @ts-ignore */}
-        {/* <ThemeProvider forcedTheme="light" suppressHydrationWarning> */}
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem suppressHydrationWarning>
+          <AppThemeApplier />
           <ConvexClientProvider>
             <SidebarProvider defaultOpen={defaultOpen}>
               <div className="relative flex h-screen w-full">
@@ -117,7 +126,7 @@ export default async function RootLayout({
             </SidebarProvider>
             <Toaster position="bottom-right" richColors />
           </ConvexClientProvider>
-        {/* </ThemeProvider> */}
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -19,32 +19,53 @@ def parse_provider_model(provider_model: str):
     return provider, model
 
 
-def get_llm(provider: str, model: str):
+def get_llm(provider: str, model: str, user_api_keys: Dict = None):
+    """Get LLM instance with user-provided or environment variable API keys
+
+    Args:
+        provider: LLM provider (openai, google, anthropic, browser-use)
+        model: Model name
+        user_api_keys: Dict with optional keys: openai_api_key, google_api_key, anthropic_api_key, browser_use_api_key
+
+    Returns:
+        LLM chat instance
+    """
+    if user_api_keys is None:
+        user_api_keys = {}
+
     provider_lower = provider.lower()
 
     if provider_lower == "browser-use":
-        return ChatBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
+        api_key = user_api_keys.get("browser_use_api_key") or os.getenv("BROWSER_USE_API_KEY")
+        if api_key:
+            return ChatBrowserUse(api_key=api_key)
+        # Fallback without explicit api_key if not provided
+        return ChatBrowserUse()
 
     if provider_lower == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = user_api_keys.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is required")
         return ChatOpenAI(model=model, api_key=api_key)
 
     if provider_lower == "google":
-        api_key = os.getenv("GOOGLE_API_KEY")
+        api_key = user_api_keys.get("google_api_key") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable is required")
         return ChatGoogle(model=model, api_key=api_key)
 
     if provider_lower == "anthropic":
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = user_api_keys.get("anthropic_api_key") or os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
         return ChatAnthropic(model=model, api_key=api_key)
 
-    return ChatBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
+    # Default to browser-use
+    api_key = user_api_keys.get("browser_use_api_key") or os.getenv("BROWSER_USE_API_KEY")
+    if api_key:
+        return ChatBrowserUse(api_key=api_key)
+    return ChatBrowserUse()
 
 
 async def run_browser_use(
@@ -53,6 +74,10 @@ async def run_browser_use(
     provider_model: str,
     browser: Anchorbrowser,
     session_id: str,
+    openai_api_key: str = None,
+    google_api_key: str = None,
+    anthropic_api_key: str = None,
+    browser_use_api_key: str = None,
 ):
     """
     Run Browser-Use agent with the given prompt
@@ -63,6 +88,10 @@ async def run_browser_use(
         provider_model: Provider/model string (e.g., "openai/gpt-4", "browser-use/bu-1.0")
         browser: Anchorbrowser instance
         session_id: Browser session ID
+        openai_api_key: Optional user-provided OpenAI API key
+        google_api_key: Optional user-provided Google API key
+        anthropic_api_key: Optional user-provided Anthropic API key
+        browser_use_api_key: Optional user-provided Browser-Use API key
 
     Returns:
         Tuple of (Browser-Use agent result, usage summary, timings dict)
@@ -73,7 +102,13 @@ async def run_browser_use(
     # Time LLM initialization
     llm_start = time.time()
     provider, model = parse_provider_model(provider_model)
-    llm = get_llm(provider, model)
+    user_api_keys = {
+        "openai_api_key": openai_api_key,
+        "google_api_key": google_api_key,
+        "anthropic_api_key": anthropic_api_key,
+        "browser_use_api_key": browser_use_api_key,
+    }
+    llm = get_llm(provider, model, user_api_keys)
     timings["llm_initialization"] = time.time() - llm_start
     print(f"⏱️  LLM initialization: {timings['llm_initialization']:.2f}s")
 
