@@ -17,10 +17,23 @@ interface AgentConfig {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, agents, smoothApiKey, isPrivate } = await request.json() as {
+        const {
+            instruction,
+            agents,
+            smoothApiKey,
+            openaiApiKey,
+            googleApiKey,
+            anthropicApiKey,
+            browserUseApiKey,
+            isPrivate
+        } = await request.json() as {
             instruction: string;
             agents: AgentConfig[];
             smoothApiKey?: string;
+            openaiApiKey?: string;
+            googleApiKey?: string;
+            anthropicApiKey?: string;
+            browserUseApiKey?: string;
             isPrivate?: boolean;
         };
 
@@ -95,6 +108,9 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            openaiApiKey,
+                            googleApiKey,
+                            anthropicApiKey,
                         };
                         break;
                     case "browser-use":
@@ -109,6 +125,9 @@ export async function POST(request: NextRequest) {
                             sessionId: dbSessionId,
                             instruction,
                             providerModel: agentConfig.model,
+                            openaiApiKey,
+                            googleApiKey,
+                            anthropicApiKey,
                             ...(browserSessionId && cdpUrl && liveViewUrl ? {
                                 browserSessionId,
                                 cdpUrl,
@@ -124,6 +143,7 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            browserUseApiKey,
                         };
                         break;
                     case "stagehand":
@@ -134,6 +154,9 @@ export async function POST(request: NextRequest) {
                             instruction,
                             model: agentConfig.model,
                             sessionId: dbSessionId, // Pass the shared session ID
+                            openaiApiKey,
+                            googleApiKey,
+                            anthropicApiKey,
                         };
                         break;
                     default:

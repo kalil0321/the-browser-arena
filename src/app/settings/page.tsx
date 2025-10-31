@@ -25,6 +25,27 @@ export default function SettingsPage() {
   const [smoothKeyVisible, setSmoothKeyVisible] = useState(false);
   const [smoothKeyDisplay, setSmoothKeyDisplay] = useState<string | null>(null);
   const [smoothKeyFull, setSmoothKeyFull] = useState<string | null>(null); // Full decrypted key
+
+  const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [openaiKeyVisible, setOpenaiKeyVisible] = useState(false);
+  const [openaiKeyDisplay, setOpenaiKeyDisplay] = useState<string | null>(null);
+  const [openaiKeyFull, setOpenaiKeyFull] = useState<string | null>(null);
+
+  const [googleApiKey, setGoogleApiKey] = useState("");
+  const [googleKeyVisible, setGoogleKeyVisible] = useState(false);
+  const [googleKeyDisplay, setGoogleKeyDisplay] = useState<string | null>(null);
+  const [googleKeyFull, setGoogleKeyFull] = useState<string | null>(null);
+
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [anthropicKeyVisible, setAnthropicKeyVisible] = useState(false);
+  const [anthropicKeyDisplay, setAnthropicKeyDisplay] = useState<string | null>(null);
+  const [anthropicKeyFull, setAnthropicKeyFull] = useState<string | null>(null);
+
+  const [browserUseApiKey, setBrowserUseApiKey] = useState("");
+  const [browserUseKeyVisible, setBrowserUseKeyVisible] = useState(false);
+  const [browserUseKeyDisplay, setBrowserUseKeyDisplay] = useState<string | null>(null);
+  const [browserUseKeyFull, setBrowserUseKeyFull] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
@@ -32,16 +53,17 @@ export default function SettingsPage() {
   // Load existing key on mount
   useEffect(() => {
     if (user?._id) {
-      loadSmoothKey();
+      loadAllKeys();
     } else {
       setIsLoadingKey(false);
     }
   }, [user?._id]);
 
-  const loadSmoothKey = async () => {
+  const loadAllKeys = async () => {
     if (!user?._id) return;
     setIsLoadingKey(true);
     try {
+      // Load Smooth key
       if (hasApiKey("smooth")) {
         const key = await getApiKey("smooth", user._id);
         if (key) {
@@ -49,11 +71,49 @@ export default function SettingsPage() {
           setSmoothKeyDisplay(maskApiKey(key));
           console.log("🔑 Loaded user's Smooth API key from localStorage");
         }
-      } else {
-        console.log("ℹ️ No Smooth API key found in localStorage");
+      }
+
+      // Load OpenAI key
+      if (hasApiKey("openai")) {
+        const key = await getApiKey("openai", user._id);
+        if (key) {
+          setOpenaiKeyFull(key);
+          setOpenaiKeyDisplay(maskApiKey(key));
+          console.log("🔑 Loaded user's OpenAI API key from localStorage");
+        }
+      }
+
+      // Load Google key
+      if (hasApiKey("google")) {
+        const key = await getApiKey("google", user._id);
+        if (key) {
+          setGoogleKeyFull(key);
+          setGoogleKeyDisplay(maskApiKey(key));
+          console.log("🔑 Loaded user's Google API key from localStorage");
+        }
+      }
+
+      // Load Anthropic key
+      if (hasApiKey("anthropic")) {
+        const key = await getApiKey("anthropic", user._id);
+        if (key) {
+          setAnthropicKeyFull(key);
+          setAnthropicKeyDisplay(maskApiKey(key));
+          console.log("🔑 Loaded user's Anthropic API key from localStorage");
+        }
+      }
+
+      // Load Browser-Use key
+      if (hasApiKey("browser-use")) {
+        const key = await getApiKey("browser-use", user._id);
+        if (key) {
+          setBrowserUseKeyFull(key);
+          setBrowserUseKeyDisplay(maskApiKey(key));
+          console.log("🔑 Loaded user's Browser-Use API key from localStorage");
+        }
       }
     } catch (error) {
-      console.error("❌ Failed to load Smooth API key:", error);
+      console.error("❌ Failed to load API keys:", error);
     } finally {
       setIsLoadingKey(false);
     }
@@ -126,6 +186,230 @@ export default function SettingsPage() {
       // Show - display full key
       setSmoothKeyDisplay(smoothKeyFull);
       setSmoothKeyVisible(true);
+    }
+  };
+
+  // OpenAI handlers
+  const handleSaveOpenaiKey = async () => {
+    if (!user?._id) {
+      setSaveMessage({ type: "error", text: "Please sign in to save API keys" });
+      return;
+    }
+    if (!openaiApiKey.trim()) {
+      setSaveMessage({ type: "error", text: "API key cannot be empty" });
+      return;
+    }
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      await setApiKey("openai", openaiApiKey, user._id);
+      setOpenaiKeyFull(openaiApiKey);
+      setOpenaiKeyDisplay(maskApiKey(openaiApiKey));
+      setOpenaiApiKey("");
+      setOpenaiKeyVisible(false);
+      setSaveMessage({ type: "success", text: "OpenAI API key saved successfully" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to save API key"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveOpenaiKey = async () => {
+    if (!user?._id) return;
+    try {
+      removeApiKey("openai");
+      setOpenaiKeyDisplay(null);
+      setOpenaiKeyFull(null);
+      setOpenaiApiKey("");
+      setOpenaiKeyVisible(false);
+      setSaveMessage({ type: "success", text: "OpenAI API key removed" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({ type: "error", text: "Failed to remove API key" });
+    }
+  };
+
+  const handleToggleOpenaiKeyVisibility = async () => {
+    if (!user?._id || !openaiKeyFull) return;
+    if (openaiKeyVisible) {
+      setOpenaiKeyDisplay(maskApiKey(openaiKeyFull));
+      setOpenaiKeyVisible(false);
+    } else {
+      setOpenaiKeyDisplay(openaiKeyFull);
+      setOpenaiKeyVisible(true);
+    }
+  };
+
+  // Google handlers
+  const handleSaveGoogleKey = async () => {
+    if (!user?._id) {
+      setSaveMessage({ type: "error", text: "Please sign in to save API keys" });
+      return;
+    }
+    if (!googleApiKey.trim()) {
+      setSaveMessage({ type: "error", text: "API key cannot be empty" });
+      return;
+    }
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      await setApiKey("google", googleApiKey, user._id);
+      setGoogleKeyFull(googleApiKey);
+      setGoogleKeyDisplay(maskApiKey(googleApiKey));
+      setGoogleApiKey("");
+      setGoogleKeyVisible(false);
+      setSaveMessage({ type: "success", text: "Google API key saved successfully" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to save API key"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveGoogleKey = async () => {
+    if (!user?._id) return;
+    try {
+      removeApiKey("google");
+      setGoogleKeyDisplay(null);
+      setGoogleKeyFull(null);
+      setGoogleApiKey("");
+      setGoogleKeyVisible(false);
+      setSaveMessage({ type: "success", text: "Google API key removed" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({ type: "error", text: "Failed to remove API key" });
+    }
+  };
+
+  const handleToggleGoogleKeyVisibility = async () => {
+    if (!user?._id || !googleKeyFull) return;
+    if (googleKeyVisible) {
+      setGoogleKeyDisplay(maskApiKey(googleKeyFull));
+      setGoogleKeyVisible(false);
+    } else {
+      setGoogleKeyDisplay(googleKeyFull);
+      setGoogleKeyVisible(true);
+    }
+  };
+
+  // Anthropic handlers
+  const handleSaveAnthropicKey = async () => {
+    if (!user?._id) {
+      setSaveMessage({ type: "error", text: "Please sign in to save API keys" });
+      return;
+    }
+    if (!anthropicApiKey.trim()) {
+      setSaveMessage({ type: "error", text: "API key cannot be empty" });
+      return;
+    }
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      await setApiKey("anthropic", anthropicApiKey, user._id);
+      setAnthropicKeyFull(anthropicApiKey);
+      setAnthropicKeyDisplay(maskApiKey(anthropicApiKey));
+      setAnthropicApiKey("");
+      setAnthropicKeyVisible(false);
+      setSaveMessage({ type: "success", text: "Anthropic API key saved successfully" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to save API key"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveAnthropicKey = async () => {
+    if (!user?._id) return;
+    try {
+      removeApiKey("anthropic");
+      setAnthropicKeyDisplay(null);
+      setAnthropicKeyFull(null);
+      setAnthropicApiKey("");
+      setAnthropicKeyVisible(false);
+      setSaveMessage({ type: "success", text: "Anthropic API key removed" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({ type: "error", text: "Failed to remove API key" });
+    }
+  };
+
+  const handleToggleAnthropicKeyVisibility = async () => {
+    if (!user?._id || !anthropicKeyFull) return;
+    if (anthropicKeyVisible) {
+      setAnthropicKeyDisplay(maskApiKey(anthropicKeyFull));
+      setAnthropicKeyVisible(false);
+    } else {
+      setAnthropicKeyDisplay(anthropicKeyFull);
+      setAnthropicKeyVisible(true);
+    }
+  };
+
+  // Browser-Use handlers
+  const handleSaveBrowserUseKey = async () => {
+    if (!user?._id) {
+      setSaveMessage({ type: "error", text: "Please sign in to save API keys" });
+      return;
+    }
+    if (!browserUseApiKey.trim()) {
+      setSaveMessage({ type: "error", text: "API key cannot be empty" });
+      return;
+    }
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      await setApiKey("browser-use", browserUseApiKey, user._id);
+      setBrowserUseKeyFull(browserUseApiKey);
+      setBrowserUseKeyDisplay(maskApiKey(browserUseApiKey));
+      setBrowserUseApiKey("");
+      setBrowserUseKeyVisible(false);
+      setSaveMessage({ type: "success", text: "Browser-Use API key saved successfully" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to save API key"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveBrowserUseKey = async () => {
+    if (!user?._id) return;
+    try {
+      removeApiKey("browser-use");
+      setBrowserUseKeyDisplay(null);
+      setBrowserUseKeyFull(null);
+      setBrowserUseApiKey("");
+      setBrowserUseKeyVisible(false);
+      setSaveMessage({ type: "success", text: "Browser-Use API key removed" });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      setSaveMessage({ type: "error", text: "Failed to remove API key" });
+    }
+  };
+
+  const handleToggleBrowserUseKeyVisibility = async () => {
+    if (!user?._id || !browserUseKeyFull) return;
+    if (browserUseKeyVisible) {
+      setBrowserUseKeyDisplay(maskApiKey(browserUseKeyFull));
+      setBrowserUseKeyVisible(false);
+    } else {
+      setBrowserUseKeyDisplay(browserUseKeyFull);
+      setBrowserUseKeyVisible(true);
     }
   };
 
@@ -324,32 +608,348 @@ export default function SettingsPage() {
                       {isSaving ? "Saving..." : smoothKeyDisplay ? "Update Key" : "Save Key"}
                     </Button>
                   </div>
+                </div>
 
-                  {/* Status Message */}
-                  {saveMessage && (
-                    <div
-                      className={`rounded-lg border p-3 text-sm ${saveMessage.type === "success"
-                        ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100"
-                        : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100"
-                        }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {saveMessage.type === "success" ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : (
-                          <XCircle className="h-4 w-4" />
-                        )}
-                        <span>{saveMessage.text}</span>
+                {/* OpenAI API Key Section */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">OpenAI API Key</h3>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Your OpenAI API key is used to authenticate requests to OpenAI services.
+                    If not provided, the default server key will be used.
+                  </p>
+
+                  {/* Current Key Display */}
+                  {isLoadingKey ? (
+                    <div className="text-sm text-muted-foreground">Loading...</div>
+                  ) : openaiKeyDisplay ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <span className="text-muted-foreground">Key is set</span>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          value={openaiKeyDisplay || ""}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleToggleOpenaiKeyVisibility}
+                          title={openaiKeyVisible ? "Hide key" : "Show key"}
+                        >
+                          {openaiKeyVisible ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleRemoveOpenaiKey}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm">
+                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">No key set</span>
                     </div>
                   )}
 
-                  <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm">
-                    <p className="text-blue-900 dark:text-blue-100">
-                      <strong>Note:</strong> Your API key is encrypted and stored locally on this device only.
-                      It will not be synced across devices. If you clear your browser data, you will need to re-enter your key.
-                    </p>
+                  {/* Save New/Update Key */}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="openai-api-key">
+                        {openaiKeyDisplay ? "Update OpenAI API Key" : "Add OpenAI API Key"}
+                      </Label>
+                      <Input
+                        id="openai-api-key"
+                        type="password"
+                        placeholder="Enter your OpenAI API key"
+                        value={openaiApiKey}
+                        onChange={(e) => setOpenaiApiKey(e.target.value)}
+                        className="font-mono"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveOpenaiKey}
+                      disabled={isSaving || !openaiApiKey.trim() || !user?._id}
+                    >
+                      {isSaving ? "Saving..." : openaiKeyDisplay ? "Update Key" : "Save Key"}
+                    </Button>
                   </div>
+                </div>
+
+                {/* Google API Key Section */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">Google API Key</h3>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Your Google API key is used to authenticate requests to Google AI services (Gemini).
+                    If not provided, the default server key will be used.
+                  </p>
+
+                  {/* Current Key Display */}
+                  {isLoadingKey ? (
+                    <div className="text-sm text-muted-foreground">Loading...</div>
+                  ) : googleKeyDisplay ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <span className="text-muted-foreground">Key is set</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          value={googleKeyDisplay || ""}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleToggleGoogleKeyVisibility}
+                          title={googleKeyVisible ? "Hide key" : "Show key"}
+                        >
+                          {googleKeyVisible ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleRemoveGoogleKey}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm">
+                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">No key set</span>
+                    </div>
+                  )}
+
+                  {/* Save New/Update Key */}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="google-api-key">
+                        {googleKeyDisplay ? "Update Google API Key" : "Add Google API Key"}
+                      </Label>
+                      <Input
+                        id="google-api-key"
+                        type="password"
+                        placeholder="Enter your Google API key"
+                        value={googleApiKey}
+                        onChange={(e) => setGoogleApiKey(e.target.value)}
+                        className="font-mono"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveGoogleKey}
+                      disabled={isSaving || !googleApiKey.trim() || !user?._id}
+                    >
+                      {isSaving ? "Saving..." : googleKeyDisplay ? "Update Key" : "Save Key"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Anthropic API Key Section */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">Anthropic API Key</h3>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Your Anthropic API key is used to authenticate requests to Anthropic services (Claude).
+                    If not provided, the default server key will be used.
+                  </p>
+
+                  {/* Current Key Display */}
+                  {isLoadingKey ? (
+                    <div className="text-sm text-muted-foreground">Loading...</div>
+                  ) : anthropicKeyDisplay ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <span className="text-muted-foreground">Key is set</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          value={anthropicKeyDisplay || ""}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleToggleAnthropicKeyVisibility}
+                          title={anthropicKeyVisible ? "Hide key" : "Show key"}
+                        >
+                          {anthropicKeyVisible ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleRemoveAnthropicKey}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm">
+                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">No key set</span>
+                    </div>
+                  )}
+
+                  {/* Save New/Update Key */}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="anthropic-api-key">
+                        {anthropicKeyDisplay ? "Update Anthropic API Key" : "Add Anthropic API Key"}
+                      </Label>
+                      <Input
+                        id="anthropic-api-key"
+                        type="password"
+                        placeholder="Enter your Anthropic API key"
+                        value={anthropicApiKey}
+                        onChange={(e) => setAnthropicApiKey(e.target.value)}
+                        className="font-mono"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveAnthropicKey}
+                      disabled={isSaving || !anthropicApiKey.trim() || !user?._id}
+                    >
+                      {isSaving ? "Saving..." : anthropicKeyDisplay ? "Update Key" : "Save Key"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Browser-Use API Key Section */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">Browser-Use API Key</h3>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Your Browser-Use API key is used to authenticate requests to Browser-Use Cloud services.
+                    If not provided, the default server key will be used.
+                  </p>
+
+                  {/* Current Key Display */}
+                  {isLoadingKey ? (
+                    <div className="text-sm text-muted-foreground">Loading...</div>
+                  ) : browserUseKeyDisplay ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <span className="text-muted-foreground">Key is set</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          value={browserUseKeyDisplay || ""}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleToggleBrowserUseKeyVisibility}
+                          title={browserUseKeyVisible ? "Hide key" : "Show key"}
+                        >
+                          {browserUseKeyVisible ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleRemoveBrowserUseKey}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm">
+                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">No key set</span>
+                    </div>
+                  )}
+
+                  {/* Save New/Update Key */}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="browser-use-api-key">
+                        {browserUseKeyDisplay ? "Update Browser-Use API Key" : "Add Browser-Use API Key"}
+                      </Label>
+                      <Input
+                        id="browser-use-api-key"
+                        type="password"
+                        placeholder="Enter your Browser-Use API key"
+                        value={browserUseApiKey}
+                        onChange={(e) => setBrowserUseApiKey(e.target.value)}
+                        className="font-mono"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveBrowserUseKey}
+                      disabled={isSaving || !browserUseApiKey.trim() || !user?._id}
+                    >
+                      {isSaving ? "Saving..." : browserUseKeyDisplay ? "Update Key" : "Save Key"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Status Message */}
+                {saveMessage && (
+                  <div
+                    className={`rounded-lg border p-3 text-sm ${saveMessage.type === "success"
+                      ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100"
+                      : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100"
+                      }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {saveMessage.type === "success" ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        <XCircle className="h-4 w-4" />
+                      )}
+                      <span>{saveMessage.text}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm">
+                  <p className="text-blue-900 dark:text-blue-100">
+                    <strong>Note:</strong> All your API keys are encrypted and stored locally on this device only.
+                    They will not be synced across devices. If you clear your browser data, you will need to re-enter your keys.
+                  </p>
                 </div>
               </div>
             </div>

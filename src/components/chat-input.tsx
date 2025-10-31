@@ -120,8 +120,33 @@ export function ChatInput() {
     // Privacy state
     const [isPrivate, setIsPrivate] = useState(false);
 
+    // API key availability state for privacy warnings
+    const [hasSmoothApiKey, setHasSmoothApiKey] = useState(false);
+    const [hasBrowserUseApiKey, setHasBrowserUseApiKey] = useState(false);
+
     // Temporary state for dialog
     const [tempAgentConfigs, setTempAgentConfigs] = useState<AgentConfig[]>(agentConfigs);
+
+    // Check if user has API keys for privacy warnings
+    useEffect(() => {
+        const checkApiKeys = async () => {
+            if (user?._id) {
+                try {
+                    const smoothKey = await getApiKey("smooth", user._id);
+                    setHasSmoothApiKey(!!smoothKey);
+
+                    const browserUseKey = await getApiKey("browser-use", user._id);
+                    setHasBrowserUseApiKey(!!browserUseKey);
+                } catch (error) {
+                    console.error("Failed to check API keys:", error);
+                }
+            } else {
+                setHasSmoothApiKey(false);
+                setHasBrowserUseApiKey(false);
+            }
+        };
+        checkApiKeys();
+    }, [user?._id]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -144,21 +169,57 @@ export function ChatInput() {
             try {
                 console.log("Submitting:", input, "with agents:", agentConfigs);
 
-                // Get user's Smooth API key if available
+                // Get user's API keys if available
                 let smoothApiKey: string | undefined = undefined;
-                if (user?._id && agentConfigs.some(c => c.agent === "smooth")) {
+                let openaiApiKey: string | undefined = undefined;
+                let googleApiKey: string | undefined = undefined;
+                let anthropicApiKey: string | undefined = undefined;
+                let browserUseApiKey: string | undefined = undefined;
+
+                if (user?._id) {
                     try {
-                        const key = await getApiKey("smooth", user._id);
-                        if (key) {
-                            smoothApiKey = key;
-                            console.log("🔑 Found user's Smooth API key in localStorage, will use it for API calls");
-                        } else {
-                            console.log("ℹ️ No user Smooth API key found, will use server key (fallback)");
+                        // Get Smooth API key if Smooth agent is selected
+                        if (agentConfigs.some(c => c.agent === "smooth")) {
+                            const key = await getApiKey("smooth", user._id);
+                            if (key) {
+                                smoothApiKey = key;
+                                console.log("🔑 Found user's Smooth API key in localStorage");
+                            }
+                        }
+
+                        // Get OpenAI API key if needed
+                        const key1 = await getApiKey("openai", user._id);
+                        if (key1) {
+                            openaiApiKey = key1;
+                            console.log("🔑 Found user's OpenAI API key in localStorage");
+                        }
+
+                        // Get Google API key if needed
+                        const key2 = await getApiKey("google", user._id);
+                        if (key2) {
+                            googleApiKey = key2;
+                            console.log("🔑 Found user's Google API key in localStorage");
+                        }
+
+                        // Get Anthropic API key if needed
+                        const key3 = await getApiKey("anthropic", user._id);
+                        if (key3) {
+                            anthropicApiKey = key3;
+                            console.log("🔑 Found user's Anthropic API key in localStorage");
+                        }
+
+                        // Get Browser-Use API key if Browser-Use Cloud is selected
+                        if (agentConfigs.some(c => c.agent === "browser-use-cloud")) {
+                            const key4 = await getApiKey("browser-use", user._id);
+                            if (key4) {
+                                browserUseApiKey = key4;
+                                console.log("🔑 Found user's Browser-Use API key in localStorage");
+                            }
                         }
                     } catch (error) {
-                        console.error("⚠️ Failed to get Smooth API key from localStorage:", error);
-                        console.log("ℹ️ Will fallback to server key");
-                        // Continue without user key - will fallback to server key
+                        console.error("⚠️ Failed to get API keys from localStorage:", error);
+                        console.log("ℹ️ Will fallback to server keys");
+                        // Continue without user keys - will fallback to server keys
                     }
                 }
 
@@ -172,6 +233,10 @@ export function ChatInput() {
                         instruction: input,
                         agents: agentConfigs,
                         smoothApiKey: smoothApiKey,
+                        openaiApiKey: openaiApiKey,
+                        googleApiKey: googleApiKey,
+                        anthropicApiKey: anthropicApiKey,
+                        browserUseApiKey: browserUseApiKey,
                         isPrivate: isPrivate,
                     }),
                 });
@@ -371,6 +436,26 @@ export function ChatInput() {
 
                         <div className="flex items-center gap-4" />
                     </div>
+
+                    {/* Privacy Warning */}
+                    {isPrivate && (
+                        (agentConfigs.some(c => c.agent === "smooth") && !hasSmoothApiKey) ||
+                        (agentConfigs.some(c => c.agent === "browser-use-cloud") && !hasBrowserUseApiKey)
+                    ) && (
+                        <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm">
+                            <p className="text-amber-900 dark:text-amber-100">
+                                <strong>Note de confidentialité:</strong> Le mode privé est activé, mais certains agents utilisent des clés API du serveur.
+                                Pour une session totalement privée, veuillez ajouter vos propres clés API dans les{" "}
+                                <a href="/settings" className="underline hover:text-amber-700 dark:hover:text-amber-300">Paramètres</a>.
+                                {agentConfigs.some(c => c.agent === "smooth") && !hasSmoothApiKey && (
+                                    <span> (Smooth API manquante)</span>
+                                )}
+                                {agentConfigs.some(c => c.agent === "browser-use-cloud") && !hasBrowserUseApiKey && (
+                                    <span> (Browser-Use API manquante)</span>
+                                )}
+                            </p>
+                        </div>
+                    )}
 
                     {/* Agent Configuration Dialog */}
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
