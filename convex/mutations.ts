@@ -541,3 +541,66 @@ export const updateAgentBrowserUrlFromBackend = mutation({
         });
     },
 });
+
+/**
+ * Initialize userUsageStats for the current user by backfilling from existing
+ * sessions and agents. If a stats document already exists, it is returned as-is.
+ */
+export const initializeUserUsageStats = mutation({
+    args: {},
+    handler: async (ctx) => {
+        const user = await getUser(ctx);
+
+        if (!user) {
+            throw new Error("User must be authenticated");
+        }
+
+        // If stats already exist, return them
+        const existing = await ctx.db
+            .query("userUsageStats")
+            .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+            .first();
+        if (existing) {
+            return existing;
+        }
+
+        // Backfill from sessions and agents
+        const sessions = await ctx.db
+            .query("sessions")
+            .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+            .collect();
+
+        const totalSessions = sessions.length;
+        let totalAgents = 0;
+        let totalCost = 0;
+
+        for (const session of sessions) {
+            const agents = await ctx.db
+                .query("agents")
+                .withIndex("by_session", (q: any) => q.eq("sessionId", session._id))
+                .collect();
+            totalAgents += agents.length;
+            for (const agent of agents) {
+                totalCost += extractCost((agent as any).result);
+            }
+        }
+
+        const now = Date.now();
+        const lastSessionAt = sessions.length
+            ? Math.max(...sessions.map((s: any) => s.createdAt))
+            : undefined;
+
+        const statsId = await ctx.db.insert("userUsageStats", {
+            userId: user._id,
+            totalCost,
+            totalSessions,
+            totalAgents,
+            lastSessionAt,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        const created = await ctx.db.get(statsId);
+        return created;
+    },
+});
