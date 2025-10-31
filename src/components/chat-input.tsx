@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useConvexAuth } from "convex/react";
+import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -91,7 +92,7 @@ const ProviderLogo: React.FC<{ provider: string; className?: string }> = ({ prov
     }
 };
 
-export function ChatInput() {
+export function ChatInput({ onAgentPresenceChange }: { onAgentPresenceChange?: (hasSmooth: boolean, hasBrowserUse: boolean) => void }) {
     // Use this as default input
     const [input, setInput] = useState("Find top hacker news post");
     const [isLoading, setIsLoading] = useState(false);
@@ -135,6 +136,13 @@ export function ChatInput() {
         }
     }, [input]);
 
+    // Notify parent when agent selection changes
+    useEffect(() => {
+        const hasSmooth = agentConfigs.some(c => c.agent === "smooth");
+        const hasBrowserUse = agentConfigs.some(c => c.agent === "browser-use" || c.agent === "browser-use-cloud");
+        onAgentPresenceChange?.(hasSmooth, hasBrowserUse);
+    }, [agentConfigs, onAgentPresenceChange]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (input.trim() && !isLoading && agentConfigs.length > 0) {
@@ -148,7 +156,7 @@ export function ChatInput() {
             try {
                 console.log("Submitting:", input, "with agents:", agentConfigs);
 
-                // Get user's Smooth API key if available
+                // Get user's Smooth API key if available (required for Smooth)
                 let smoothApiKey: string | undefined = undefined;
                 if (user?._id && agentConfigs.some(c => c.agent === "smooth")) {
                     try {
@@ -157,12 +165,18 @@ export function ChatInput() {
                             smoothApiKey = key;
                             console.log("🔑 Found user's Smooth API key in localStorage, will use it for API calls");
                         } else {
-                            console.log("ℹ️ No user Smooth API key found, will use server key (fallback)");
+                            // Block submission if Smooth selected without a user key
+                            setIsLoading(false);
+                            const message = "Smooth requires your API key. Add it in Settings.";
+                            try { toast.error(message, { duration: 5000 }); } catch { }
+                            return;
                         }
                     } catch (error) {
                         console.error("⚠️ Failed to get Smooth API key from localStorage:", error);
-                        console.log("ℹ️ Will fallback to server key");
-                        // Continue without user key - will fallback to server key
+                        setIsLoading(false);
+                        const message = "Could not access your Smooth API key. Please re-add it in Settings.";
+                        try { toast.error(message, { duration: 5000 }); } catch { }
+                        return;
                     }
                 }
 
@@ -210,7 +224,11 @@ export function ChatInput() {
                 });
             } catch (error) {
                 console.error("Error submitting:", error);
-                alert(`Failed to create session: ${error instanceof Error ? error.message : "Unknown error"}`);
+                const errorMessage = error instanceof Error ? error.message : "Unknown error";
+                toast.error(`Failed to create session: ${errorMessage}`, {
+                    duration: 5000,
+                    description: "Please check your configuration and try again."
+                });
                 setIsLoading(false);
             } finally {
                 setInput("");
@@ -229,8 +247,16 @@ export function ChatInput() {
             setIsLoginDialogOpen(false);
             setEmail("");
             setPassword("");
+            toast.success("Signed in successfully!", {
+                duration: 3000,
+            });
         } catch (err: any) {
-            setAuthError(err?.message || "Sign in failed");
+            const errorMsg = err?.message || "Sign in failed";
+            setAuthError(errorMsg);
+            toast.error("Sign in failed", {
+                description: errorMsg,
+                duration: 5000,
+            });
         } finally {
             setIsSubmittingAuth(false);
         }
@@ -249,8 +275,17 @@ export function ChatInput() {
             setEmail("");
             setPassword("");
             setName("");
+            toast.success("Account created successfully!", {
+                duration: 3000,
+                description: "Welcome to The Browser Arena!"
+            });
         } catch (err: any) {
-            setAuthError(err?.message || "Sign up failed");
+            const errorMsg = err?.message || "Sign up failed";
+            setAuthError(errorMsg);
+            toast.error("Sign up failed", {
+                description: errorMsg,
+                duration: 5000,
+            });
         } finally {
             setIsSubmittingAuth(false);
         }
@@ -352,6 +387,8 @@ export function ChatInput() {
                             </svg>
                         </button>
                     </form>
+
+
 
                     <div className="flex h-10 w-full items-center justify-between">
                         <div className="flex items-center gap-2 flex-nowrap overflow-x-auto whitespace-nowrap max-w-full">

@@ -201,3 +201,89 @@ export const getArenaStats = query({
     },
 });
 
+/**
+ * Get current user's usage statistics
+ */
+export const getUserUsageStats = query({
+    handler: async (ctx) => {
+        const user = await getUser(ctx);
+
+        if (!user) {
+            return null;
+        }
+
+        const stats = await ctx.db
+            .query("userUsageStats")
+            .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+            .first();
+
+        if (!stats) {
+            // Return default stats if user hasn't started yet
+            return {
+                userId: user._id,
+                totalCost: 0,
+                totalSessions: 0,
+                totalAgents: 0,
+                lastSessionAt: null,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            };
+        }
+
+        return stats;
+    },
+});
+
+/**
+ * Get cost breakdown for current user's sessions
+ */
+export const getUserCostBreakdown = query({
+    handler: async (ctx) => {
+        const user = await getUser(ctx);
+
+        if (!user) {
+            return {
+                byAgent: {},
+                byModel: {},
+                totalCost: 0,
+            };
+        }
+
+        const sessions = await ctx.db
+            .query("sessions")
+            .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+            .collect();
+
+        const byAgent: Record<string, number> = {};
+        const byModel: Record<string, number> = {};
+        let totalCost = 0;
+
+        for (const session of sessions) {
+            const agents = await ctx.db
+                .query("agents")
+                .withIndex("by_session", (q: any) => q.eq("sessionId", session._id))
+                .collect();
+
+            for (const agent of agents) {
+                if (agent.result) {
+                    // Extract cost
+                    const cost = agent.result.usage?.total_cost ?? agent.result.cost ?? 0;
+                    if (cost > 0) {
+                        totalCost += cost;
+                        byAgent[agent.name] = (byAgent[agent.name] || 0) + cost;
+                        if (agent.model) {
+                            byModel[agent.model] = (byModel[agent.model] || 0) + cost;
+                        }
+                    }
+                }
+            }
+        }
+
+        return {
+            byAgent,
+            byModel,
+            totalCost,
+        };
+    },
+});
+

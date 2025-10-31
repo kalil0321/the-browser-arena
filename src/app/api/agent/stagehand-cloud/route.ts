@@ -181,10 +181,19 @@ export async function POST(request: NextRequest) {
                 const duration = (endTime - startTime) / 1000; // Convert to seconds
 
                 const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
-                const cost = computeCost(model, usageData);
+                const llmCost = computeCost(model, usageData);
+                // Browserbase pricing: $0.2 per hour
+                const hours = Math.max(duration / 3600, 0);
+                const browserCost = 0.2 * hours;
+                const cost = llmCost + browserCost;
 
                 const payload = {
-                    usage: usageData,
+                    usage: {
+                        ...usageData,
+                        total_cost: cost,
+                        browser_cost: browserCost,
+                        llm_cost: llmCost,
+                    },
                     cost,
                     duration,
                     message,
