@@ -3,6 +3,64 @@ import { mutation } from "./_generated/server";
 import { getUser } from "./auth";
 
 /**
+ * Helper function to extract cost from agent result
+ */
+function extractCost(result: any): number {
+    if (!result) return 0;
+
+    // Browser-Use format: usage.total_cost
+    if (result.usage?.total_cost !== undefined) {
+        return result.usage.total_cost;
+    }
+
+    // Smooth format: cost
+    if (result.cost !== undefined) {
+        return result.cost;
+    }
+
+    return 0;
+}
+
+/**
+ * Helper function to ensure user usage stats exist and update them
+ */
+async function updateUserCostTracking(
+    ctx: any,
+    userId: string,
+    cost: number,
+    isNewAgent: boolean = true
+) {
+    // Get or create user usage stats
+    const existing = await ctx.db
+        .query("userUsageStats")
+        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .first();
+
+    const now = Date.now();
+
+    if (existing) {
+        // Update existing stats
+        await ctx.db.patch(existing._id, {
+            totalCost: existing.totalCost + cost,
+            totalAgents: isNewAgent ? existing.totalAgents + 1 : existing.totalAgents,
+            lastSessionAt: now,
+            updatedAt: now,
+        });
+    } else {
+        // Create new stats
+        await ctx.db.insert("userUsageStats", {
+            userId,
+            totalCost: cost,
+            totalSessions: 0, // Will be incremented in createSession
+            totalAgents: isNewAgent ? 1 : 0,
+            lastSessionAt: now,
+            createdAt: now,
+            updatedAt: now,
+        });
+    }
+}
+
+/**
  * Create a new session when user submits an instruction
  */
 export const createSession = mutation({
@@ -32,6 +90,30 @@ export const createSession = mutation({
             createdAt: now,
             updatedAt: now,
         });
+
+        // Increment session count in user stats
+        const existing = await ctx.db
+            .query("userUsageStats")
+            .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                totalSessions: existing.totalSessions + 1,
+                lastSessionAt: now,
+                updatedAt: now,
+            });
+        } else {
+            await ctx.db.insert("userUsageStats", {
+                userId: user._id,
+                totalCost: 0,
+                totalSessions: 1,
+                totalAgents: 0,
+                lastSessionAt: now,
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
 
         // If browser data is provided, create the agent at the same time
         let agentId = undefined;
@@ -130,6 +212,12 @@ export const updateAgentResult = mutation({
             result: args.result,
             updatedAt: Date.now(),
         });
+
+        // Track cost for this agent
+        const cost = extractCost(args.result);
+        if (cost > 0) {
+            await updateUserCostTracking(ctx, user._id, cost, false);
+        }
     },
 });
 
@@ -371,6 +459,15 @@ export const updateAgentResultFromBackend = mutation({
             result: args.result,
             updatedAt: Date.now(),
         });
+
+        // Track cost for this agent (get session to find user)
+        const session = await ctx.db.get(agent.sessionId);
+        if (session && args.status !== "failed") {
+            const cost = extractCost(args.result);
+            if (cost > 0) {
+                await updateUserCostTracking(ctx, session.userId, cost, false);
+            }
+        }
     },
 });
 

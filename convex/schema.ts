@@ -30,4 +30,16 @@ export default defineSchema({
         .index("by_session", ["sessionId"])
         .index("by_session_status", ["sessionId", "status"])
         .index("by_session_name", ["sessionId", "name"]),
+
+    // User usage stats table - tracks costs and usage metrics per user
+    userUsageStats: defineTable({
+        userId: v.string(),
+        totalCost: v.number(), // Cumulative cost in USD
+        totalSessions: v.number(), // Total number of sessions created
+        totalAgents: v.number(), // Total number of agents run
+        lastSessionAt: v.optional(v.number()), // Timestamp of last session
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    })
+        .index("by_user", ["userId"]),
 });

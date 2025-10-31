@@ -195,8 +195,11 @@ export async function POST(request: NextRequest) {
                 const cost = computeCost(model, usageData);
 
                 const payload = {
-                    usage: usageData,
-                    cost,
+                    usage: {
+                        ...usageData,
+                        total_cost: cost, // Add total_cost field for cost tracking
+                    },
+                    cost, // Also keep cost field for backward compatibility
                     duration,
                     message,
                     actions,

@@ -11,12 +11,23 @@ import { useConvexAuth } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { getApiKey, setApiKey, removeApiKey, hasApiKey, maskApiKey } from "@/lib/api-keys";
-import { Eye, EyeOff, CheckCircle2, XCircle, Key } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2, XCircle, Key, DollarSign, Zap, Smartphone } from "lucide-react";
 
 export default function SettingsPage() {
   const { isAuthenticated } = useConvexAuth();
   const user = useQuery(
     api.auth.getCurrentUser,
+    isAuthenticated ? {} : "skip"
+  );
+
+  // Fetch usage stats
+  const usageStats = useQuery(
+    api.queries.getUserUsageStats,
+    isAuthenticated ? {} : "skip"
+  );
+
+  const costBreakdown = useQuery(
+    api.queries.getUserCostBreakdown,
     isAuthenticated ? {} : "skip"
   );
 
@@ -351,6 +362,134 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Usage & Billing Section */}
+            <div className="grid grid-cols-12 gap-8">
+              <div className="col-span-4 space-y-2">
+                <h2 className="text-xl font-semibold">Usage & Billing</h2>
+                <p className="text-sm text-muted-foreground">
+                  Track your API usage and costs across all agent sessions.
+                </p>
+              </div>
+              <div className="col-span-1 flex justify-center">
+                <div className="w-px h-full border-l border-dashed border-border"></div>
+              </div>
+              <div className="col-span-7 space-y-6">
+                {/* Cost Summary Cards */}
+                <div className="grid grid-cols-3 gap-4">
+                  {/* Total Cost Card */}
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-muted-foreground">Total Cost</p>
+                      <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <p className="text-2xl font-bold">
+                      ${usageStats?.totalCost.toFixed(4) ?? "0.0000"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">USD</p>
+                  </div>
+
+                  {/* Sessions Card */}
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-muted-foreground">Sessions</p>
+                      <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <p className="text-2xl font-bold">
+                      {usageStats?.totalSessions ?? 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">total sessions</p>
+                  </div>
+
+                  {/* Agents Card */}
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-muted-foreground">Agents Run</p>
+                      <Smartphone className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <p className="text-2xl font-bold">
+                      {usageStats?.totalAgents ?? 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">total agents</p>
+                  </div>
+                </div>
+
+                {/* Cost Breakdown */}
+                {(costBreakdown?.byAgent && Object.keys(costBreakdown.byAgent).length > 0) && (
+                  <div className="space-y-4 pt-4 border-t">
+                    <h3 className="text-lg font-medium">Cost Breakdown</h3>
+
+                    {/* By Agent Type */}
+                    <div>
+                      <p className="text-sm font-medium mb-3">By Agent Type</p>
+                      <div className="space-y-2">
+                        {Object.entries(costBreakdown.byAgent).map(([agent, cost]) => (
+                          <div
+                            key={agent}
+                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                          >
+                            <span className="text-sm capitalize">{agent}</span>
+                            <span className="font-mono font-semibold">
+                              ${(cost as number).toFixed(4)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* By Model */}
+                    {costBreakdown?.byModel && Object.keys(costBreakdown.byModel).length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium mb-3">By Model</p>
+                        <div className="space-y-2">
+                          {Object.entries(costBreakdown.byModel).map(([model, cost]) => (
+                            <div
+                              key={model}
+                              className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                            >
+                              <span className="text-sm truncate">{model}</span>
+                              <span className="font-mono font-semibold">
+                                ${(cost as number).toFixed(4)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {(!costBreakdown?.byAgent || Object.keys(costBreakdown.byAgent).length === 0) && (
+                  <div className="rounded-lg border border-dashed p-6 text-center">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      No agents have been run yet
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Agent costs will appear here once you run your first session
+                    </p>
+                  </div>
+                )}
+
+                {/* Last Session Info */}
+                {usageStats?.lastSessionAt && (
+                  <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm">
+                    <p className="text-blue-900 dark:text-blue-100">
+                      <strong>Last Session:</strong>{" "}
+                      {new Date(usageStats.lastSessionAt).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
