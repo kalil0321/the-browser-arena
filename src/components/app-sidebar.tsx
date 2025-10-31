@@ -15,12 +15,14 @@ import { UserInfo } from "./user-info";
 import { SessionsNav, type Session } from "./nav-sessions";
 import { ThemeSwitcher } from "./theme-switcher";
 import { HelpButton } from "./help-button";
-import { SettingsButton } from "./settings-button";
+import { SettingsButton } from "@/components/settings-button";
 import { Separator } from "@/components/ui/separator";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Trophy, Map } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import {
     SidebarMenu,
     SidebarMenuButton,
@@ -37,6 +39,26 @@ export function DashboardSidebar() {
     const { state } = useSidebar();
     const isCollapsed = state === "collapsed";
     const sessions = useQuery(api.queries.getUserSessions);
+    const { resolvedTheme } = useTheme();
+    const [isProTheme, setIsProTheme] = useState(false);
+
+    useEffect(() => {
+        const apply = () => {
+            try {
+                setIsProTheme(document.documentElement.getAttribute("data-theme") === "pro");
+            } catch {
+                setIsProTheme(false);
+            }
+        };
+        apply();
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === "appTheme") apply();
+        };
+        window.addEventListener("storage", onStorage);
+        return () => window.removeEventListener("storage", onStorage);
+    }, []);
+
+    const useWhiteLogo = isProTheme ? resolvedTheme === "dark" : true;
 
     return (
         <Sidebar variant="inset" collapsible="offcanvas">
@@ -51,7 +73,7 @@ export function DashboardSidebar() {
             >
                 <div className="flex items-center justify-between gap-2 w-full">
                     <a href="/" className="flex items-center gap-2">
-                        <IconFull dark={false} width={80} height={60} />
+                        <IconFull dark={!useWhiteLogo} width={80} height={60} />
                     </a>
                     <motion.div
                         key={isCollapsed ? "header-collapsed" : "header-expanded"}

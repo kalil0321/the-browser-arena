@@ -106,8 +106,10 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
+  const appThemeCookie = cookieStore.get("appTheme")?.value;
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning data-theme={appThemeCookie === "pro" ? "pro" : undefined}>
+      <head></head>
       <body
         className={`${appSans.variable} ${appMono.variable} ${defaultFont.variable} ${interFont.variable} antialiased relative min-h-screen`}
       >

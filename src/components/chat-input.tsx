@@ -391,15 +391,15 @@ export function ChatInput({ onStateChange }: ChatInputProps = {}) {
         <>
             {isLoading && <LoadingDino />}
             <div className="container mx-auto max-w-3xl px-4 font-mono text-white">
-                <div className="bg-white rounded-4xl w-full space-y-2 px-4 py-4">
+                <div className="bg-background rounded-4xl w-full space-y-2 px-4 py-4">
                     <form
                         onSubmit={handleSubmit}
-                        className="relative mx-auto overflow-hidden transition duration-200 dark:bg-zinc-800 mb-4 min-h-12 w-full max-w-full bg-transparent shadow-none"
+                        className="relative mx-auto overflow-hidden transition duration-200 mb-2 min-h-12 w-full max-w-full bg-background shadow-none"
                     >
                         <textarea
                             ref={textareaRef}
                             placeholder="Automate your tasks..."
-                            className="sm:text font-default relative w-full border-none bg-transparent pr-20 text-sm tracking-tight text-black focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
+                            className="sm:text font-default relative w-full border-none bg-background pr-20 text-sm tracking-tight text-black focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}

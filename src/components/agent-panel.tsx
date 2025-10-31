@@ -56,7 +56,7 @@ export function AgentPanel({ agent }: AgentPanelProps) {
     };
 
     return (
-        <div className="h-full flex flex-col bg-background text-foreground overflow-hidden">
+        <div className="h-full flex flex-col dark:bg-black bg-white text-foreground overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
                 <div className="flex items-center gap-2">
@@ -72,9 +72,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                 </div>
                 <div className="flex items-center gap-3">
                     <span className={`text-xs capitalize ${agent.status === "running" ? "text-blue-600" :
-                            agent.status === "completed" ? "text-green-600" :
-                                agent.status === "failed" ? "text-red-600" :
-                                    "text-muted-foreground"
+                        agent.status === "completed" ? "text-green-600" :
+                            agent.status === "failed" ? "text-red-600" :
+                                "text-muted-foreground"
                         }`}>
                         {agent.status}
                     </span>

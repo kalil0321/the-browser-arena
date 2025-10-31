@@ -107,3 +107,8 @@ html[data-theme="pro"].dark {
     --shadow-xl: 0px 4px 8px -2px hsl(0 0% 0% / 0.10), 0px 8px 10px -3px hsl(0 0% 0% / 0.10);
     --shadow-2xl: 0px 4px 8px -2px hsl(0 0% 0% / 0.25);
 }
+
+/* Ensure Inter applies to body when Pro is active */
+html[data-theme="pro"] body {
+    font-family: var(--font-inter), var(--font-default), system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+}

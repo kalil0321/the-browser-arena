@@ -36,7 +36,7 @@ export default function SessionPage() {
 
     if (session === undefined) {
         return (
-            <SidebarInset className="flex items-center justify-center bg-white dark:bg-black">
+            <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-900 dark:border-gray-700 dark:border-t-gray-300 mx-auto"></div>
                     <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -47,7 +47,7 @@ export default function SessionPage() {
 
     if (session === null) {
         return (
-            <SidebarInset className="flex items-center justify-center bg-white dark:bg-black">
+            <SidebarInset className="flex items-center justify-center ">
                 <div className="text-center">
                     <p className="text-gray-900 dark:text-gray-100 mb-2">Session not found</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Redirecting...</p>
@@ -71,7 +71,7 @@ export default function SessionPage() {
     return (
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-black">
             {/* Header */}
-            <div className="border-b border-gray-200 dark:border-card/20 bg-white dark:bg-black px-4 py-4 shrink-0">
+            <div className="border-b border-gray-200 dark:border-card/20  px-4 py-4 shrink-0">
                 <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1">
                         <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100">
