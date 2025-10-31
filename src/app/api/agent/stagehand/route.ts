@@ -55,7 +55,7 @@ const pricing: Record<string, { in: number; out: number; cached: number }> = {
         out: 8.0 / 1_000_000,
         cached: 0.5 / 1_000_000,
     },
-    "anthropic/claude-4.5-haiku": {
+    "anthropic/claude-haiku-4.5": {
         in: 1.0 / 1_000_000,
         out: 5.0 / 1_000_000,
         cached: 0.1 / 1_000_000,
