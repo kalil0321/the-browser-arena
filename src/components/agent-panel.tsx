@@ -27,9 +27,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
 
     if (!agent) {
         return (
-            <div className="h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+            <div className="h-full flex items-center justify-center bg-gray-100 dark:bg-black border-gray-200 dark:border-gray-800">
                 <div className="text-center p-6">
-                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-900 dark:border-gray-700 dark:border-t-gray-300 mx-auto mb-3"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-900 dark:border-gray-700 dark:border-t-white mx-auto mb-3"></div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Waiting for agent...</p>
                 </div>
             </div>
@@ -56,22 +56,27 @@ export function AgentPanel({ agent }: AgentPanelProps) {
     };
 
     return (
-        <div className="h-full flex flex-col bg-white dark:bg-gray-900 rounded-lg  overflow-hidden">
+        <div className="h-full flex flex-col bg-white dark:bg-black  overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 dark:border-card/20 dark:bg-background">
                 <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${getStatusColor()}`}></div>
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 capitalize">
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white capitalize">
                         {agent.name}
                     </h3>
                     {agent.model && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                        <span className="text-xs text-gray-500 dark:text-foreground bg-gray-100 dark:bg-card px-2 py-0.5 rounded">
                             {agent.model}
                         </span>
                     )}
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                    <span className={`text-xs capitalize ${
+                        agent.status === "running" ? "text-blue-600 dark:text-blue-400" :
+                        agent.status === "completed" ? "text-green-600 dark:text-green-400" :
+                        agent.status === "failed" ? "text-red-600 dark:text-red-400" :
+                        "text-gray-500 dark:text-gray-400"
+                    }`}>
                         {agent.status}
                     </span>
                 </div>
@@ -82,7 +87,7 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                 {agent.status === "pending" && (
                     <div className="h-full flex items-center justify-center">
                         <div className="text-center p-6">
-                            <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-900 dark:border-gray-700 dark:border-t-gray-300 mx-auto mb-3"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-900 dark:border-gray-700 dark:border-t-white mx-auto mb-3"></div>
                             <p className="text-sm text-gray-600 dark:text-gray-400">Initializing...</p>
                         </div>
                     </div>
@@ -123,9 +128,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                                 {/* Fallback for unknown agents */}
                                 {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "stagehand-bb-cloud", "stagehand-cloud"].includes(agent.name) && (
                                     <div className="space-y-3">
-                                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                                            <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Result</h4>
-                                            <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                                            <h4 className="text-xs font-medium text-gray-700 dark:text-white mb-2 uppercase tracking-wide">Result</h4>
+                                            <pre className="text-xs text-gray-700 dark:text-white whitespace-pre-wrap">
                                                 {JSON.stringify(agentResult, null, 2)}
                                             </pre>
                                         </div>
@@ -139,4 +144,3 @@ export function AgentPanel({ agent }: AgentPanelProps) {
         </div>
     );
 }
-

@@ -6,6 +6,7 @@ import { ConvexClientProvider } from "@/components/providers/convex";
 import { DashboardSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
+import { AppThemeApplier } from "../components/app-theme-applier";
 
 const appSans = Pixelify_Sans({
   variable: "--font-sans",
@@ -19,6 +20,11 @@ const appMono = JetBrains_Mono({
 
 const defaultFont = Geist({
   variable: "--font-default",
+  subsets: ["latin"],
+});
+
+const interFont = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -103,10 +109,11 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${appSans.variable} ${appMono.variable} ${defaultFont.variable} antialiased relative min-h-screen`}
+        className={`${appSans.variable} ${appMono.variable} ${defaultFont.variable} ${interFont.variable} antialiased relative min-h-screen`}
       >
         {/* @ts-ignore */}
-        {/* <ThemeProvider forcedTheme="light" suppressHydrationWarning> */}
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem suppressHydrationWarning>
+          <AppThemeApplier />
           <ConvexClientProvider>
             <SidebarProvider defaultOpen={defaultOpen}>
               <div className="relative flex h-screen w-full">
@@ -115,7 +122,7 @@ export default async function RootLayout({
               </div>
             </SidebarProvider>
           </ConvexClientProvider>
-        {/* </ThemeProvider> */}
+        </ThemeProvider>
       </body>
     </html>
   );

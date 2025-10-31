@@ -88,7 +88,18 @@ const ProviderLogo: React.FC<{ provider: string; className?: string }> = ({ prov
     }
 };
 
-export function ChatInput() {
+export interface ChatInputState {
+    isPrivate: boolean;
+    agentConfigs: AgentConfig[];
+    hasSmoothApiKey: boolean;
+    hasBrowserUseApiKey: boolean;
+}
+
+interface ChatInputProps {
+    onStateChange?: (state: ChatInputState) => void;
+}
+
+export function ChatInput({ onStateChange }: ChatInputProps = {}) {
     // Use this as default input
     const [input, setInput] = useState("Find top hacker news post");
     const [isLoading, setIsLoading] = useState(false);
@@ -364,6 +375,18 @@ export function ChatInput() {
         }
     };
 
+    const chatInputState: ChatInputState = {
+        isPrivate,
+        agentConfigs,
+        hasSmoothApiKey,
+        hasBrowserUseApiKey,
+    };
+
+    // Notify parent component whenever state changes
+    useEffect(() => {
+        onStateChange?.(chatInputState);
+    }, [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, onStateChange]);
+
     return (
         <>
             {isLoading && <LoadingDino />}
@@ -436,26 +459,6 @@ export function ChatInput() {
 
                         <div className="flex items-center gap-4" />
                     </div>
-
-                    {/* Privacy Warning */}
-                    {isPrivate && (
-                        (agentConfigs.some(c => c.agent === "smooth") && !hasSmoothApiKey) ||
-                        (agentConfigs.some(c => c.agent === "browser-use-cloud") && !hasBrowserUseApiKey)
-                    ) && (
-                        <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm">
-                            <p className="text-amber-900 dark:text-amber-100">
-                                <strong>Note de confidentialité:</strong> Le mode privé est activé, mais certains agents utilisent des clés API du serveur.
-                                Pour une session totalement privée, veuillez ajouter vos propres clés API dans les{" "}
-                                <a href="/settings" className="underline hover:text-amber-700 dark:hover:text-amber-300">Paramètres</a>.
-                                {agentConfigs.some(c => c.agent === "smooth") && !hasSmoothApiKey && (
-                                    <span> (Smooth API manquante)</span>
-                                )}
-                                {agentConfigs.some(c => c.agent === "browser-use-cloud") && !hasBrowserUseApiKey && (
-                                    <span> (Browser-Use API manquante)</span>
-                                )}
-                            </p>
-                        </div>
-                    )}
 
                     {/* Agent Configuration Dialog */}
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

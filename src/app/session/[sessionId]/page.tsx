@@ -36,7 +36,7 @@ export default function SessionPage() {
 
     if (session === undefined) {
         return (
-            <SidebarInset className="flex items-center justify-center bg-white dark:bg-gray-950">
+            <SidebarInset className="flex items-center justify-center bg-white dark:bg-black">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-900 dark:border-gray-700 dark:border-t-gray-300 mx-auto"></div>
                     <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -47,7 +47,7 @@ export default function SessionPage() {
 
     if (session === null) {
         return (
-            <SidebarInset className="flex items-center justify-center bg-white dark:bg-gray-950">
+            <SidebarInset className="flex items-center justify-center bg-white dark:bg-black">
                 <div className="text-center">
                     <p className="text-gray-900 dark:text-gray-100 mb-2">Session not found</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Redirecting...</p>
@@ -69,9 +69,9 @@ export default function SessionPage() {
     const showViewToggle = agents && agents.length > 1;
 
     return (
-        <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+        <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-black">
             {/* Header */}
-            <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-4 shrink-0">
+            <div className="border-b border-gray-200 dark:border-card/20 bg-white dark:bg-black px-4 py-4 shrink-0">
                 <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1">
                         <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100">
@@ -147,7 +147,7 @@ export default function SessionPage() {
                     <div className="h-full">
                         {agents && agents.length > 0 ? (
                             <Tabs defaultValue={agents[0]._id} className="h-full flex flex-col gap-0">
-                                <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 dark:bg-gray-900 px-4 shrink-0">
+                                <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 dark:bg-black px-4 shrink-0">
                                     {agents.map((agent) => (
                                         <TabsTrigger key={agent._id} value={agent._id} className="capitalize text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:text-white data-[state=active]:underline">
                                             <div className="flex items-center gap-2">

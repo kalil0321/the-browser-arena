@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+// Removed Select imports as visibility setting is hidden for now
 import { useConvexAuth } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -49,6 +49,36 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
+
+  // App theme (Arena default vs Pro)
+  const [appTheme, setAppTheme] = useState<"default" | "pro">("default");
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("appTheme");
+      if (stored === "pro") {
+        setAppTheme("pro");
+        document.documentElement.setAttribute("data-theme", "pro");
+      } else {
+        setAppTheme("default");
+        document.documentElement.removeAttribute("data-theme");
+      }
+    } catch {
+      // no-op
+    }
+  }, []);
+  const handleChangeAppTheme = (value: "default" | "pro") => {
+    setAppTheme(value);
+    try {
+      localStorage.setItem("appTheme", value);
+    } catch {
+      // no-op
+    }
+    if (value === "pro") {
+      document.documentElement.setAttribute("data-theme", "pro");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  };
 
   // Load existing key on mount
   useEffect(() => {
@@ -425,8 +455,43 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-16">
+            {/* Application Theme Section */}
+            <div id="app-theme" className="grid grid-cols-12 gap-8">
+              <div className="col-span-4 space-y-2">
+                <h2 className="text-xl font-semibold">Application theme</h2>
+                <p className="text-sm text-muted-foreground">
+                  Choose between the Arena default styling and a more professional look.
+                </p>
+              </div>
+              <div className="col-span-1 flex justify-center">
+                <div className="w-px h-full border-l border-dashed border-border"></div>
+              </div>
+              <div className="col-span-7 space-y-4">
+                <div className="flex items-center gap-4">
+                  <button
+                    className={`px-3 py-2 rounded-md border text-sm ${appTheme === "default" ? "bg-primary text-primary-foreground border-transparent" : "bg-background text-foreground border-border"}`}
+                    onClick={() => handleChangeAppTheme("default")}
+                    aria-pressed={appTheme === "default"}
+                  >
+                    Default (Arena)
+                  </button>
+                  <button
+                    className={`px-3 py-2 rounded-md border text-sm ${appTheme === "pro" ? "bg-primary text-primary-foreground border-transparent" : "bg-background text-foreground border-border"}`}
+                    onClick={() => handleChangeAppTheme("pro")}
+                    aria-pressed={appTheme === "pro"}
+                  >
+                    Pro
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This preference is stored on this device only.
+                </p>
+              </div>
+            </div>
+
+            <Separator />
             {/* Personal Information Section */}
-            <div className="grid grid-cols-12 gap-8">
+            <div id="personal-info" className="grid grid-cols-12 gap-8">
               <div className="col-span-4 space-y-2">
                 <h2 className="text-xl font-semibold">Personal information</h2>
                 <p className="text-sm text-muted-foreground">
@@ -438,22 +503,6 @@ export default function SettingsPage() {
               </div>
               <div className="col-span-7 space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="first-name">First name</Label>
-                  <Input
-                    id="first-name"
-                    placeholder="Emma"
-                    defaultValue={user?.name?.split(" ")[0] || ""}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="last-name">Last name</Label>
-                  <Input
-                    id="last-name"
-                    placeholder="Crown"
-                    defaultValue={user?.name?.split(" ").slice(1).join(" ") || ""}
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
@@ -462,33 +511,13 @@ export default function SettingsPage() {
                     defaultValue={user?.email || ""}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="birth-year">Birth year</Label>
-                  <Input
-                    id="birth-year"
-                    type="number"
-                    placeholder="1990"
-                    min="1900"
-                    max={new Date().getFullYear()}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Input
-                    id="role"
-                    placeholder="Senior Manager"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Roles can only be changed by system admin.
-                  </p>
-                </div>
               </div>
             </div>
 
             <Separator />
 
             {/* Workspace Settings Section */}
-            <div className="grid grid-cols-12 gap-8">
+            <div id="api-keys" className="grid grid-cols-12 gap-8">
               <div className="col-span-4 space-y-2">
                 <h2 className="text-xl font-semibold">Workspace settings</h2>
                 <p className="text-sm text-muted-foreground">
@@ -499,40 +528,10 @@ export default function SettingsPage() {
                 <div className="w-px h-full border-l border-dashed border-border"></div>
               </div>
               <div className="col-span-7 space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="workspace-name">Workspace name</Label>
-                  <Input
-                    id="workspace-name"
-                    placeholder="Test workspace"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="visibility">Visibility</Label>
-                  <Select defaultValue="private">
-                    <SelectTrigger id="visibility">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="private">Private</SelectItem>
-                      <SelectItem value="public">Public</SelectItem>
-                      <SelectItem value="team">Team</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="workspace-description">Workspace description</Label>
-                  <textarea
-                    id="workspace-description"
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-input/30 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Enter a description for your workspace"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Note: description provided will not be displayed externally.
-                  </p>
-                </div>
+                {/* Workspace name, visibility, and description hidden for now */}
 
                 {/* API Keys Section */}
-                <div className="space-y-4 pt-4 border-t">
+                <div id="smooth-api-section" className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-2">
                     <Key className="h-5 w-5 text-muted-foreground" />
                     <h3 className="text-lg font-medium">Smooth API Key</h3>
@@ -611,7 +610,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* OpenAI API Key Section */}
-                <div className="space-y-4 pt-4 border-t">
+                <div id="openai-api-section" className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-2">
                     <Key className="h-5 w-5 text-muted-foreground" />
                     <h3 className="text-lg font-medium">OpenAI API Key</h3>
@@ -690,7 +689,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Google API Key Section */}
-                <div className="space-y-4 pt-4 border-t">
+                <div id="google-api-section" className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-2">
                     <Key className="h-5 w-5 text-muted-foreground" />
                     <h3 className="text-lg font-medium">Google API Key</h3>
@@ -769,7 +768,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Anthropic API Key Section */}
-                <div className="space-y-4 pt-4 border-t">
+                <div id="anthropic-api-section" className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-2">
                     <Key className="h-5 w-5 text-muted-foreground" />
                     <h3 className="text-lg font-medium">Anthropic API Key</h3>
@@ -848,7 +847,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Browser-Use API Key Section */}
-                <div className="space-y-4 pt-4 border-t">
+                <div id="browser-use-api-section" className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-2">
                     <Key className="h-5 w-5 text-muted-foreground" />
                     <h3 className="text-lg font-medium">Browser-Use API Key</h3>
@@ -954,75 +953,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <Separator />
-
-            {/* Notification Settings Section */}
-            <div className="grid grid-cols-12 gap-8">
-              <div className="col-span-4 space-y-2">
-                <h2 className="text-xl font-semibold">Notification settings</h2>
-                <p className="text-sm text-muted-foreground">
-                  Configure how and when you receive notifications.
-                </p>
-              </div>
-              <div className="col-span-1 flex justify-center">
-                <div className="w-px h-full border-l border-dashed border-border"></div>
-              </div>
-              <div className="col-span-7 space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-base font-medium mb-1">Newsletter</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Change how often you want to receive updates from our newsletter.
-                    </p>
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          id="newsletter-weekly"
-                          name="newsletter"
-                          value="weekly"
-                          className="h-4 w-4"
-                        />
-                        <Label htmlFor="newsletter-weekly" className="font-normal cursor-pointer">
-                          Every week
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          id="newsletter-monthly"
-                          name="newsletter"
-                          value="monthly"
-                          className="h-4 w-4"
-                        />
-                        <Label htmlFor="newsletter-monthly" className="font-normal cursor-pointer">
-                          Every month
-                        </Label>
-                      </div>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Email Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive email updates about your sessions
-                      </p>
-                    </div>
-                    <input type="checkbox" className="h-4 w-4" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Session Alerts</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Get notified when agents complete tasks
-                      </p>
-                    </div>
-                    <input type="checkbox" className="h-4 w-4" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Notification settings hidden for now */}
           </div>
         </div>
       </div>
