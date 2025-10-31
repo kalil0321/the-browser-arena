@@ -192,12 +192,18 @@ export async function POST(request: NextRequest) {
                 await browser.sessions.delete(browserSessionId);
 
                 const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
-                const cost = computeCost(model, usageData);
+                const llmCost = computeCost(model, usageData);
+                // Anchor Browser pricing: $0.01 base + $0.05 per hour
+                const hours = Math.max(duration / 3600, 0);
+                const browserCost = 0.01 + 0.05 * hours;
+                const cost = llmCost + browserCost;
 
                 const payload = {
                     usage: {
                         ...usageData,
-                        total_cost: cost, // Add total_cost field for cost tracking
+                        total_cost: cost,
+                        browser_cost: browserCost,
+                        llm_cost: llmCost,
                     },
                     cost, // Also keep cost field for backward compatibility
                     duration,
