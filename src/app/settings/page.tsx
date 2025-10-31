@@ -70,6 +70,9 @@ export default function SettingsPage() {
     setAppTheme(value);
     try {
       localStorage.setItem("appTheme", value);
+      // Mirror to cookie so server can SSR the same attribute and avoid hydration mismatch
+      const maxAge = 60 * 60 * 24 * 365; // 1 year
+      document.cookie = `appTheme=${value}; path=/; max-age=${maxAge}`;
     } catch {
       // no-op
     }
