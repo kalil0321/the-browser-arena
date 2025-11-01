@@ -126,18 +126,23 @@ export async function POST(request: NextRequest) {
         // Create Convex client without auth for demo endpoint
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-        // Check if device has used their free query
-        const usageCheck = await convex.mutation(api.mutations.checkDemoUsage, {
+        // Atomically claim a demo query slot BEFORE creating any resources
+        // This prevents race conditions by checking the limit and incrementing
+        // usage in a single transaction
+        const claimResult = await convex.mutation(api.mutations.claimDemoQuerySlot, {
             deviceFingerprint,
+            clientFingerprint,
+            ipAddress: ip,
+            userAgent: userAgent,
         });
 
-        if (usageCheck.hasUsedFreeQuery) {
+        if (!claimResult.allowed) {
             return NextResponse.json(
                 {
                     error: "DEMO_LIMIT_REACHED",
                     message: "You've used your free demo query. Create an account to continue!",
-                    queriesUsed: 1,
-                    maxQueries: 1,
+                    queriesUsed: claimResult.queriesUsed,
+                    maxQueries: claimResult.maxQueries,
                 },
                 { status: 403 }
             );
@@ -199,12 +204,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
         }
 
-        // Record demo usage
-        await convex.mutation(api.mutations.recordDemoUsage, {
-            deviceFingerprint,
-            clientFingerprint,
-            ipAddress: ip,
-            userAgent: userAgent,
+        // Associate the session with the demo usage record
+        await convex.mutation(api.mutations.associateDemoSession, {
+            usageId: claimResult.usageId,
             sessionId: dbSessionId,
         });
 

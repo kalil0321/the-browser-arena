@@ -190,6 +190,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         const generateFingerprint = async () => {
             try {
                 const fingerprint = await getClientFingerprint();
+                console.log("[ChatInput] Generated client fingerprint:", fingerprint);
                 setClientFingerprint(fingerprint);
             } catch (error) {
                 console.error("Failed to generate fingerprint:", error);
@@ -336,8 +337,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const handleDemoSubmit = async () => {
         setIsLoading(true);
         try {
-            console.log("Submitting demo:", input, "with agents:", agentConfigs);
-
             // Demo mode only supports one agent
             if (agentConfigs.length !== 1) {
                 toast.error("Demo mode supports only one agent. Please select either Stagehand or Browser-Use.", {
@@ -388,7 +387,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             }
 
             const data = await response.json();
-            console.log("Demo session created, response data:", data);
 
             // Redirect to the session page
             const sessionId = data.session?.id;
@@ -399,7 +397,26 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
 
             // Ensure sessionId is a string
             const sessionIdString = String(sessionId);
-            console.log("Redirecting to session:", sessionIdString);
+
+            // Store demo session in localStorage
+            try {
+                const currentInstruction = input;
+                const demoSession = {
+                    _id: sessionIdString,
+                    instruction: currentInstruction,
+                    userId: "demo-user",
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    _creationTime: Date.now(),
+                };
+                const existing = localStorage.getItem("demo_sessions");
+                const sessions = existing ? JSON.parse(existing) : [];
+                // Add to beginning and keep only last 10
+                const updated = [demoSession, ...sessions].slice(0, 10);
+                localStorage.setItem("demo_sessions", JSON.stringify(updated));
+            } catch (storageError) {
+                console.error("Failed to store demo session in localStorage:", storageError);
+            }
 
             // Clear loading state before redirect
             setIsLoading(false);

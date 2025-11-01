@@ -634,36 +634,19 @@ export const addUsageCost = mutation({
  */
 
 /**
- * Check if device fingerprint has used their free demo query
+ * Atomically claim a demo query slot for a device fingerprint.
+ * This prevents race conditions by checking the limit and incrementing usage
+ * in a single atomic transaction.
+ *
+ * @returns { allowed: true, usageId } if the demo query is permitted
+ * @returns { allowed: false, queriesUsed, maxQueries } if limit exceeded
  */
-export const checkDemoUsage = mutation({
-    args: {
-        deviceFingerprint: v.string(),
-    },
-    handler: async (ctx, args) => {
-        const usage = await ctx.db
-            .query("demoUsage")
-            .withIndex("by_fingerprint", (q) => q.eq("deviceFingerprint", args.deviceFingerprint))
-            .first();
-
-        if (!usage) {
-            return { hasUsedFreeQuery: false, usage: null };
-        }
-
-        return { hasUsedFreeQuery: usage.queriesUsed >= 1, usage };
-    },
-});
-
-/**
- * Record demo usage for a device fingerprint
- */
-export const recordDemoUsage = mutation({
+export const claimDemoQuerySlot = mutation({
     args: {
         deviceFingerprint: v.string(),
         clientFingerprint: v.string(),
         ipAddress: v.string(),
         userAgent: v.string(),
-        sessionId: v.id("sessions"),
     },
     handler: async (ctx, args) => {
         const now = Date.now();
@@ -674,27 +657,67 @@ export const recordDemoUsage = mutation({
             .first();
 
         if (existing) {
-            // Update existing usage
+            // Check if limit already exceeded
+            if (existing.queriesUsed >= 1) {
+                return {
+                    allowed: false,
+                    queriesUsed: existing.queriesUsed,
+                    maxQueries: 1,
+                };
+            }
+
+            // Atomically increment usage
             await ctx.db.patch(existing._id, {
                 queriesUsed: existing.queriesUsed + 1,
-                sessionIds: [...existing.sessionIds, args.sessionId],
                 lastUsedAt: now,
             });
-            return existing;
+
+            return {
+                allowed: true,
+                usageId: existing._id,
+                queriesUsed: existing.queriesUsed + 1,
+                maxQueries: 1,
+            };
         } else {
-            // Create new usage record
+            // First usage - create new record with queriesUsed: 1
             const usageId = await ctx.db.insert("demoUsage", {
                 deviceFingerprint: args.deviceFingerprint,
                 clientFingerprint: args.clientFingerprint,
                 ipAddress: args.ipAddress,
                 userAgent: args.userAgent,
                 queriesUsed: 1,
-                sessionIds: [args.sessionId],
+                sessionIds: [],
                 firstUsedAt: now,
                 lastUsedAt: now,
             });
-            return await ctx.db.get(usageId);
+
+            return {
+                allowed: true,
+                usageId,
+                queriesUsed: 1,
+                maxQueries: 1,
+            };
         }
+    },
+});
+
+/**
+ * Associate a session with a demo usage record
+ */
+export const associateDemoSession = mutation({
+    args: {
+        usageId: v.id("demoUsage"),
+        sessionId: v.id("sessions"),
+    },
+    handler: async (ctx, args) => {
+        const usage = await ctx.db.get(args.usageId);
+        if (!usage) {
+            throw new Error("Demo usage record not found");
+        }
+
+        await ctx.db.patch(args.usageId, {
+            sessionIds: [...usage.sessionIds, args.sessionId],
+        });
     },
 });
 

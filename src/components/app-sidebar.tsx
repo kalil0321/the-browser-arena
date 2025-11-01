@@ -21,7 +21,7 @@ import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Trophy, Map } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
 import {
     SidebarMenu,
@@ -29,6 +29,7 @@ import {
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getClientFingerprint } from "@/lib/fingerprint";
 
 const teams = [
     { id: "1", name: "Alpha Inc.", logo: IconSmall, plan: "Free" },
@@ -39,8 +40,90 @@ const teams = [
 export function DashboardSidebar() {
     const { state } = useSidebar();
     const isCollapsed = state === "collapsed";
-    const { isAuthenticated } = useConvexAuth();
-    const sessions = useQuery(api.queries.getUserSessions, isAuthenticated ? {} : "skip");
+    const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+    const [localStorageSessions, setLocalStorageSessions] = useState<Session[]>([]);
+    const [clientFingerprint, setClientFingerprint] = useState<string | null>(null);
+
+    // Get authenticated user sessions
+    const authSessions = useQuery(api.queries.getUserSessions, isAuthenticated ? {} : "skip");
+
+    // Get demo sessions from DB
+    const dbDemoSessions = useQuery(
+        api.queries.getDemoUserSessions,
+        !isAuthenticated && clientFingerprint ? { clientFingerprint } : "skip"
+    );
+
+    // Function to load sessions from localStorage
+    const loadLocalStorageSessions = useCallback(() => {
+        try {
+            const stored = localStorage.getItem("demo_sessions");
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                setLocalStorageSessions(parsed);
+            } else {
+                setLocalStorageSessions([]);
+            }
+        } catch (error) {
+            console.error("Failed to load sessions from localStorage:", error);
+            setLocalStorageSessions([]);
+        }
+    }, []);
+
+    // Function to sync sessions from DB to localStorage
+    const syncFromDatabase = useCallback(async () => {
+        try {
+            // Generate fingerprint if not available
+            let fingerprint = clientFingerprint;
+            if (!fingerprint) {
+                fingerprint = await getClientFingerprint();
+                setClientFingerprint(fingerprint);
+            }
+
+            // Wait for dbDemoSessions to be available if not already
+            if (dbDemoSessions === undefined) {
+                return;
+            }
+
+            if (dbDemoSessions && dbDemoSessions.length > 0) {
+                setLocalStorageSessions(dbDemoSessions);
+                // Store in localStorage
+                localStorage.setItem("demo_sessions", JSON.stringify(dbDemoSessions));
+            } else {
+                // Load from localStorage as fallback
+                loadLocalStorageSessions();
+            }
+        } catch (error) {
+            console.error("Failed to sync from database:", error);
+            // Fallback to localStorage
+            loadLocalStorageSessions();
+        }
+    }, [clientFingerprint, dbDemoSessions, loadLocalStorageSessions]);
+
+    // Generate fingerprint for unauthenticated users
+    useEffect(() => {
+        if (!isAuthLoading && !isAuthenticated) {
+            const generateFingerprint = async () => {
+                try {
+                    const fingerprint = await getClientFingerprint();
+                    setClientFingerprint(fingerprint);
+                } catch (error) {
+                    console.error("Failed to generate fingerprint:", error);
+                }
+            };
+            generateFingerprint();
+        }
+    }, [isAuthLoading, isAuthenticated]);
+
+    // Load sessions from localStorage on mount and when not authenticated
+    useEffect(() => {
+        if (!isAuthenticated) {
+            loadLocalStorageSessions();
+        }
+    }, [isAuthenticated, loadLocalStorageSessions]);
+
+    // Use authenticated sessions if logged in, otherwise use localStorage sessions
+    const sessions = isAuthenticated ? authSessions : localStorageSessions;
+
     const { resolvedTheme } = useTheme();
     const [isProTheme, setIsProTheme] = useState(() => {
         // Initialize from DOM on mount
@@ -141,29 +224,31 @@ export function DashboardSidebar() {
                 </div>
 
                 {!isCollapsed && (
-                    (!isAuthenticated ? <SessionsNav sessions={[]} /> :
-                        sessions === undefined ? (
-                            <div className="flex flex-col gap-3">
-                                <div className="px-2 py-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Skeleton className="h-4 w-20" />
-                                        <Skeleton className="h-8 w-8 rounded-md" />
-                                    </div>
+                    (isAuthLoading || (isAuthenticated && authSessions === undefined)) ? (
+                        <div className="flex flex-col gap-3">
+                            <div className="px-2 py-1.5">
+                                <div className="flex items-center justify-between">
+                                    <Skeleton className="h-4 w-20" />
+                                    <Skeleton className="h-8 w-8 rounded-md" />
                                 </div>
-                                <SidebarMenu className="px-2">
-                                    {[1, 2, 3].map((i) => (
-                                        <SidebarMenuItem key={i} className="px-0">
-                                            <div className="flex h-9 items-center gap-2 rounded-md px-2">
-                                                <Skeleton className="size-4 rounded-md" />
-                                                <Skeleton className="h-4 flex-1 max-w-[80%]" />
-                                            </div>
-                                        </SidebarMenuItem>
-                                    ))}
-                                </SidebarMenu>
                             </div>
-                        ) : (
-                            <SessionsNav sessions={sessions} />
-                        ))
+                            <SidebarMenu className="px-2">
+                                {[1, 2, 3].map((i) => (
+                                    <SidebarMenuItem key={i} className="px-0">
+                                        <div className="flex h-9 items-center gap-2 rounded-md px-2">
+                                            <Skeleton className="size-4 rounded-md" />
+                                            <Skeleton className="h-4 flex-1 max-w-[80%]" />
+                                        </div>
+                                    </SidebarMenuItem>
+                                ))}
+                            </SidebarMenu>
+                        </div>
+                    ) : (
+                        <SessionsNav
+                            sessions={sessions}
+                            isDemo={!isAuthenticated}
+                        />
+                    )
                 )}
             </SidebarContent>
 
