@@ -688,7 +688,7 @@ async def run_browser_use_agent(
                     "browser": {
                         "profile": {
                             "name": f"profile-{request.userId}",
-                            "persist": True
+                            "persist": True,
                         }
                     }
                 }
