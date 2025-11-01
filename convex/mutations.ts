@@ -628,3 +628,119 @@ export const addUsageCost = mutation({
         return { success: true };
     },
 });
+
+/**
+ * Demo mutations - for unauthenticated demo users
+ */
+
+/**
+ * Check if device fingerprint has used their free demo query
+ */
+export const checkDemoUsage = mutation({
+    args: {
+        deviceFingerprint: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const usage = await ctx.db
+            .query("demoUsage")
+            .withIndex("by_fingerprint", (q) => q.eq("deviceFingerprint", args.deviceFingerprint))
+            .first();
+
+        if (!usage) {
+            return { hasUsedFreeQuery: false, usage: null };
+        }
+
+        return { hasUsedFreeQuery: usage.queriesUsed >= 1, usage };
+    },
+});
+
+/**
+ * Record demo usage for a device fingerprint
+ */
+export const recordDemoUsage = mutation({
+    args: {
+        deviceFingerprint: v.string(),
+        ipAddress: v.string(),
+        userAgent: v.string(),
+        sessionId: v.id("sessions"),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+
+        const existing = await ctx.db
+            .query("demoUsage")
+            .withIndex("by_fingerprint", (q) => q.eq("deviceFingerprint", args.deviceFingerprint))
+            .first();
+
+        if (existing) {
+            // Update existing usage
+            await ctx.db.patch(existing._id, {
+                queriesUsed: existing.queriesUsed + 1,
+                sessionIds: [...existing.sessionIds, args.sessionId],
+                lastUsedAt: now,
+            });
+            return existing;
+        } else {
+            // Create new usage record
+            const usageId = await ctx.db.insert("demoUsage", {
+                deviceFingerprint: args.deviceFingerprint,
+                ipAddress: args.ipAddress,
+                userAgent: args.userAgent,
+                queriesUsed: 1,
+                sessionIds: [args.sessionId],
+                firstUsedAt: now,
+                lastUsedAt: now,
+            });
+            return await ctx.db.get(usageId);
+        }
+    },
+});
+
+/**
+ * Create a demo session - no auth required
+ */
+export const createDemoSession = mutation({
+    args: {
+        instruction: v.string(),
+        browserData: v.optional(v.object({
+            sessionId: v.string(),
+            url: v.string(),
+        })),
+        agentName: v.optional(v.string()),
+        model: v.optional(v.string()),
+        isPrivate: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+
+        // Demo sessions use a special userId
+        const demoUserId = "demo-user";
+
+        const sessionId = await ctx.db.insert("sessions", {
+            userId: demoUserId,
+            instruction: args.instruction,
+            isPrivate: args.isPrivate ?? false,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        // If browser data is provided, create the agent at the same time
+        let agentId = undefined;
+        if (args.browserData) {
+            agentId = await ctx.db.insert("agents", {
+                sessionId,
+                name: args.agentName ?? "stagehand",
+                model: args.model,
+                status: "running",
+                browser: {
+                    sessionId: args.browserData.sessionId,
+                    url: args.browserData.url,
+                },
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+
+        return { sessionId, agentId };
+    },
+});

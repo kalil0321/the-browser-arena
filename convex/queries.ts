@@ -287,3 +287,53 @@ export const getUserCostBreakdown = query({
     },
 });
 
+/**
+ * Demo queries - for unauthenticated demo users
+ */
+
+/**
+ * Get a demo session by ID - no auth required
+ */
+export const getDemoSession = query({
+    args: {
+        sessionId: v.id("sessions"),
+    },
+    handler: async (ctx, args) => {
+        const session = await ctx.db.get(args.sessionId);
+
+        if (!session) {
+            return null;
+        }
+
+        // Only return demo sessions
+        if (session.userId !== "demo-user") {
+            return null;
+        }
+
+        return session;
+    },
+});
+
+/**
+ * Get agents for a demo session - no auth required
+ */
+export const getDemoSessionAgents = query({
+    args: {
+        sessionId: v.id("sessions"),
+    },
+    handler: async (ctx, args) => {
+        // Verify it's a demo session
+        const session = await ctx.db.get(args.sessionId);
+        if (!session || session.userId !== "demo-user") {
+            return [];
+        }
+
+        const agents = await ctx.db
+            .query("agents")
+            .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+            .collect();
+
+        return agents;
+    },
+});
+

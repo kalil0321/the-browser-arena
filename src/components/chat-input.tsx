@@ -23,6 +23,7 @@ import { OpenAI } from "@/components/logos/openai";
 import { GeminiLogo } from "@/components/logos/gemini";
 import { ClaudeLogo } from "@/components/logos/claude";
 import { AgentConfigDialog } from "./agent-config-dialog";
+import { getClientFingerprint } from "@/lib/fingerprint";
 
 type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
 type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
@@ -97,6 +98,7 @@ export interface ChatInputState {
     agentConfigs: AgentConfig[];
     hasSmoothApiKey: boolean;
     hasBrowserUseApiKey: boolean;
+    clientFingerprint?: string | null;
 }
 
 interface ChatInputProps {
@@ -115,6 +117,9 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
     const router = useRouter();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    // Device fingerprinting for demo mode
+    const [clientFingerprint, setClientFingerprint] = useState<string | null>(null);
 
     // Get current user for API key access
     const user = useQuery(
@@ -181,13 +186,34 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         onAgentPresenceChange?.(hasSmooth, hasBrowserUse);
     }, [agentConfigs, onAgentPresenceChange]);
 
+    // Generate device fingerprint on mount
+    useEffect(() => {
+        const generateFingerprint = async () => {
+            try {
+                const fingerprint = await getClientFingerprint();
+                setClientFingerprint(fingerprint);
+            } catch (error) {
+                console.error("Failed to generate fingerprint:", error);
+            }
+        };
+        generateFingerprint();
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (input.trim() && !isLoading && agentConfigs.length > 0) {
-            // Check if user is authenticated
+            // Check if user is authenticated - if not, try demo mode
             if (!isAuthenticated) {
-                setIsLoginDialogOpen(true);
-                return;
+                // Try demo mode if fingerprint is ready
+                if (clientFingerprint) {
+                    await handleDemoSubmit();
+                    return;
+                } else {
+                    toast.error("Loading... Please try again in a moment.", {
+                        duration: 3000,
+                    });
+                    return;
+                }
             }
 
             setIsLoading(true);
@@ -308,6 +334,97 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         }
     };
 
+    const handleDemoSubmit = async () => {
+        setIsLoading(true);
+        try {
+            console.log("Submitting demo:", input, "with agents:", agentConfigs);
+
+            // Demo mode only supports one agent
+            if (agentConfigs.length !== 1) {
+                toast.error("Demo mode supports only one agent. Please select either Stagehand or Browser-Use.", {
+                    duration: 5000,
+                });
+                setIsLoading(false);
+                return;
+            }
+
+            const agent = agentConfigs[0];
+
+            // Demo mode only supports stagehand and browser-use (not cloud)
+            if (agent.agent !== "stagehand" && agent.agent !== "browser-use") {
+                toast.error("Demo mode only supports Stagehand or Browser-Use. Please select one of these.", {
+                    duration: 5000,
+                });
+                setIsLoading(false);
+                return;
+            }
+
+            // Call the demo endpoint
+            const response = await fetch("/api/agent/demo", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    instruction: input,
+                    agentType: agent.agent,
+                    model: agent.model,
+                    clientFingerprint: clientFingerprint,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error("Demo API Error:", response.status, errorData);
+
+                // Handle demo limit reached
+                if (response.status === 403 && errorData.error === "DEMO_LIMIT_REACHED") {
+                    toast.error("Free demo limit reached", {
+                        description: "You've used your free demo query. Please create an account to continue!",
+                        duration: 8000,
+                    });
+                    setIsLoginDialogOpen(true);
+                    setIsLoading(false);
+                    return;
+                }
+
+                throw new Error(errorData.message || "Failed to create demo session");
+            }
+
+            const data = await response.json();
+            console.log("Demo session created, response data:", data);
+
+            // Redirect to the session page
+            const sessionId = data.session?.id;
+            if (!sessionId) {
+                console.error("No session ID in response:", data);
+                throw new Error("Demo session created but no ID returned");
+            }
+
+            // Ensure sessionId is a string
+            const sessionIdString = String(sessionId);
+            console.log("Redirecting to session:", sessionIdString);
+
+            // Clear loading state before redirect
+            setIsLoading(false);
+
+            // Use startTransition for better React 18 concurrent rendering
+            startTransition(() => {
+                router.push(`/session/${sessionIdString}`);
+            });
+        } catch (error) {
+            console.error("Error submitting demo:", error);
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Demo failed: ${errorMessage}`, {
+                duration: 5000,
+                description: "Please try again or create an account for full access."
+            });
+            setIsLoading(false);
+        } finally {
+            setInput("");
+        }
+    };
+
     const handleSignIn = async () => {
         setIsSubmittingAuth(true);
         setAuthError(null);
@@ -422,12 +539,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         agentConfigs,
         hasSmoothApiKey,
         hasBrowserUseApiKey,
+        clientFingerprint,
     };
 
     // Notify parent component whenever state changes
     useEffect(() => {
         onStateChange?.(chatInputState);
-    }, [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, onStateChange]);
+    }, [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, clientFingerprint, onStateChange]);
 
     return (
         <>
