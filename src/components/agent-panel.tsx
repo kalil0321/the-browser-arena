@@ -102,20 +102,24 @@ export function AgentPanel({ agent }: AgentPanelProps) {
 
                 {isCompleted && (
                     <div className="h-full overflow-auto">
-                        {hasRecording && agent.recordingUrl ? (
+                        {/* {hasRecording && agent.recordingUrl ? (
                             <video
                                 src={agent.recordingUrl}
                                 controls
                                 className="w-full h-auto"
                                 autoPlay
                             />
-                        ) : displayUrl && !agentResult ? (
+                        ) :  */}
+
+                        {displayUrl && !agentResult && (
                             <iframe
                                 src={displayUrl}
                                 className="w-full h-full border-0"
                                 allow="camera; microphone"
                             />
-                        ) : null}
+                        )}
+
+                        {/* : null} */}
 
                         {/* Results Section - Route to specific panel based on agent name */}
                         {agentResult && (

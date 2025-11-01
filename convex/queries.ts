@@ -337,3 +337,43 @@ export const getDemoSessionAgents = query({
     },
 });
 
+/**
+ * Get all demo sessions for a device fingerprint (using client fingerprint)
+ */
+export const getDemoUserSessions = query({
+    args: {
+        clientFingerprint: v.string(),
+    },
+    handler: async (ctx, args) => {
+        // Get the demo usage record for this client fingerprint
+        const demoUsage = await ctx.db
+            .query("demoUsage")
+            .withIndex("by_client_fingerprint", (q) => q.eq("clientFingerprint", args.clientFingerprint))
+            .first();
+
+        if (!demoUsage || !demoUsage.sessionIds || demoUsage.sessionIds.length === 0) {
+            return [];
+        }
+
+        // Fetch all sessions for this device, deduplicating by sessionId
+        const sessions = [];
+        const seenSessionIds = new Set<string>();
+        for (const sessionId of demoUsage.sessionIds) {
+            const sessionIdStr = sessionId as string;
+            // Skip if we've already seen this session
+            if (seenSessionIds.has(sessionIdStr)) {
+                continue;
+            }
+            seenSessionIds.add(sessionIdStr);
+
+            const session = await ctx.db.get(sessionId);
+            if (session && session.userId === "demo-user") {
+                sessions.push(session);
+            }
+        }
+
+        // Sort by creation date descending (most recent first)
+        return sessions.sort((a, b) => b.createdAt - a.createdAt);
+    },
+});
+

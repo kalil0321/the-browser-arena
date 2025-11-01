@@ -660,6 +660,7 @@ export const checkDemoUsage = mutation({
 export const recordDemoUsage = mutation({
     args: {
         deviceFingerprint: v.string(),
+        clientFingerprint: v.string(),
         ipAddress: v.string(),
         userAgent: v.string(),
         sessionId: v.id("sessions"),
@@ -684,6 +685,7 @@ export const recordDemoUsage = mutation({
             // Create new usage record
             const usageId = await ctx.db.insert("demoUsage", {
                 deviceFingerprint: args.deviceFingerprint,
+                clientFingerprint: args.clientFingerprint,
                 ipAddress: args.ipAddress,
                 userAgent: args.userAgent,
                 queriesUsed: 1,
@@ -719,7 +721,7 @@ export const createDemoSession = mutation({
         const sessionId = await ctx.db.insert("sessions", {
             userId: demoUserId,
             instruction: args.instruction,
-            isPrivate: args.isPrivate ?? false,
+            isPrivate: false, // Demo sessions are always public
             createdAt: now,
             updatedAt: now,
         });

@@ -64,11 +64,6 @@ export default function Home() {
               <strong>Optional:</strong> Configure API keys for LLM providers (OpenAI, Anthropic, Google) in Settings. Get a Browser-Use API key at <a href="https://cloud.browser-use.com/new-api-key" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">cloud.browser-use.com</a>. Free credits on signup.
             </p>
           )}
-          {chatInputState && chatInputState.clientFingerprint && (
-            <p className="text-xs text-muted-foreground font-default opacity-60">
-              <strong>Device ID:</strong> <code className="bg-muted/30 px-1 py-0.5 rounded text-[10px] font-mono">{chatInputState.clientFingerprint}</code>
-            </p>
-          )}
         </div>
       </div>
     </SidebarInset>

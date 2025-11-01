@@ -1,40 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { useParams } from "next/navigation";
 import { SidebarInset } from "@/components/ui/sidebar";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { AgentPanel } from "@/components/agent-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default function SessionPage() {
     const params = useParams();
-    const router = useRouter();
     const sessionId = params.sessionId as string;
     const sessionIdConvex = sessionId as any;
+    const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
 
     // View mode state: "grid" or "tabs"
     const [viewMode, setViewMode] = useState<"grid" | "tabs">("grid");
 
-    const session = useQuery(api.queries.getSession, {
-        sessionId: sessionIdConvex
-    });
+    const session = useQuery(
+        api.queries.getSession,
+        isAuthenticated ? { sessionId: sessionIdConvex } : "skip"
+    );
+    const agents = useQuery(
+        api.queries.getSessionAgents,
+        isAuthenticated ? { sessionId: sessionIdConvex } : "skip"
+    );
 
-    const agents = useQuery(api.queries.getSessionAgents, {
-        sessionId: sessionIdConvex
-    });
+    // Show proper error if not authenticated
+    if (!isAuthLoading && !isAuthenticated) {
+        return (
+            <SidebarInset className="flex items-center justify-center">
+                <div className="text-center max-w-md">
+                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                        Authentication Required
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        You must be logged in to view this session. Please sign in or check if this is a demo session.
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                        <Button asChild>
+                            <Link href="/">Go to Home</Link>
+                        </Button>
+                    </div>
+                </div>
+            </SidebarInset>
+        );
+    }
 
-    useEffect(() => {
-        if (session === null && session !== undefined) {
-            setTimeout(() => {
-                router.push("/");
-            }, 2000);
-        }
-    }, [session, router]);
-
-    if (session === undefined) {
+    // Loading state while auth is loading or queries are loading
+    if (isAuthLoading || (isAuthenticated && (session === undefined || agents === undefined))) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">
@@ -45,15 +61,28 @@ export default function SessionPage() {
         );
     }
 
-    if (session === null) {
+    // Session not found or not accessible
+    if (isAuthenticated && session === null) {
         return (
-            <SidebarInset className="flex items-center justify-center ">
-                <div className="text-center">
-                    <p className="text-gray-900 dark:text-gray-100 mb-2">Session not found</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Redirecting...</p>
+            <SidebarInset className="flex items-center justify-center">
+                <div className="text-center max-w-md">
+                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                        Session Not Found
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        This session doesn't exist or you don't have access to it. It may be private or belong to another user.
+                    </p>
+                    <Button asChild>
+                        <Link href="/">Go to Home</Link>
+                    </Button>
                 </div>
             </SidebarInset>
         );
+    }
+
+    // At this point, session must be defined (TypeScript assertion)
+    if (!session) {
+        return null;
     }
 
     // Determine grid layout based on number of agents

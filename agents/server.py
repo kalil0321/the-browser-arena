@@ -47,6 +47,8 @@ class AgentRequest(BaseModel):
     liveViewUrl: Optional[str] = None
     # Optional user ID for browser profile
     userId: Optional[str] = None
+    # Optional agent ID (if provided, skip agent creation - used for demo sessions)
+    agentId: Optional[str] = None
     # Optional user-provided API keys (BYOK - Bring Your Own Key)
     openaiApiKey: Optional[str] = None
     googleApiKey: Optional[str] = None
@@ -705,19 +707,21 @@ async def run_browser_use_agent(
             if not cdp_url:
                 raise ValueError("Failed to create browser session - no cdp_url")
 
-        # Create agent in Convex
-        agent_id = convex_client.mutation(
-            "mutations:createAgentFromBackend",
-            {
-                "sessionId": request.sessionId,
-                "name": "browser-use",
-                "model": request.providerModel,
-                "browser": {
-                    "sessionId": browser_session_id,
-                    "url": live_view_url,
+        # Create agent in Convex (unless agentId is provided, e.g., for demo sessions)
+        agent_id = request.agentId
+        if not agent_id:
+            agent_id = convex_client.mutation(
+                "mutations:createAgentFromBackend",
+                {
+                    "sessionId": request.sessionId,
+                    "name": "browser-use",
+                    "model": request.providerModel,
+                    "browser": {
+                        "sessionId": browser_session_id,
+                        "url": live_view_url,
+                    },
                 },
-            },
-        )
+            )
 
         # Schedule background task
         background_tasks.add_task(

@@ -191,7 +191,6 @@ export async function POST(request: NextRequest) {
             },
             agentName: agentType,
             model: model ?? "google/gemini-2.5-flash",
-            isPrivate: false,
         });
 
         const { sessionId: dbSessionId, agentId } = result;
@@ -203,6 +202,7 @@ export async function POST(request: NextRequest) {
         // Record demo usage
         await convex.mutation(api.mutations.recordDemoUsage, {
             deviceFingerprint,
+            clientFingerprint,
             ipAddress: ip,
             userAgent: userAgent,
             sessionId: dbSessionId,
@@ -303,6 +303,7 @@ export async function POST(request: NextRequest) {
                             cdpUrl,
                             liveViewUrl,
                             userId: demoUserId,
+                            agentId: agentId, // Pass the agentId to avoid duplicate creation
                         }),
                     });
 

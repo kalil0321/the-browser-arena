@@ -121,6 +121,9 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     // Device fingerprinting for demo mode
     const [clientFingerprint, setClientFingerprint] = useState<string | null>(null);
 
+    // Store input when user hits demo limit to restore after signup
+    const [storedInputForDemo, setStoredInputForDemo] = useState<string | null>(null);
+
     // Get current user for API key access
     const user = useQuery(
         api.auth.getCurrentUser,
@@ -318,6 +321,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 // Use startTransition for better React 18 concurrent rendering
                 // and ensure navigation happens properly
                 startTransition(() => {
+                    setInput(""); // Clear input only on successful navigation
                     router.push(`/session/${sessionIdString}`);
                 });
             } catch (error) {
@@ -328,8 +332,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     description: "Please check your configuration and try again."
                 });
                 setIsLoading(false);
-            } finally {
-                setInput("");
+                // Don't clear input on error, let user retry
             }
         }
     };
@@ -379,10 +382,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
 
                 // Handle demo limit reached
                 if (response.status === 403 && errorData.error === "DEMO_LIMIT_REACHED") {
-                    toast.error("Free demo limit reached", {
-                        description: "You've used your free demo query. Please create an account to continue!",
-                        duration: 8000,
-                    });
+                    setStoredInputForDemo(input); // Store the input for after signup
                     setIsLoginDialogOpen(true);
                     setIsLoading(false);
                     return;
@@ -410,7 +410,8 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
 
             // Use startTransition for better React 18 concurrent rendering
             startTransition(() => {
-                router.push(`/session/${sessionIdString}`);
+                setInput(""); // Clear input only on successful navigation
+                router.push(`/demo/session/${sessionIdString}`);
             });
         } catch (error) {
             console.error("Error submitting demo:", error);
@@ -420,8 +421,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 description: "Please try again or create an account for full access."
             });
             setIsLoading(false);
-        } finally {
-            setInput("");
+            // Don't clear input on error, let user retry
         }
     };
 
@@ -436,6 +436,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             setIsLoginDialogOpen(false);
             setEmail("");
             setPassword("");
+
+            // Restore stored input if available
+            if (storedInputForDemo) {
+                setInput(storedInputForDemo);
+                setStoredInputForDemo(null);
+            }
+
             toast.success("Signed in successfully!", {
                 duration: 3000,
             });
@@ -464,6 +471,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             setEmail("");
             setPassword("");
             setName("");
+
+            // Restore stored input if available
+            if (storedInputForDemo) {
+                setInput(storedInputForDemo);
+                setStoredInputForDemo(null);
+            }
+
             toast.success("Account created successfully!", {
                 duration: 3000,
                 description: "Welcome to The Browser Arena!"
@@ -559,7 +573,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         <textarea
                             ref={textareaRef}
                             placeholder="Automate your tasks..."
-                            className="sm:text font-default relative w-full border-none bg-background pr-20 text-sm tracking-tight text-black focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
+                            className="sm:text font-default relative w-full border-none bg-background pr-20 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
@@ -821,7 +835,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             <DialogHeader>
                                 <DialogTitle>Sign In Required</DialogTitle>
                                 <DialogDescription>
-                                    Please sign in or create an account to submit a message.
+                                    Please sign in or create an account to submit a query.
                                 </DialogDescription>
                             </DialogHeader>
                             <Tabs defaultValue="signin" className="w-full">
