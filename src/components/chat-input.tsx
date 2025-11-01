@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, startTransition } from "react";
+import { useState, useRef, useEffect, startTransition, useMemo, useCallback, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useConvexAuth } from "convex/react";
 import { toast } from "sonner";
@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingDino } from "@/components/loading-dino";
+
+// Lazy load the LoadingDino component for better initial load performance
+const LoadingDino = lazy(() => import("@/components/loading-dino").then(mod => ({ default: mod.LoadingDino })));
 import { authClient } from "@/lib/auth/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +19,7 @@ import { Bot, Sparkles, Settings, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { getApiKey } from "@/lib/api-keys";
+import { getApiKey, hasApiKey } from "@/lib/api-keys";
 import { Switch } from "@/components/ui/switch";
 import { OpenAI } from "@/components/logos/openai";
 import { GeminiLogo } from "@/components/logos/gemini";
@@ -153,25 +155,18 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     // Temporary state for dialog
     const [tempAgentConfigs, setTempAgentConfigs] = useState<AgentConfig[]>(agentConfigs);
 
-    // Check if user has API keys for privacy warnings
+    // Check if user has API keys for privacy warnings (use hasApiKey for synchronous check)
     useEffect(() => {
-        const checkApiKeys = async () => {
-            if (user?._id) {
-                try {
-                    const smoothKey = await getApiKey("smooth", user._id);
-                    setHasSmoothApiKey(!!smoothKey);
-
-                    const browserUseKey = await getApiKey("browser-use", user._id);
-                    setHasBrowserUseApiKey(!!browserUseKey);
-                } catch (error) {
-                    console.error("Failed to check API keys:", error);
-                }
-            } else {
-                setHasSmoothApiKey(false);
-                setHasBrowserUseApiKey(false);
-            }
-        };
-        checkApiKeys();
+        if (user?._id) {
+            // Use synchronous hasApiKey check instead of async getApiKey to avoid layout shift
+            const smoothKey = hasApiKey("smooth");
+            const browserUseKey = hasApiKey("browser-use");
+            setHasSmoothApiKey(smoothKey);
+            setHasBrowserUseApiKey(browserUseKey);
+        } else {
+            setHasSmoothApiKey(false);
+            setHasBrowserUseApiKey(false);
+        }
     }, [user?._id]);
 
     // Auto-resize textarea
@@ -182,12 +177,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         }
     }, [input]);
 
-    // Notify parent when agent selection changes
+    // Notify parent when agent selection changes - memoized to prevent unnecessary calls
+    const hasSmooth = useMemo(() => agentConfigs.some(c => c.agent === "smooth"), [agentConfigs]);
+    const hasBrowserUse = useMemo(() => agentConfigs.some(c => c.agent === "browser-use" || c.agent === "browser-use-cloud"), [agentConfigs]);
+
     useEffect(() => {
-        const hasSmooth = agentConfigs.some(c => c.agent === "smooth");
-        const hasBrowserUse = agentConfigs.some(c => c.agent === "browser-use" || c.agent === "browser-use-cloud");
         onAgentPresenceChange?.(hasSmooth, hasBrowserUse);
-    }, [agentConfigs, onAgentPresenceChange]);
+    }, [hasSmooth, hasBrowserUse, onAgentPresenceChange]);
 
     // Generate device fingerprint on mount
     useEffect(() => {
@@ -548,22 +544,31 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         }
     };
 
-    const chatInputState: ChatInputState = {
+    // Memoize chatInputState to prevent unnecessary re-renders
+    const chatInputState: ChatInputState = useMemo(() => ({
         isPrivate,
         agentConfigs,
         hasSmoothApiKey,
         hasBrowserUseApiKey,
         clientFingerprint,
-    };
+    }), [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, clientFingerprint]);
 
     // Notify parent component whenever state changes
     useEffect(() => {
         onStateChange?.(chatInputState);
-    }, [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, clientFingerprint, onStateChange]);
+    }, [chatInputState, onStateChange]);
 
     return (
         <>
-            {isLoading && <LoadingDino />}
+            {isLoading && (
+                <Suspense fallback={
+                    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md">
+                        <div className="text-lg text-foreground">Loading...</div>
+                    </div>
+                }>
+                    <LoadingDino />
+                </Suspense>
+            )}
             <div className="container mx-auto max-w-3xl px-4 font-mono text-white">
                 <div className="bg-background rounded-4xl w-full space-y-2 px-4 py-4">
                     <form

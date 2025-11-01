@@ -17,7 +17,7 @@ import { ThemeSwitcher } from "./theme-switcher";
 import { HelpButton } from "./help-button";
 import { SettingsButton } from "@/components/settings-button";
 import { Separator } from "@/components/ui/separator";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Trophy, Map } from "lucide-react";
 import Link from "next/link";
@@ -28,6 +28,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const teams = [
     { id: "1", name: "Alpha Inc.", logo: IconSmall, plan: "Free" },
@@ -38,14 +39,23 @@ const teams = [
 export function DashboardSidebar() {
     const { state } = useSidebar();
     const isCollapsed = state === "collapsed";
-    const sessions = useQuery(api.queries.getUserSessions);
+    const { isAuthenticated } = useConvexAuth();
+    const sessions = useQuery(api.queries.getUserSessions, isAuthenticated ? {} : "skip");
     const { resolvedTheme } = useTheme();
-    const [isProTheme, setIsProTheme] = useState(false);
+    const [isProTheme, setIsProTheme] = useState(() => {
+        // Initialize from DOM on mount
+        try {
+            return typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "pro";
+        } catch {
+            return false;
+        }
+    });
 
     useEffect(() => {
         const apply = () => {
             try {
-                setIsProTheme(document.documentElement.getAttribute("data-theme") === "pro");
+                const isPro = document.documentElement.getAttribute("data-theme") === "pro";
+                setIsProTheme(prev => prev !== isPro ? isPro : prev);
             } catch {
                 setIsProTheme(false);
             }
@@ -131,7 +141,29 @@ export function DashboardSidebar() {
                 </div>
 
                 {!isCollapsed && (
-                    <SessionsNav sessions={sessions} />
+                    (!isAuthenticated ? <SessionsNav sessions={[]} /> :
+                        sessions === undefined ? (
+                            <div className="flex flex-col gap-3">
+                                <div className="px-2 py-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Skeleton className="h-4 w-20" />
+                                        <Skeleton className="h-8 w-8 rounded-md" />
+                                    </div>
+                                </div>
+                                <SidebarMenu className="px-2">
+                                    {[1, 2, 3].map((i) => (
+                                        <SidebarMenuItem key={i} className="px-0">
+                                            <div className="flex h-9 items-center gap-2 rounded-md px-2">
+                                                <Skeleton className="size-4 rounded-md" />
+                                                <Skeleton className="h-4 flex-1 max-w-[80%]" />
+                                            </div>
+                                        </SidebarMenuItem>
+                                    ))}
+                                </SidebarMenu>
+                            </div>
+                        ) : (
+                            <SessionsNav sessions={sessions} />
+                        ))
                 )}
             </SidebarContent>
 

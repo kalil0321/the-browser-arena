@@ -7,11 +7,19 @@ import { SidebarInset } from "@/components/ui/sidebar";
 import { useState } from "react";
 
 export default function Home() {
-  const [hasSmooth, setHasSmooth] = useState(false);
-  const [hasBrowserUse, setHasBrowserUse] = useState(false);
+  // Initialize with true since default agents are smooth and browser-use
+  const [hasSmooth, setHasSmooth] = useState(true);
+  const [hasBrowserUse, setHasBrowserUse] = useState(true);
   const [chatInputState, setChatInputState] = useState<ChatInputState | null>(null);
+
+  const showPrivacyWarning = chatInputState?.isPrivate && (
+    (chatInputState.agentConfigs.some(c => c.agent === "smooth") && !chatInputState.hasSmoothApiKey) ||
+    (chatInputState.agentConfigs.some(c => c.agent === "browser-use-cloud") && !chatInputState.hasBrowserUseApiKey)
+  );
+
   return (
-    <SidebarInset className="flex flex-1 flex-col items-center justify-center overflow-hidden bg-[url('/bg.jpeg')] bg-cover bg-center">
+    <SidebarInset className="flex flex-1 flex-col items-center justify-center overflow-hidden">
+      <div className="absolute inset-0 bg-[url('/bg.jpeg')] bg-cover bg-center will-change-transform" />
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
       <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-6 text-center md:px-12">
         {/* Main content area */}
@@ -31,12 +39,10 @@ export default function Home() {
             />
           </div>
 
-          {/* Privacy Warning - Moved outside of chat input */}
-          {chatInputState && chatInputState.isPrivate && (
-            (chatInputState.agentConfigs.some(c => c.agent === "smooth") && !chatInputState.hasSmoothApiKey) ||
-            (chatInputState.agentConfigs.some(c => c.agent === "browser-use-cloud") && !chatInputState.hasBrowserUseApiKey)
-          ) && (
-              <div className="w-full max-w-2xl rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm">
+          {/* Privacy Warning - Fixed height to prevent layout shift */}
+          <div className="w-full max-w-2xl min-h-[88px] flex items-start">
+            {showPrivacyWarning && (
+              <div className="w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm">
                 <p className="text-amber-900 dark:text-amber-100">
                   <strong>Privacy Notice:</strong> Private mode is enabled, but some agents are using server API keys.
                   For a fully private session, please add your own API keys in{" "}
@@ -50,20 +56,23 @@ export default function Home() {
                 </p>
               </div>
             )}
+          </div>
         </div>
 
-        {/* Subtle info notes at the bottom */}
-        <div className="mt-auto w-full max-w-4xl space-y-2 pb-6 pt-8">
-          {hasSmooth && (
-            <p className="text-xs text-muted-foreground font-default opacity-60">
-              <strong>Note:</strong> To use Smooth, get your API key from <a href="https://app.smooth.sh" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">app.smooth.sh</a> and add it in Settings. Free credits on signup.
-            </p>
-          )}
-          {hasBrowserUse && (
-            <p className="text-xs text-muted-foreground font-default opacity-60">
-              <strong>Optional:</strong> Configure API keys for LLM providers (OpenAI, Anthropic, Google) in Settings. Get a Browser-Use API key at <a href="https://cloud.browser-use.com/new-api-key" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">cloud.browser-use.com</a>. Free credits on signup.
-            </p>
-          )}
+        {/* Subtle info notes at the bottom - Fixed height to prevent layout shift */}
+        <div className="mt-auto w-full max-w-4xl pb-6 pt-8">
+          <div className="space-y-2 min-h-[60px] flex flex-col justify-start">
+            {hasSmooth && (
+              <p className="text-xs text-muted-foreground font-default opacity-60">
+                <strong>Note:</strong> To use Smooth, get your API key from <a href="https://app.smooth.sh" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">app.smooth.sh</a> and add it in Settings. Free credits on signup.
+              </p>
+            )}
+            {hasBrowserUse && (
+              <p className="text-xs text-muted-foreground font-default opacity-60">
+                <strong>Optional:</strong> Configure API keys for LLM providers (OpenAI, Anthropic, Google) in Settings. Get a Browser-Use API key at <a href="https://cloud.browser-use.com/new-api-key" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">cloud.browser-use.com</a>. Free credits on signup.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </SidebarInset>
