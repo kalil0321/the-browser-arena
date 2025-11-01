@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+// import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import { getApiKey, setApiKey, removeApiKey, hasApiKey, maskApiKey } from "@/lib
 import { CheckCircle2, XCircle, Key, DollarSign, Zap, Smartphone, Eye, EyeOff } from "lucide-react";
 
 export default function SettingsPage() {
+  // const router = useRouter();
   const { isAuthenticated } = useConvexAuth();
   const user = useQuery(
     api.auth.getCurrentUser,
@@ -492,6 +494,23 @@ export default function SettingsPage() {
     }
   };
 
+  // const handleStartProfileBrowser = async () => {
+  //   try {
+  //     const res = await fetch("/api/profile/session", { method: "POST" });
+  //     if (!res.ok) {
+  //       const data = await res.json().catch(() => ({}));
+  //       throw new Error(data?.message || "Failed to start browser session");
+  //     }
+  //     const data = await res.json();
+  //     if (!data?.url) {
+  //       throw new Error("No browser URL returned");
+  //     }
+  //     router.push(`/profile?url=${encodeURIComponent(data.url)}`);
+  //   } catch (e: any) {
+  //     toast.error(e?.message || "Unable to start browser session");
+  //   }
+  // };
+
   return (
     <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
       <div className="flex-1 overflow-y-auto">
@@ -538,7 +557,37 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <Separator />
+            {/* <Separator />
+
+            Browser Profile Management
+            <div id="browser-profile" className="grid grid-cols-12 gap-8">
+              <div className="col-span-4 space-y-2">
+                <h2 className="text-xl font-semibold">Browser profile</h2>
+                <p className="text-sm text-muted-foreground">
+                  Create a persistent browser profile and launch an interactive session.
+                  Sessions have a 10 min max duration and 3 min idle timeout.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Each session adds $0.10 + $0.05/hour (prorated) to your usage.
+                </p>
+              </div>
+              <div className="col-span-1 flex justify-center">
+                <div className="w-px h-full border-l border-dashed border-border"></div>
+              </div>
+              <div className="col-span-7 space-y-4">
+                <div className="rounded-lg border bg-card p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Interactive profile browser</p>
+                      <p className="text-xs text-muted-foreground">Launches a live browser you can control</p>
+                    </div>
+                    <Button onClick={handleStartProfileBrowser}>Start session</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator /> */}
             {/* Personal Information Section */}
             <div id="personal-info" className="grid grid-cols-12 gap-8">
               <div className="col-span-4 space-y-2">

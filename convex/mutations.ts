@@ -604,3 +604,27 @@ export const initializeUserUsageStats = mutation({
         return created;
     },
 });
+
+/**
+ * Add arbitrary usage cost to the current user
+ */
+export const addUsageCost = mutation({
+    args: {
+        cost: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const user = await getUser(ctx);
+
+        if (!user) {
+            throw new Error("User must be authenticated");
+        }
+
+        const cost = Math.max(0, args.cost);
+        if (cost === 0) {
+            return { success: true };
+        }
+
+        await updateUserCostTracking(ctx, user._id, cost, false);
+        return { success: true };
+    },
+});

@@ -133,8 +133,28 @@ export async function POST(request: NextRequest) {
             return serverMisconfigured("Missing LLM provider API key", { model });
         }
 
+        // Get current user to create browser profile
+        const user = await convex.query(api.auth.getCurrentUser, {});
+        if (!user) {
+            return unauthorized();
+        }
+        // getCurrentUser returns user with _id field (Convex document ID)
+        const userId = user._id;
+
+        // Create browser profile configuration using user_id
+        const browserProfileConfig = {
+            ...config,
+            browser: {
+                ...config.browser,
+                profile: {
+                    name: `profile-${userId}`,
+                    persist: true
+                }
+            }
+        };
+
         // Create browser session (external API call) - this is the main bottleneck
-        const browserSession = await browser.sessions.create(config).catch((e: any) => {
+        const browserSession = await browser.sessions.create(browserProfileConfig).catch((e: any) => {
             if (e?.status === 401 || e?.status === 403) {
                 return Promise.reject(missingKey("Anchor Browser", true));
             }

@@ -45,6 +45,8 @@ class AgentRequest(BaseModel):
     browserSessionId: Optional[str] = None
     cdpUrl: Optional[str] = None
     liveViewUrl: Optional[str] = None
+    # Optional user ID for browser profile
+    userId: Optional[str] = None
     # Optional user-provided API keys (BYOK - Bring Your Own Key)
     openaiApiKey: Optional[str] = None
     googleApiKey: Optional[str] = None
@@ -679,7 +681,20 @@ async def run_browser_use_agent(
             live_view_url = request.liveViewUrl
         else:
             # Fallback: create browser session here (slower path)
-            browser_session = anchor_browser.sessions.create()
+            # Create browser profile configuration using user_id if provided
+            browser_config = {}
+            if request.userId:
+                browser_config = {
+                    "browser": {
+                        "profile": {
+                            "name": f"profile-{request.userId}",
+                            "persist": True
+                        }
+                    }
+                }
+                browser_session = anchor_browser.sessions.create(browser_config)
+            else:
+                browser_session = anchor_browser.sessions.create()
             browser_session_id = browser_session.data.id
             cdp_url = browser_session.data.cdp_url
             live_view_url = browser_session.data.live_view_url
