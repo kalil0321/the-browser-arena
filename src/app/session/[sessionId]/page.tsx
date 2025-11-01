@@ -9,6 +9,7 @@ import { AgentPanel } from "@/components/agent-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { BrowserUseLogo } from "@/components/logos/bu";
 
 export default function SessionPage() {
     const params = useParams();
@@ -180,6 +181,9 @@ export default function SessionPage() {
                                     {agents.map((agent) => (
                                         <TabsTrigger key={agent._id} value={agent._id} className="capitalize text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:text-white data-[state=active]:underline">
                                             <div className="flex items-center gap-2">
+                                                {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
+                                                    <BrowserUseLogo className="h-4 w-4" />
+                                                )}
                                                 <span className="data-[state=active]:border-current transition-colors">{agent.name}</span>
                                                 {agent.status === "completed" && (
                                                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

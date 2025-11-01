@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { getClientFingerprint } from "@/lib/fingerprint";
+import { BrowserUseLogo } from "@/components/logos/bu";
 import { useEffect, useState } from "react";
 
 type SessionRow = {
@@ -168,6 +169,9 @@ function DemoSessionAgents({ sessionId }: { sessionId: Id<"sessions"> }) {
                         className={`size-1.5 rounded-full ${getStatusColor(agent.status)}`}
                         aria-hidden="true"
                     />
+                    {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
+                        <BrowserUseLogo className="h-3 w-3" />
+                    )}
                     {agent.name}
                 </Badge>
             ))}

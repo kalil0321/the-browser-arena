@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { BrowserUseLogo } from "@/components/logos/bu";
 
 type SessionRow = {
   _id: Id<"sessions">;
@@ -150,6 +151,9 @@ function SessionAgents({ sessionId }: { sessionId: Id<"sessions"> }) {
             className={`size-1.5 rounded-full ${getStatusColor(agent.status)}`}
             aria-hidden="true"
           />
+          {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
+            <BrowserUseLogo className="h-3 w-3" />
+          )}
           {agent.name}
         </Badge>
       ))}

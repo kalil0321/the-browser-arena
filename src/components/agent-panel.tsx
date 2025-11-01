@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SmoothPanel } from "./panels/smooth-panel";
 import { BUPanel } from "./panels/bu-panel";
 import { StagehandPanel } from "./panels/stagehand-panel";
+import { BrowserUseLogo } from "./logos/bu";
 
 interface AgentPanelProps {
     agent: {
@@ -61,6 +62,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
             <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
                 <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${getStatusColor()}`}></div>
+                    {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
+                        <BrowserUseLogo className="h-4 w-4" />
+                    )}
                     <h3 className="text-sm font-medium capitalize">
                         {agent.name}
                     </h3>
