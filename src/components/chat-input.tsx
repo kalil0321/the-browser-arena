@@ -24,6 +24,9 @@ import { Switch } from "@/components/ui/switch";
 import { OpenAI } from "@/components/logos/openai";
 import { GeminiLogo } from "@/components/logos/gemini";
 import { ClaudeLogo } from "@/components/logos/claude";
+import { BrowserUseLogo } from "@/components/logos/bu";
+import { SmoothLogo } from "@/components/logos/smooth";
+import { StagehandLogo } from "@/components/logos/stagehand";
 import { AgentConfigDialog } from "./agent-config-dialog";
 import { getClientFingerprint } from "@/lib/fingerprint";
 
@@ -65,7 +68,7 @@ const detectProviderFromModelName = (modelName: string): string => {
     if (modelName.startsWith("claude-")) {
         return "anthropic";
     }
-    if (modelName === "browser-use-llm") {
+    if (modelName === "browser-use-llm" || modelName === "bu-1.0") {
         return "browser-use";
     }
     return "";
@@ -108,6 +111,8 @@ const ProviderLogo: React.FC<{ provider: string; className?: string }> = ({ prov
             return <GeminiLogo className={cn("h-4 w-4", className)} />;
         case "anthropic":
             return <ClaudeLogo className={cn("h-4 w-4", className)} />;
+        case "browser-use":
+            return <BrowserUseLogo className={cn("h-4 w-4", className)} />;
         default:
             return <Bot className={cn("h-4 w-4 text-muted-foreground", className)} />;
     }
@@ -756,11 +761,20 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                                                 <Label
                                                                     htmlFor={agentType}
                                                                     className={cn(
-                                                                        "text-[13px] font-medium cursor-pointer font-default",
+                                                                        "text-[13px] font-medium cursor-pointer font-default flex items-center gap-1.5",
                                                                         selected && "text-primary",
                                                                         (isDisabled || isMaxReached) && "cursor-not-allowed"
                                                                     )}
                                                                 >
+                                                                    {(agentType === "browser-use" || agentType === "browser-use-cloud") && (
+                                                                        <BrowserUseLogo className="h-3.5 w-3.5" />
+                                                                    )}
+                                                                    {agentType === "smooth" && (
+                                                                        <SmoothLogo className="h-3.5 w-3.5" />
+                                                                    )}
+                                                                    {(agentType === "stagehand" || agentType === "stagehand-bb-cloud") && (
+                                                                        <StagehandLogo className="h-3.5 w-3.5" />
+                                                                    )}
                                                                     {AGENT_LABELS[agentType]}
                                                                 </Label>
                                                                 {selected && MODEL_OPTIONS[agentType].length > 0 && (

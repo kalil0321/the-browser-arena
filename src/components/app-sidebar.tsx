@@ -19,7 +19,7 @@ import { SettingsButton } from "@/components/settings-button";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { Trophy, Map } from "lucide-react";
+import { Trophy, Map, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
@@ -165,9 +165,9 @@ export function DashboardSidebar() {
                 )}
             >
                 <div className="flex items-center justify-between gap-2 w-full">
-                    <a href="/" className="flex items-center gap-2">
+                    <Link href="/" prefetch className="flex items-center gap-2">
                         <IconFull dark={!useWhiteLogo} width={80} height={60} />
-                    </a>
+                    </Link>
                     <motion.div
                         key={isCollapsed ? "header-collapsed" : "header-expanded"}
                         className={cn(
@@ -228,17 +228,22 @@ export function DashboardSidebar() {
                         <div className="flex flex-col gap-3">
                             <div className="px-2 py-1.5">
                                 <div className="flex items-center justify-between">
-                                    <Skeleton className="h-4 w-20" />
-                                    <Skeleton className="h-8 w-8 rounded-md" />
+                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Sessions
+                                    </span>
+                                    <button
+                                        className="inline-flex items-center justify-center rounded-md p-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                                        title="New session"
+                                        onClick={() => window.location.href = '/'}
+                                    >
+                                        <Plus className="size-4" />
+                                    </button>
                                 </div>
                             </div>
                             <SidebarMenu className="px-2">
                                 {[1, 2, 3].map((i) => (
                                     <SidebarMenuItem key={i} className="px-0">
-                                        <div className="flex h-9 items-center gap-2 rounded-md px-2">
-                                            <Skeleton className="size-4 rounded-md" />
-                                            <Skeleton className="h-4 flex-1 max-w-[80%]" />
-                                        </div>
+                                        <Skeleton className="h-9 w-full rounded-lg" />
                                     </SidebarMenuItem>
                                 ))}
                             </SidebarMenu>

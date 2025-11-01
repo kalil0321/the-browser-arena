@@ -8,6 +8,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { BrowserUseLogo } from "./logos/bu";
+import { StagehandLogo } from "./logos/stagehand";
 
 interface AgentPropertiesDialogProps {
     agent: {
@@ -44,6 +45,7 @@ export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentProper
                 <DialogHeader>
                     <DialogTitle className="capitalize flex items-center gap-2">
                         {isBrowserUse && <BrowserUseLogo className="h-4 w-4" />}
+                        {isStagehand && <StagehandLogo className="h-4 w-4" />}
                         {agent.name} Properties
                     </DialogTitle>
                     <DialogDescription>

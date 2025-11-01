@@ -18,6 +18,8 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { getClientFingerprint } from "@/lib/fingerprint";
 import { BrowserUseLogo } from "@/components/logos/bu";
+import { SmoothLogo } from "@/components/logos/smooth";
+import { StagehandLogo } from "@/components/logos/stagehand";
 import { useEffect, useState } from "react";
 
 type SessionRow = {
@@ -171,6 +173,12 @@ function DemoSessionAgents({ sessionId }: { sessionId: Id<"sessions"> }) {
                     />
                     {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
                         <BrowserUseLogo className="h-3 w-3" />
+                    )}
+                    {agent.name === "smooth" && (
+                        <SmoothLogo className="h-3 w-3" />
+                    )}
+                    {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                        <StagehandLogo className="h-3 w-3" />
                     )}
                     {agent.name}
                 </Badge>

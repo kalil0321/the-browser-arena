@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BrowserUseLogo } from "@/components/logos/bu";
+import { SmoothLogo } from "@/components/logos/smooth";
+import { StagehandLogo } from "@/components/logos/stagehand";
 
 export default function SessionPage() {
     const params = useParams();
@@ -92,7 +94,8 @@ export default function SessionPage() {
         if (agents.length === 1) return "grid-cols-1";
         if (agents.length === 2) return "grid-cols-1 lg:grid-cols-2";
         if (agents.length === 3) return "grid-cols-1 lg:grid-cols-3";
-        return "grid-cols-1 lg:grid-cols-3"; // 4+ agents still use 3 columns
+        if (agents.length === 4) return "grid-cols-1 md:grid-cols-2"; // 2x2 grid for 4 agents
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"; // 5+ agents use 2 columns on medium, 3 on large
     };
 
     // Show view mode toggle only when there are multiple agents
@@ -180,11 +183,22 @@ export default function SessionPage() {
                                 <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 dark:bg-black px-4 shrink-0">
                                     {agents.map((agent) => (
                                         <TabsTrigger key={agent._id} value={agent._id} className="capitalize text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:text-white data-[state=active]:underline">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
-                                                    <BrowserUseLogo className="h-4 w-4" />
+                                                    <BrowserUseLogo className="h-4 w-4 shrink-0" />
                                                 )}
-                                                <span className="data-[state=active]:border-current transition-colors">{agent.name}</span>
+                                                {agent.name === "smooth" && (
+                                                    <SmoothLogo className="h-4 w-4 shrink-0" />
+                                                )}
+                                                {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                                                    <StagehandLogo className="h-4 w-4 shrink-0" />
+                                                )}
+                                                <span className="data-[state=active]:border-current transition-colors truncate max-w-[120px]" title={agent.name}>
+                                                    {agent.name === "browser-use-cloud" ? "BU Cloud" :
+                                                        agent.name === "stagehand-bb-cloud" ? "SH BB Cloud" :
+                                                            agent.name === "stagehand-cloud" ? "SH Cloud" :
+                                                                agent.name}
+                                                </span>
                                                 {agent.status === "completed" && (
                                                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

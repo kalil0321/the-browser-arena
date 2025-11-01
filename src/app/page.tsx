@@ -25,10 +25,6 @@ export default function Home() {
         {/* Main content area */}
         <div className="flex w-full flex-col items-center gap-6 py-12 md:py-16">
           <IconFull dark={false} width={160} height={100} />
-          {/* <AnimatedHeadline
-            phrases={["Compare agents", "Automate your tasks", "Coordinate workflows"]}
-            className="text-2xl font-bold text-foreground font-default"
-          /> */}
           <div className="w-full max-w-2xl">
             <ChatInput
               onStateChange={setChatInputState}
