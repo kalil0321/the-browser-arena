@@ -680,7 +680,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     <LoadingDino />
                 </Suspense>
             )}
-            <div className="container mx-auto max-w-3xl px-4 font-mono text-white">
+            <div className="container mx-auto max-w-3xl px-3 sm:px-4 font-mono text-white">
                 <FileUpload
                     file={file}
                     onFileChange={setFile}
@@ -691,7 +691,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 >
                     <div
                         className={cn(
-                            "bg-background rounded-4xl w-full space-y-2 px-4 py-4 transition-colors relative"
+                            "bg-background rounded-4xl w-full space-y-2 px-3 py-3 sm:px-4 sm:py-4 transition-colors relative"
                         )}
                     >
                         <form
@@ -701,27 +701,27 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             <textarea
                                 ref={textareaRef}
                                 placeholder="Automate your tasks..."
-                                className="sm:text font-default relative w-full border-none bg-background pr-28 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
+                                className="sm:text font-default relative w-full border-none bg-background pr-20 sm:pr-28 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 rows={1}
                                 disabled={isUploadingFiles}
                             />
-                            <div className="absolute right-0 top-3 flex items-center gap-1">
+                            <div className="absolute right-1 sm:right-0 top-2.5 sm:top-3 flex items-center gap-1.5 sm:gap-1">
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isLoading || isUploadingFiles}
-                                    className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 transition duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 transition duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                                     title="Upload file"
                                 >
-                                    <Paperclip className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                                    <Paperclip className="h-4 w-4 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-300" />
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={!input.trim() || isLoading || isUploadingFiles}
-                                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black transition duration-200 hover:opacity-90 disabled:bg-gray-100 dark:bg-zinc-900 dark:disabled:bg-zinc-800"
+                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-black transition duration-200 hover:opacity-90 disabled:bg-gray-100 dark:bg-zinc-900 dark:disabled:bg-zinc-800 touch-manipulation"
                                 >
                                     {isUploadingFiles ? (
                                         <svg className="animate-spin h-4 w-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -751,29 +751,30 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             </div>
                         </form>
 
-                        <div className="flex h-10 w-full items-center justify-between">
-                            <div className="flex items-center gap-2 flex-nowrap overflow-x-auto whitespace-nowrap max-w-full">
+                        <div className="flex h-auto min-h-10 w-full items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                            <div className="flex items-center gap-2 flex-nowrap overflow-x-auto whitespace-nowrap max-w-full sm:max-w-none">
                                 <Button
                                     type="button"
                                     onClick={handleDialogOpen}
                                     disabled={isLoading}
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 px-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-primary hover:text-primary shrink-0"
+                                    className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-primary hover:text-primary shrink-0 touch-manipulation"
                                 >
-                                    <Settings className="mr-1.5 h-4 w-4" />
-                                    Agents
-                                    <span className="ml-1 rounded-full bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-1.5 py-0.5 text-[10px]">
+                                    <Settings className="mr-1 sm:mr-1.5 h-4 w-4 shrink-0" />
+                                    <span className="hidden sm:inline">Agents</span>
+                                    <span className="ml-1 rounded-full bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-1.5 py-0.5 text-[10px] shrink-0">
                                         {agentConfigs.length}
                                     </span>
                                 </Button>
-                                <div className="flex items-center gap-2 rounded-full px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 shrink-0">
-                                    <Label htmlFor="private-session" className="text-[11px] text-muted-foreground">Private</Label>
+                                <div className="flex items-center gap-2 rounded-full px-2.5 sm:px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 shrink-0">
+                                    <Label htmlFor="private-session" className="text-[11px] sm:text-[11px] text-muted-foreground whitespace-nowrap">Private</Label>
                                     <Switch
                                         id="private-session"
                                         checked={isPrivate}
                                         onCheckedChange={(checked) => setIsPrivate(checked === true)}
                                         disabled={isLoading}
+                                        className="touch-manipulation"
                                     />
                                 </div>
 

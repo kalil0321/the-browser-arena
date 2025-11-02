@@ -240,7 +240,7 @@ export function DashboardSidebar() {
             </SidebarContent>
 
             {/* Footer - Help & Theme Switcher */}
-            <SidebarFooter className="px-2 pb-2 gap-2">
+            <SidebarFooter className="px-2 pb-2 sm:pb-2 gap-2.5 sm:gap-2">
                 <SettingsButton />
                 <HelpButton />
                 <ThemeSwitcher />

@@ -92,10 +92,10 @@ export default function SessionPage() {
     const getGridCols = () => {
         if (!agents || agents.length === 0) return "grid-cols-1";
         if (agents.length === 1) return "grid-cols-1";
-        if (agents.length === 2) return "grid-cols-1 lg:grid-cols-2";
-        if (agents.length === 3) return "grid-cols-1 lg:grid-cols-3";
-        if (agents.length === 4) return "grid-cols-1 md:grid-cols-2"; // 2x2 grid for 4 agents
-        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"; // 5+ agents use 2 columns on medium, 3 on large
+        if (agents.length === 2) return "grid-cols-1 md:grid-cols-2";
+        if (agents.length === 3) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
+        if (agents.length === 4) return "grid-cols-1 sm:grid-cols-2"; // 2x2 grid for 4 agents
+        return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"; // 5+ agents use 2 columns on small, 3 on large
     };
 
     // Show view mode toggle only when there are multiple agents
@@ -104,13 +104,13 @@ export default function SessionPage() {
     return (
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-black">
             {/* Header */}
-            <div className="border-b border-gray-200 dark:border-card/20  px-4 py-4 shrink-0">
-                <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-1">
-                        <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100">
+            <div className="border-b border-gray-200 dark:border-card/20 px-3 py-3 sm:px-4 sm:py-4 shrink-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                        <h1 className="text-base sm:text-lg font-default font-medium text-gray-900 dark:text-gray-100 break-words">
                             {session.instruction}
                         </h1>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
                             Created {new Date(session.createdAt).toLocaleDateString(undefined, {
                                 year: 'numeric',
                                 month: 'long',
@@ -120,35 +120,35 @@ export default function SessionPage() {
                             })}
                         </p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                         {agents && agents.length > 0 && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                            <div className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                 {agents.filter(a => a.status === "completed").length} / {agents.length} completed
                             </div>
                         )}
                         {showViewToggle && (
-                            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 sm:p-1">
                                 <Button
                                     variant={viewMode === "grid" ? "default" : "ghost"}
                                     size="sm"
                                     onClick={() => setViewMode("grid")}
-                                    className="h-7 px-3 text-xs dark:text-white dark:hover:text-white text-black hover:text-black"
+                                    className="h-8 sm:h-7 px-2 sm:px-3 text-[11px] sm:text-xs dark:text-white dark:hover:text-white text-black hover:text-black touch-manipulation"
                                 >
-                                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                                     </svg>
-                                    Grid
+                                    <span className="hidden sm:inline">Grid</span>
                                 </Button>
                                 <Button
                                     variant={viewMode === "tabs" ? "default" : "ghost"}
                                     size="sm"
                                     onClick={() => setViewMode("tabs")}
-                                    className="h-7 px-3 text-xs dark:text-white dark:hover:text-white text-black hover:text-black"
+                                    className="h-8 sm:h-7 px-2 sm:px-3 text-[11px] sm:text-xs dark:text-white dark:hover:text-white text-black hover:text-black touch-manipulation"
                                 >
-                                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                     </svg>
-                                    Tabs
+                                    <span className="hidden sm:inline">Tabs</span>
                                 </Button>
                             </div>
                         )}
@@ -180,20 +180,20 @@ export default function SessionPage() {
                     <div className="h-full">
                         {agents && agents.length > 0 ? (
                             <Tabs defaultValue={agents[0]._id} className="h-full flex flex-col gap-0">
-                                <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 dark:bg-black px-4 shrink-0">
+                                <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 dark:bg-black px-2 sm:px-4 shrink-0 overflow-x-auto">
                                     {agents.map((agent) => (
-                                        <TabsTrigger key={agent._id} value={agent._id} className="capitalize text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:text-white data-[state=active]:underline">
-                                            <div className="flex items-center gap-2 min-w-0">
+                                        <TabsTrigger key={agent._id} value={agent._id} className="capitalize text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:text-white data-[state=active]:underline h-10 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm touch-manipulation shrink-0">
+                                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
-                                                    <BrowserUseLogo className="h-4 w-4 shrink-0" />
+                                                    <BrowserUseLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
                                                 {agent.name === "smooth" && (
-                                                    <SmoothLogo className="h-4 w-4 shrink-0" />
+                                                    <SmoothLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
                                                 {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
-                                                    <StagehandLogo className="h-4 w-4 shrink-0" />
+                                                    <StagehandLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
-                                                <span className="data-[state=active]:border-current transition-colors truncate max-w-[120px]" title={agent.name}>
+                                                <span className="data-[state=active]:border-current transition-colors truncate max-w-[100px] sm:max-w-[120px]" title={agent.name}>
                                                     {agent.name === "browser-use-cloud" ? "BU Cloud" :
                                                         agent.name === "stagehand-bb-cloud" ? "SH BB Cloud" :
                                                             agent.name === "stagehand-cloud" ? "SH Cloud" :

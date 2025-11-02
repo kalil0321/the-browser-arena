@@ -18,9 +18,9 @@ export function SettingsButton() {
                     onClick={() => {
                         router.push("/settings");
                     }}
-                    className="w-full justify-start"
+                    className="w-full justify-start touch-manipulation min-h-[44px] sm:min-h-0"
                 >
-                    <Settings className="size-4" />
+                    <Settings className="size-4 shrink-0" />
                     <span className="text-sm">Settings</span>
                 </SidebarMenuButton>
             </SidebarMenuItem>

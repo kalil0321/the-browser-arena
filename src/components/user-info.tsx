@@ -181,7 +181,7 @@ export function UserInfo() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>{getTriggerContent()}</DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-80 max-w-sm">
                 {isLoading ? (
                     <div className="flex items-center justify-center p-4">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -197,10 +197,10 @@ export function UserInfo() {
                                 className="w-full"
                             >
                                 <TabsList className="grid w-full grid-cols-2 mb-3">
-                                    <TabsTrigger value="signin" className="text-xs">
+                                    <TabsTrigger value="signin" className="text-xs touch-manipulation">
                                         Sign In
                                     </TabsTrigger>
-                                    <TabsTrigger value="signup" className="text-xs">
+                                    <TabsTrigger value="signup" className="text-xs touch-manipulation">
                                         Sign Up
                                     </TabsTrigger>
                                 </TabsList>
@@ -224,7 +224,7 @@ export function UserInfo() {
                                             }}
                                             disabled={isSubmitting}
                                             autoComplete="email"
-                                            className="h-9 text-xs"
+                                            className="h-10 sm:h-9 text-sm sm:text-xs"
                                         />
                                         <Input
                                             type="password"
@@ -238,13 +238,13 @@ export function UserInfo() {
                                             }}
                                             disabled={isSubmitting}
                                             autoComplete="current-password"
-                                            className="h-9 text-xs"
+                                            className="h-10 sm:h-9 text-sm sm:text-xs"
                                         />
                                     </div>
                                     <Button
                                         onClick={handleSignIn}
                                         disabled={isSubmitting || !email || !password}
-                                        className="w-full h-9 text-xs"
+                                        className="w-full h-10 sm:h-9 text-sm sm:text-xs touch-manipulation"
                                     >
                                         {isSubmitting ? (
                                             <>
@@ -276,7 +276,7 @@ export function UserInfo() {
                                             }}
                                             disabled={isSubmitting}
                                             autoComplete="name"
-                                            className="h-9 text-xs"
+                                            className="h-10 sm:h-9 text-sm sm:text-xs"
                                         />
                                         <Input
                                             type="email"
@@ -290,7 +290,7 @@ export function UserInfo() {
                                             }}
                                             disabled={isSubmitting}
                                             autoComplete="email"
-                                            className="h-9 text-xs"
+                                            className="h-10 sm:h-9 text-sm sm:text-xs"
                                         />
                                         <Input
                                             type="password"
@@ -304,13 +304,13 @@ export function UserInfo() {
                                             }}
                                             disabled={isSubmitting}
                                             autoComplete="new-password"
-                                            className="h-9 text-xs"
+                                            className="h-10 sm:h-9 text-sm sm:text-xs"
                                         />
                                     </div>
                                     <Button
                                         onClick={handleSignUp}
                                         disabled={isSubmitting || !email || !password || !name}
-                                        className="w-full h-9 text-xs"
+                                        className="w-full h-10 sm:h-9 text-sm sm:text-xs touch-manipulation"
                                     >
                                         {isSubmitting ? (
                                             <>

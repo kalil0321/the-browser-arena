@@ -98,17 +98,17 @@ export function FileUpload({
             {/* File display (single file) */}
             {file && (
                 <div className="flex flex-wrap gap-2 mb-2">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs text-foreground">
-                        <Paperclip className="h-3 w-3 text-muted-foreground" />
-                        <span className="max-w-[200px] truncate">{file.name}</span>
+                    <div className="flex items-center gap-2 px-3 py-2 sm:py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs text-foreground min-h-[44px] sm:min-h-0">
+                        <Paperclip className="h-3.5 w-3.5 sm:h-3 sm:w-3 text-muted-foreground shrink-0" />
+                        <span className="max-w-[180px] sm:max-w-[200px] truncate text-xs sm:text-xs">{file.name}</span>
                         <button
                             type="button"
                             onClick={handleRemoveFile}
                             disabled={isLoading || isUploadingFiles}
-                            className="ml-1 hover:opacity-70 disabled:opacity-50"
+                            className="ml-1 hover:opacity-70 disabled:opacity-50 touch-manipulation min-w-[32px] min-h-[32px] flex items-center justify-center"
                             title="Remove file"
                         >
-                            <X className="h-3 w-3" />
+                            <X className="h-4 w-4 sm:h-3 sm:w-3" />
                         </button>
                     </div>
                 </div>
