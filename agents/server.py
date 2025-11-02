@@ -9,13 +9,20 @@ import uvicorn
 from anchorbrowser import Anchorbrowser
 from convex import ConvexClient
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 # Import agent functions
-from skyvern_agent import run_skyvern
 from browser_use_agent import run_browser_use
 
 
@@ -48,13 +55,13 @@ security = HTTPBearer()
 
 
 async def verify_api_key(
-    authorization: HTTPAuthorizationCredentials = Depends(security)
+    authorization: HTTPAuthorizationCredentials = Depends(security),
 ) -> None:
     """
     Verify that the provided API key matches the server's API key.
     """
     provided_key = authorization.credentials
-    
+
     if not provided_key or provided_key != AGENT_SERVER_API_KEY:
         raise HTTPException(
             status_code=401,
@@ -105,7 +112,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="Agent Server",
-    description="API for running browser automation agents (Skyvern, Browser-Use)",
+    description="API for running browser automation agents (Browser-Use)",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -275,118 +282,6 @@ def to_jsonable(value):
 
 
 # Background task functions
-async def run_skyvern_task(
-    agent_id: str,
-    session_id: str,
-    instruction: str,
-    cdp_url: str,
-    browser_session_id: str,
-    provider_model: str,
-):
-    """Run Skyvern agent in background and update Convex"""
-    try:
-        # Update status to running
-        print(f"🔄 Updating Skyvern agent {agent_id} status to running...")
-        try:
-            convex_client.mutation(
-                "mutations:updateAgentStatusFromBackend",
-                {"agentId": agent_id, "status": "running"},
-            )
-        except Exception as convex_error:
-            print(f"⚠️  Warning: Could not update status to running: {convex_error}")
-
-        # Run the agent
-        print(f"🤖 Starting Skyvern execution for: {instruction}")
-        result = await run_skyvern(
-            prompt=instruction,
-            cdp_url=cdp_url,
-            browser=anchor_browser,
-            session_id=browser_session_id,
-            provider_model=provider_model,
-        )
-
-        # Fetch and upload recording before deleting session
-        recording_url = None
-        try:
-            print(f"📹 Fetching recording for session {browser_session_id}...")
-            recording = anchor_browser.sessions.recordings.primary.get(
-                browser_session_id
-            )
-
-            # Get recording content as bytes
-            # Anchor Browser SDK returns recording with .content property
-            if hasattr(recording, "content"):
-                recording_content = recording.content
-            elif hasattr(recording, "read"):
-                recording_content = recording.read()
-            elif isinstance(recording, bytes):
-                recording_content = recording
-            else:
-                # Try to get bytes directly
-                recording_content = (
-                    bytes(recording) if hasattr(recording, "__bytes__") else None
-                )
-
-            if recording_content:
-                print(f"📦 Recording size: {len(recording_content)} bytes")
-                recording_url = await upload_recording_to_convex(
-                    agent_id, recording_content
-                )
-            else:
-                print("⚠️  Could not extract recording content")
-        except Exception as e:
-            print(f"⚠️  Failed to fetch/upload recording: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
-        # Delete browser session (can happen anytime, doesn't affect recording)
-        try:
-            anchor_browser.sessions.delete(browser_session_id)
-            print(f"🗑️  Deleted browser session {browser_session_id}")
-        except Exception as e:
-            print(f"⚠️  Failed to delete browser session: {str(e)}")
-
-        # Update with result
-        print("💾 Saving Skyvern results to Convex...")
-        convex_client.mutation(
-            "mutations:updateAgentResultFromBackend",
-            {
-                "agentId": agent_id,
-                "result": {
-                    "success": True,
-                    "data": str(result),
-                    "agent": "skyvern",
-                },
-                "status": "completed",
-            },
-        )
-
-        if recording_url:
-            print(f"✅ Recording saved: {recording_url}")
-
-        print(f"✅ Skyvern agent {agent_id} completed successfully")
-
-    except Exception as e:
-        print(f"❌ Skyvern agent {agent_id} failed: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
-
-        # Update with error
-        try:
-            convex_client.mutation(
-                "mutations:updateAgentStatusFromBackend",
-                {
-                    "agentId": agent_id,
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-        except Exception as convex_error:
-            print(f"❌ Failed to update error status in Convex: {convex_error}")
-
-
 async def run_browser_use_task(
     agent_id: str,
     session_id: str,
@@ -663,7 +558,7 @@ async def root():
         "status": "healthy",
         "service": "agent-server",
         "version": "0.1.0",
-        "agents": ["skyvern", "browser-use"],
+        "agents": ["browser-use"],
     }
 
 
@@ -684,26 +579,6 @@ async def health_convex():
             "convex_url": CONVEX_URL,
             "error": str(e),
         }
-
-
-@app.post("/agent/skyvern", response_model=AgentResponse)
-async def run_skyvern_agent(
-    request: AgentRequest,
-    background_tasks: BackgroundTasks,
-    _: None = Depends(verify_api_key),
-):
-    """
-    Start a Skyvern agent task in the background
-
-    NOTE: Skyvern is currently disabled due to dependency conflicts.
-    Use Browser-Use, Stagehand, or Smooth instead.
-
-    Returns immediately with session info and browser URL
-    """
-    raise HTTPException(
-        status_code=501,
-        detail="Skyvern agent is currently disabled due to dependency conflicts. Please use Browser-Use, Stagehand, or Smooth instead.",
-    )
 
 
 @app.post("/agent/browser-use", response_model=AgentResponse)
@@ -806,7 +681,7 @@ async def upload_file(
 ):
     """
     Upload a file to be used by browser-use agent tasks.
-    
+
     Saves the file to a temporary directory and returns the file path.
     The file will be cleaned up after the task completes (or can be cleaned up manually).
     """
@@ -814,26 +689,26 @@ async def upload_file(
         # Create temp directory if it doesn't exist
         temp_dir = os.path.join(tempfile.gettempdir(), "browser_arena_uploads")
         os.makedirs(temp_dir, exist_ok=True)
-        
+
         # Generate unique filename to avoid conflicts
         file_extension = os.path.splitext(file.filename)[1] if file.filename else ""
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = os.path.join(temp_dir, unique_filename)
-        
+
         # Save file
         with open(file_path, "wb") as f:
             content = await file.read()
             f.write(content)
-        
-        print(f"📎 File uploaded: {file.filename} -> {file_path} ({len(content)} bytes)")
-        
+
+        print(
+            f"📎 File uploaded: {file.filename} -> {file_path} ({len(content)} bytes)"
+        )
+
         return {"filePath": file_path, "filename": file.filename}
-    
+
     except Exception as e:
         print(f"❌ Error uploading file: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to upload file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
 
 if __name__ == "__main__":
