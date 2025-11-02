@@ -1,0 +1,39 @@
+name: Test Docker Build (No Push)
+
+on:
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (test only, no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agents
+          file: Dockerfile
+          push: false # Don't push, just test the build
+          platforms: linux/amd64
+          tags: kalil0321/agent-server:test
+          load: true # Load image for testing
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Summary
+        run: |
+          echo "### ✅ Docker Build Test Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The Docker image built successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "This confirms your Dockerfile is correct." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Next step: Add Docker Hub secrets and test the full workflow." >> $GITHUB_STEP_SUMMARY
+
