@@ -176,7 +176,7 @@ export function StagehandPanel({ agent }: StagehandPanelProps) {
                             </p>
                         </div>
                     )}
-                    {(
+                    {agentResult.usage && (
                         <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
                             <div className="flex items-center gap-2 mb-1">
                                 <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -185,7 +185,7 @@ export function StagehandPanel({ agent }: StagehandPanelProps) {
                                 <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Tokens</h4>
                             </div>
                             <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                {((agentResult.usage.input_tokens ?? 0) + (agentResult.usage.output_tokens ?? 0)).toLocaleString()} (${agentResult.usage.total_cost.toFixed(4)})
+                                {((agentResult.usage.input_tokens ?? 0) + (agentResult.usage.output_tokens ?? 0)).toLocaleString()} (${agentResult.usage.total_cost?.toFixed(4) ?? "0.0000"})
                             </p>
                         </div>
                     )}
