@@ -43,26 +43,25 @@ export function UserInfo() {
         setIsSubmitting(true);
         setError(null);
         try {
-            await authClient.signIn.email({
+            const { data, error } = await authClient.signIn.email({
                 email,
                 password,
             });
+
+            if (error) {
+                const errorMsg = error.message || "Sign in failed. Please check your credentials and try again.";
+                setError(errorMsg);
+                setIsSubmitting(false);
+                return;
+            }
+
             // Clear form on success
             setEmail("");
             setPassword("");
             setError(null);
         } catch (err: any) {
-            // Extract error message from Better Auth error response
-            let errorMsg = "Sign in failed. Please check your credentials and try again.";
-            if (err?.message) {
-                errorMsg = err.message;
-            } else if (err?.error?.message) {
-                errorMsg = err.error.message;
-            } else if (err?.data?.message) {
-                errorMsg = err.data.message;
-            } else if (typeof err === "string") {
-                errorMsg = err;
-            }
+            console.error("Sign in error:", err);
+            const errorMsg = err?.message || "Sign in failed. Please check your credentials and try again.";
             setError(errorMsg);
         } finally {
             setIsSubmitting(false);
@@ -73,28 +72,27 @@ export function UserInfo() {
         setIsSubmitting(true);
         setError(null);
         try {
-            await authClient.signUp.email({
+            const { data, error } = await authClient.signUp.email({
                 email,
                 password,
                 name,
             });
+
+            if (error) {
+                const errorMsg = error.message || "Sign up failed. Please check your information and try again.";
+                setError(errorMsg);
+                setIsSubmitting(false);
+                return;
+            }
+
             // Clear form on success
             setEmail("");
             setPassword("");
             setName("");
             setError(null);
         } catch (err: any) {
-            // Extract error message from Better Auth error response
-            let errorMsg = "Sign up failed. Please check your information and try again.";
-            if (err?.message) {
-                errorMsg = err.message;
-            } else if (err?.error?.message) {
-                errorMsg = err.error.message;
-            } else if (err?.data?.message) {
-                errorMsg = err.data.message;
-            } else if (typeof err === "string") {
-                errorMsg = err;
-            }
+            console.error("Sign up error:", err);
+            const errorMsg = err?.message || "Sign up failed. Please check your information and try again.";
             setError(errorMsg);
         } finally {
             setIsSubmitting(false);

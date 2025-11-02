@@ -654,10 +654,22 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         setIsSubmittingAuth(true);
         setAuthError(null);
         try {
-            await authClient.signIn.email({
+            const { data, error } = await authClient.signIn.email({
                 email,
                 password,
             });
+
+            if (error) {
+                const errorMsg = error.message || "Sign in failed. Please check your credentials and try again.";
+                setAuthError(errorMsg);
+                toast.error("Sign in failed", {
+                    description: errorMsg,
+                    duration: 5000,
+                });
+                setIsSubmittingAuth(false);
+                return;
+            }
+
             setIsLoginDialogOpen(false);
             setEmail("");
             setPassword("");
@@ -673,17 +685,8 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 duration: 3000,
             });
         } catch (err: any) {
-            // Extract error message from Better Auth error response
-            let errorMsg = "Sign in failed. Please check your credentials and try again.";
-            if (err?.message) {
-                errorMsg = err.message;
-            } else if (err?.error?.message) {
-                errorMsg = err.error.message;
-            } else if (err?.data?.message) {
-                errorMsg = err.data.message;
-            } else if (typeof err === "string") {
-                errorMsg = err;
-            }
+            console.error("Sign in error:", err);
+            const errorMsg = err?.message || "Sign in failed. Please check your credentials and try again.";
             setAuthError(errorMsg);
             toast.error("Sign in failed", {
                 description: errorMsg,
@@ -698,11 +701,23 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         setIsSubmittingAuth(true);
         setAuthError(null);
         try {
-            await authClient.signUp.email({
+            const { data, error } = await authClient.signUp.email({
                 email,
                 password,
                 name,
             });
+
+            if (error) {
+                const errorMsg = error.message || "Sign up failed. Please check your information and try again.";
+                setAuthError(errorMsg);
+                toast.error("Sign up failed", {
+                    description: errorMsg,
+                    duration: 5000,
+                });
+                setIsSubmittingAuth(false);
+                return;
+            }
+
             setIsLoginDialogOpen(false);
             setEmail("");
             setPassword("");
@@ -720,17 +735,8 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 description: "Welcome to The Browser Arena!"
             });
         } catch (err: any) {
-            // Extract error message from Better Auth error response
-            let errorMsg = "Sign up failed. Please check your information and try again.";
-            if (err?.message) {
-                errorMsg = err.message;
-            } else if (err?.error?.message) {
-                errorMsg = err.error.message;
-            } else if (err?.data?.message) {
-                errorMsg = err.data.message;
-            } else if (typeof err === "string") {
-                errorMsg = err;
-            }
+            console.error("Sign up error:", err);
+            const errorMsg = err?.message || "Sign up failed. Please check your information and try again.";
             setAuthError(errorMsg);
             toast.error("Sign up failed", {
                 description: errorMsg,
