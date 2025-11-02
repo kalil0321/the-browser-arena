@@ -31,9 +31,10 @@ import { AgentConfigDialog } from "./agent-config-dialog";
 import { getClientFingerprint } from "@/lib/fingerprint";
 
 type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
-type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
+type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4" | "openai/computer-use-preview" | "openai/computer-use-preview-2025-03-11" | "anthropic/claude-3-7-sonnet-latest" | "anthropic/claude-haiku-4-5-20251001" | "anthropic/claude-sonnet-4-20250514" | "anthropic/claude-sonnet-4-5-20250929" | "google/gemini-2.5-computer-use-preview-10-2025";
 
 interface AgentConfig {
+    id?: string; // Unique identifier for this agent instance
     agent: AgentType;
     model: ModelType;
     secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
@@ -44,7 +45,7 @@ interface AgentConfig {
 const AGENT_LABELS: Record<AgentType, string> = {
     "stagehand": "Stagehand",
     "smooth": "Smooth",
-    "stagehand-bb-cloud": "Stagehand Cloud",
+    "stagehand-bb-cloud": "Stagehand Cloud", // Commented out in UI for now
     "browser-use": "BU",
     "browser-use-cloud": "BU Cloud"
 };
@@ -52,9 +53,9 @@ const AGENT_LABELS: Record<AgentType, string> = {
 const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
     "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
     "browser-use-cloud": ["browser-use-llm", "gemini-flash-latest", "gpt-4.1", "o3", "claude-sonnet-4"],
-    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
+    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openai/computer-use-preview-2025-03-11", "anthropic/claude-3-7-sonnet-latest", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-5-20250929", "google/gemini-2.5-computer-use-preview-10-2025"],
     "smooth": [], // Smooth uses its own models
-    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"]
+    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openai/computer-use-preview-2025-03-11", "anthropic/claude-3-7-sonnet-latest", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-5-20250929", "google/gemini-2.5-computer-use-preview-10-2025"] // Commented out in UI for now
 };
 
 // Helper to detect provider from browser-use cloud model names
@@ -123,6 +124,9 @@ const getShortModelName = (model: string): string => {
     const { provider, modelName } = formatModelName(model);
     // Return short version of model name
     if (modelName.toLowerCase().includes("gemini")) {
+        if (modelName.toLowerCase().includes("computer-use")) {
+            return "Gemini CUA";
+        }
         if (modelName.toLowerCase().includes("pro")) {
             return "Gemini Pro";
         }
@@ -134,7 +138,22 @@ const getShortModelName = (model: string): string => {
     if (modelName.toLowerCase().includes("gpt") || modelName === "gpt-4.1") {
         return modelName;
     }
+    if (modelName.toLowerCase().includes("computer-use")) {
+        return "Computer Use";
+    }
     if (modelName.toLowerCase().includes("claude")) {
+        if (modelName === "claude-3-7-sonnet-latest") {
+            return "Claude 3.7 Sonnet CUA";
+        }
+        if (modelName === "claude-haiku-4-5-20251001") {
+            return "Claude Haiku CUA";
+        }
+        if (modelName === "claude-sonnet-4-20250514") {
+            return "Claude Sonnet 4 CUA";
+        }
+        if (modelName === "claude-sonnet-4-5-20250929") {
+            return "Claude Sonnet 4.5 CUA";
+        }
         if (modelName.toLowerCase().includes("sonnet")) {
             return "Claude Sonnet";
         }
@@ -199,8 +218,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
 
     // Agent configuration state
     const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([
-        { agent: "browser-use", model: "browser-use/bu-1.0" },
-        { agent: "smooth", model: "google/gemini-2.5-flash" }
+        { id: `agent-${Date.now()}`, agent: "browser-use", model: "browser-use/bu-1.0" }
     ]);
 
     // Privacy state
@@ -585,7 +603,8 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             return; // Max limit reached
         }
         const defaultModel = MODEL_OPTIONS[agent][0] || "google/gemini-2.5-flash";
-        setTempAgentConfigs([...tempAgentConfigs, { agent, model: defaultModel }]);
+        const newId = `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        setTempAgentConfigs([...tempAgentConfigs, { id: newId, agent, model: defaultModel }]);
     };
 
     const removeAgentInstance = (index: number) => {
@@ -616,11 +635,16 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     };
 
     const handlePropertiesSave = (updatedConfig: AgentConfig) => {
-        // Match by agent and model to update the correct instance
-        // If multiple instances have same agent+model, update the first one found
+        // Match by id first (if present), then fall back to agent and model
         let found = false;
         setAgentConfigs(agentConfigs.map(c => {
-            if (!found && c.agent === updatedConfig.agent && c.model === updatedConfig.model) {
+            // If both have ids and they match
+            if (updatedConfig.id && c.id && c.id === updatedConfig.id) {
+                found = true;
+                return updatedConfig;
+            }
+            // If no id is present, fall back to matching agent+model (only first match)
+            if (!updatedConfig.id && !found && c.agent === updatedConfig.agent && c.model === updatedConfig.model) {
                 found = true;
                 return updatedConfig;
             }
@@ -740,7 +764,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                     <button
                                         key={`${config.agent}-${index}-${config.model}`}
                                         type="button"
-                                        onClick={() => hasProperties && setPropertiesDialogAgent({ ...config })}
+                                        onClick={() => hasProperties && setPropertiesDialogAgent({ ...config, id: config.id || `agent-${index}-${Date.now()}` })}
                                         disabled={isLoading || !hasProperties}
                                         className={cn(
                                             "h-6 px-2 text-[10px] rounded-full transition-colors flex items-center gap-1 shrink-0",
@@ -786,7 +810,9 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             </DialogHeader>
                             <div className="py-3">
                                 <div className="space-y-4">
-                                    {(Object.keys(AGENT_LABELS) as AgentType[]).map((agentType) => {
+                                    {(Object.keys(AGENT_LABELS) as AgentType[])
+                                        .filter((agentType) => agentType !== "stagehand-bb-cloud") // Commented out: Stagehand Cloud
+                                        .map((agentType) => {
                                         const instances = getAgentInstances(agentType);
                                         const instanceCount = getAgentInstanceCount(agentType);
                                         const isDisabled = false; // All agents are now enabled

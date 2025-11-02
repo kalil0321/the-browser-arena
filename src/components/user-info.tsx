@@ -127,12 +127,12 @@ export function UserInfo() {
                     )}
                     <div className="flex flex-1 flex-col items-start overflow-hidden min-h-[32px] justify-center">
                         {user.name && (
-                            <span className="truncate text-xs font-medium">{user.name}</span>
+                            <span className="truncate text-xs font-medium">Kalil</span>
+
                         )}
                         {user.email && (
-                            <span className="truncate text-[10px] text-muted-foreground">
-                                {user.email}
-                            </span>
+                            // 
+                            <span className="truncate text-xs font-medium">The Browser Arena</span>
                         )}
                         {!user.name && !user.email && (
                             <span className="text-xs text-muted-foreground">User</span>
