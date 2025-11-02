@@ -7,9 +7,12 @@ export function AppThemeApplier() {
         const apply = () => {
             try {
                 const value = typeof window !== "undefined" ? localStorage.getItem("appTheme") : null;
-                if (value === "pro") {
+                const currentTheme = document.documentElement.getAttribute("data-theme");
+
+                // Only update DOM if value actually changed
+                if (value === "pro" && currentTheme !== "pro") {
                     document.documentElement.setAttribute("data-theme", "pro");
-                } else {
+                } else if (value !== "pro" && currentTheme === "pro") {
                     document.documentElement.removeAttribute("data-theme");
                 }
             } catch {

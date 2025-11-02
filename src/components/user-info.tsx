@@ -95,8 +95,8 @@ export function UserInfo() {
     const getTriggerContent = () => {
         if (isLoading) {
             return (
-                <Button variant="ghost" size="sm" className="w-full justify-start gap-2" disabled>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-auto min-h-[40px]" disabled>
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                     <span className="text-xs">Loading...</span>
                 </Button>
             );
@@ -104,8 +104,8 @@ export function UserInfo() {
 
         if (!isAuthenticated) {
             return (
-                <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
-                    <LogIn className="h-4 w-4" />
+                <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-auto min-h-[40px]">
+                    <LogIn className="h-4 w-4 shrink-0" />
                     <span className="text-xs">Sign In</span>
                 </Button>
             );
@@ -113,19 +113,19 @@ export function UserInfo() {
 
         if (user) {
             return (
-                <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
+                <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-auto min-h-[40px]">
                     {user.image ? (
                         <img
                             src={user.image}
                             alt={user.name || "User"}
-                            className="h-6 w-6 rounded-full"
+                            className="h-6 w-6 rounded-full shrink-0"
                         />
                     ) : (
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium shrink-0">
                             {getUserInitials()}
                         </div>
                     )}
-                    <div className="flex flex-1 flex-col items-start overflow-hidden">
+                    <div className="flex flex-1 flex-col items-start overflow-hidden min-h-[32px] justify-center">
                         {user.name && (
                             <span className="truncate text-xs font-medium">{user.name}</span>
                         )}
@@ -143,8 +143,8 @@ export function UserInfo() {
         }
 
         return (
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
-                <User className="h-4 w-4" />
+            <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-auto min-h-[40px]">
+                <User className="h-4 w-4 shrink-0" />
                 <span className="text-xs">No user data</span>
             </Button>
         );

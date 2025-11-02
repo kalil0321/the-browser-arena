@@ -25,6 +25,7 @@ export function LoadingDino() {
         { position: 90, yPosition: 15, speed: 0.25 }
     ]);
     const [score, setScore] = useState(0);
+    const [bestScore, setBestScore] = useState(0);
     const [groundOffset, setGroundOffset] = useState(0);
     const [legFrame, setLegFrame] = useState(0);
     const [gameOver, setGameOver] = useState(false);
@@ -33,6 +34,14 @@ export function LoadingDino() {
     const scoreRef = useRef(0);
     const obstacleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    // Load best score from localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem('dino-best-score');
+        if (saved) {
+            setBestScore(parseInt(saved, 10));
+        }
+    }, []);
+
     // Collision detection function
     const checkCollision = useCallback(() => {
         if (!gameContainerRef.current || obstacles.length === 0) return false;
@@ -40,15 +49,18 @@ export function LoadingDino() {
         const containerWidth = gameContainerRef.current.offsetWidth;
         const containerHeight = 256; // h-64 = 256px
 
+        // Hitbox padding for fairer gameplay (reduce visual size by this amount)
+        const hitboxPadding = 5;
+
         // Dino horizontal position - left-16 means left: 64px (16 * 4 = 64px based on Tailwind spacing)
-        const dinoLeftPx = 64;
-        const dinoWidth = 50;
+        const dinoLeftPx = 64 + hitboxPadding;
+        const dinoWidth = 50 - (hitboxPadding * 2);
         const dinoRightPx = dinoLeftPx + dinoWidth;
 
         // Dino vertical position
         const dinoBottomFromBottom = isJumping ? 120 : 64;
         const dinoHeight = isDucking ? 35 : 55;
-        const dinoTopPx = containerHeight - dinoBottomFromBottom - dinoHeight;
+        const dinoTopPx = containerHeight - dinoBottomFromBottom - dinoHeight + hitboxPadding;
         const dinoBottomPx = containerHeight - dinoBottomFromBottom;
 
         for (const obstacle of obstacles) {
@@ -56,14 +68,14 @@ export function LoadingDino() {
             // position: 100 means at right edge, position: 0 means at left edge
             const obstacleLeftPercent = obstacle.position;
             const obstacleWidth = obstacle.type === 'cactus' ? 30 : 40;
-            const obstacleLeftPx = (obstacleLeftPercent / 100) * containerWidth;
-            const obstacleRightPx = obstacleLeftPx + obstacleWidth;
+            const obstacleLeftPx = (obstacleLeftPercent / 100) * containerWidth + hitboxPadding;
+            const obstacleRightPx = obstacleLeftPx + obstacleWidth - (hitboxPadding * 2);
 
             // Obstacle vertical position
             // Cactus: bottom: 64px, Bird: bottom: 100px
             const obstacleBottomFromBottom = obstacle.type === 'bird' ? 100 : 64;
             const obstacleHeight = obstacle.type === 'cactus' ? 48 : 25;
-            const obstacleTopPx = containerHeight - obstacleBottomFromBottom - obstacleHeight;
+            const obstacleTopPx = containerHeight - obstacleBottomFromBottom - obstacleHeight + hitboxPadding;
             const obstacleBottomPx = containerHeight - obstacleBottomFromBottom;
 
             // AABB collision detection: check if bounding boxes overlap
@@ -150,6 +162,11 @@ export function LoadingDino() {
             // Check for collisions
             if (checkCollision()) {
                 setGameOver(true);
+                // Update best score if current score is higher
+                if (scoreRef.current > bestScore) {
+                    setBestScore(scoreRef.current);
+                    localStorage.setItem('dino-best-score', scoreRef.current.toString());
+                }
             }
         }, 50);
 
@@ -183,7 +200,7 @@ export function LoadingDino() {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
         };
-    }, [handleJump, handleDuck, checkCollision, obstacleSpeed, gameOver, resetGame]);
+    }, [handleJump, handleDuck, checkCollision, obstacleSpeed, gameOver, resetGame, bestScore]);
 
     // Handle obstacle spawning separately
     useEffect(() => {
@@ -237,11 +254,19 @@ export function LoadingDino() {
                                 Starting the agent...
                             </h3>
                         </div>
-                        <div className="text-right">
-                            <div className="text-3xl font-bold text-foreground tabular-nums">
-                                {score}
+                        <div className="flex items-center gap-6">
+                            <div className="text-right">
+                                <div className="text-3xl font-bold text-foreground tabular-nums">
+                                    {score}
+                                </div>
+                                <div className="text-xs text-muted-foreground">SCORE</div>
                             </div>
-                            <div className="text-xs text-muted-foreground">SCORE</div>
+                            <div className="text-right">
+                                <div className="text-2xl font-bold text-muted-foreground tabular-nums">
+                                    {bestScore}
+                                </div>
+                                <div className="text-xs text-muted-foreground">BEST</div>
+                            </div>
                         </div>
                     </div>
 
@@ -258,7 +283,7 @@ export function LoadingDino() {
                                 style={{
                                     left: `${cloud.position}%`,
                                     top: `${cloud.yPosition}%`,
-                                    transition: 'left 0.05s linear',
+                                    willChange: 'left',
                                 }}
                             >
                                 <svg width="50" height="20" viewBox="0 0 50 20" className="opacity-40">
@@ -292,6 +317,7 @@ export function LoadingDino() {
                                 transition: isJumping
                                     ? 'bottom 0.3s cubic-bezier(0.33, 1, 0.68, 1), height 0.1s ease'
                                     : 'bottom 0.2s cubic-bezier(0.6, -0.28, 0.74, 0.05), height 0.1s ease',
+                                willChange: 'bottom, height',
                             }}
                         >
                             <svg
@@ -357,10 +383,11 @@ export function LoadingDino() {
                         {obstacles.map((obstacle, index) => (
                             <div
                                 key={index}
-                                className="absolute transition-all duration-50"
+                                className="absolute"
                                 style={{
                                     left: `${obstacle.position}%`,
                                     bottom: obstacle.type === 'bird' ? '100px' : '64px',
+                                    willChange: 'left',
                                 }}
                             >
                                 {obstacle.type === 'cactus' ? (
@@ -396,6 +423,16 @@ export function LoadingDino() {
                                     <div className="text-xl text-white/90">
                                         Final Score: <span className="font-bold">{score}</span>
                                     </div>
+                                    {score === bestScore && score > 0 && (
+                                        <div className="text-lg text-yellow-400 font-bold animate-pulse">
+                                            New Best Score!
+                                        </div>
+                                    )}
+                                    {score < bestScore && (
+                                        <div className="text-sm text-white/70">
+                                            Best: <span className="font-bold">{bestScore}</span>
+                                        </div>
+                                    )}
                                     <div className="text-sm text-white/70 mt-2">
                                         Press SPACE or click to restart
                                     </div>

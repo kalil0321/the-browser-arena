@@ -7,6 +7,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { BrowserUseLogo } from "./logos/bu";
+import { StagehandLogo } from "./logos/stagehand";
 
 interface AgentPropertiesDialogProps {
     agent: {
@@ -41,7 +43,9 @@ export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentProper
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle className="capitalize">
+                    <DialogTitle className="capitalize flex items-center gap-2">
+                        {isBrowserUse && <BrowserUseLogo className="h-4 w-4" />}
+                        {isStagehand && <StagehandLogo className="h-4 w-4" />}
                         {agent.name} Properties
                     </DialogTitle>
                     <DialogDescription>
@@ -57,12 +61,12 @@ export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentProper
                                     Secrets Support
                                 </h4>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                    Browser Use agent supports secrets for secure credential management. 
+                                    Browser Use agent supports secrets for secure credential management.
                                     Secrets can be configured through environment variables or the Browser Use API.
                                 </p>
                                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                                     <p className="text-xs text-blue-900 dark:text-blue-100">
-                                        <strong>Note:</strong> Secrets are managed through the Browser Use API or 
+                                        <strong>Note:</strong> Secrets are managed through the Browser Use API or
                                         environment variables. No secrets are stored in this interface.
                                     </p>
                                 </div>
@@ -121,7 +125,7 @@ export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentProper
                                 </div>
                                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-3">
                                     <p className="text-xs text-blue-900 dark:text-blue-100">
-                                        <strong>Note:</strong> Currently, both thinking and execution use the same model. 
+                                        <strong>Note:</strong> Currently, both thinking and execution use the same model.
                                         Support for separate models is coming soon.
                                     </p>
                                 </div>

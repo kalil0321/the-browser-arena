@@ -17,17 +17,19 @@ import { ThemeSwitcher } from "./theme-switcher";
 import { HelpButton } from "./help-button";
 import { SettingsButton } from "@/components/settings-button";
 import { Separator } from "@/components/ui/separator";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { Trophy, Map } from "lucide-react";
+import { Trophy, Map, Plus } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
 import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getClientFingerprint } from "@/lib/fingerprint";
 
 const teams = [
     { id: "1", name: "Alpha Inc.", logo: IconSmall, plan: "Free" },
@@ -38,14 +40,105 @@ const teams = [
 export function DashboardSidebar() {
     const { state } = useSidebar();
     const isCollapsed = state === "collapsed";
-    const sessions = useQuery(api.queries.getUserSessions);
+    const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+    const [localStorageSessions, setLocalStorageSessions] = useState<Session[]>([]);
+    const [clientFingerprint, setClientFingerprint] = useState<string | null>(null);
+
+    // Get authenticated user sessions
+    const authSessions = useQuery(api.queries.getUserSessions, isAuthenticated ? {} : "skip");
+
+    // Get demo sessions from DB
+    const dbDemoSessions = useQuery(
+        api.queries.getDemoUserSessions,
+        !isAuthenticated && clientFingerprint ? { clientFingerprint } : "skip"
+    );
+
+    // Function to load sessions from localStorage
+    const loadLocalStorageSessions = useCallback(() => {
+        try {
+            const stored = localStorage.getItem("demo_sessions");
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                setLocalStorageSessions(parsed);
+            } else {
+                setLocalStorageSessions([]);
+            }
+        } catch (error) {
+            console.error("Failed to load sessions from localStorage:", error);
+            setLocalStorageSessions([]);
+        }
+    }, []);
+
+    // Function to sync sessions from DB to localStorage
+    const syncFromDatabase = useCallback(async () => {
+        try {
+            // Generate fingerprint if not available
+            let fingerprint = clientFingerprint;
+            if (!fingerprint) {
+                fingerprint = await getClientFingerprint();
+                setClientFingerprint(fingerprint);
+            }
+
+            // Wait for dbDemoSessions to be available if not already
+            if (dbDemoSessions === undefined) {
+                return;
+            }
+
+            if (dbDemoSessions && dbDemoSessions.length > 0) {
+                setLocalStorageSessions(dbDemoSessions);
+                // Store in localStorage
+                localStorage.setItem("demo_sessions", JSON.stringify(dbDemoSessions));
+            } else {
+                // Load from localStorage as fallback
+                loadLocalStorageSessions();
+            }
+        } catch (error) {
+            console.error("Failed to sync from database:", error);
+            // Fallback to localStorage
+            loadLocalStorageSessions();
+        }
+    }, [clientFingerprint, dbDemoSessions, loadLocalStorageSessions]);
+
+    // Generate fingerprint for unauthenticated users
+    useEffect(() => {
+        if (!isAuthLoading && !isAuthenticated) {
+            const generateFingerprint = async () => {
+                try {
+                    const fingerprint = await getClientFingerprint();
+                    setClientFingerprint(fingerprint);
+                } catch (error) {
+                    console.error("Failed to generate fingerprint:", error);
+                }
+            };
+            generateFingerprint();
+        }
+    }, [isAuthLoading, isAuthenticated]);
+
+    // Load sessions from localStorage on mount and when not authenticated
+    useEffect(() => {
+        if (!isAuthenticated) {
+            loadLocalStorageSessions();
+        }
+    }, [isAuthenticated, loadLocalStorageSessions]);
+
+    // Use authenticated sessions if logged in, otherwise use localStorage sessions
+    const sessions = isAuthenticated ? authSessions : localStorageSessions;
+
     const { resolvedTheme } = useTheme();
-    const [isProTheme, setIsProTheme] = useState(false);
+    const [isProTheme, setIsProTheme] = useState(() => {
+        // Initialize from DOM on mount
+        try {
+            return typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "pro";
+        } catch {
+            return false;
+        }
+    });
 
     useEffect(() => {
         const apply = () => {
             try {
-                setIsProTheme(document.documentElement.getAttribute("data-theme") === "pro");
+                const isPro = document.documentElement.getAttribute("data-theme") === "pro";
+                setIsProTheme(prev => prev !== isPro ? isPro : prev);
             } catch {
                 setIsProTheme(false);
             }
@@ -72,9 +165,9 @@ export function DashboardSidebar() {
                 )}
             >
                 <div className="flex items-center justify-between gap-2 w-full">
-                    <a href="/" className="flex items-center gap-2">
+                    <Link href="/" prefetch className="flex items-center gap-2">
                         <IconFull dark={!useWhiteLogo} width={80} height={60} />
-                    </a>
+                    </Link>
                     <motion.div
                         key={isCollapsed ? "header-collapsed" : "header-expanded"}
                         className={cn(
@@ -131,7 +224,36 @@ export function DashboardSidebar() {
                 </div>
 
                 {!isCollapsed && (
-                    <SessionsNav sessions={sessions} />
+                    (isAuthLoading || (isAuthenticated && authSessions === undefined)) ? (
+                        <div className="flex flex-col gap-3">
+                            <div className="px-2 py-1.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Sessions
+                                    </span>
+                                    <button
+                                        className="inline-flex items-center justify-center rounded-md p-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                                        title="New session"
+                                        onClick={() => window.location.href = '/'}
+                                    >
+                                        <Plus className="size-4" />
+                                    </button>
+                                </div>
+                            </div>
+                            <SidebarMenu className="px-2">
+                                {[1, 2, 3].map((i) => (
+                                    <SidebarMenuItem key={i} className="px-0">
+                                        <Skeleton className="h-9 w-full rounded-lg" />
+                                    </SidebarMenuItem>
+                                ))}
+                            </SidebarMenu>
+                        </div>
+                    ) : (
+                        <SessionsNav
+                            sessions={sessions}
+                            isDemo={!isAuthenticated}
+                        />
+                    )
                 )}
             </SidebarContent>
 

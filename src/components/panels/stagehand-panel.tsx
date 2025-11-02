@@ -93,9 +93,67 @@ export function StagehandPanel({ agent }: StagehandPanelProps) {
             {/* Message */}
             {agentResult.message && (
                 <div className="bg-gray-50 dark:bg-card rounded-lg p-4">
-                    <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Message</h4>
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Result</h4>
+                    <div className="font-default prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0">
+                        <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                                table: ({ children }) => (
+                                    <div className="overflow-x-auto -mx-2 my-4">
+                                        <div className="inline-block min-w-full align-middle px-2">
+                                            <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                                                <table className="min-w-full divide-y divide-gray-200 dark:divide-border bg-white dark:bg-card">
+                                                    {children}
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ),
+                                thead: ({ children }) => (
+                                    <thead className="bg-gray-50 dark:bg-muted">{children}</thead>
+                                ),
+                                th: ({ children }) => (
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                                        {children}
+                                    </th>
+                                ),
+                                td: ({ children }) => (
+                                    <td className="px-4 py-3 text-sm text-gray-800 dark:text-gray-200 whitespace-normal border-b border-gray-100 dark:border-gray-800">
+                                        {children}
+                                    </td>
+                                ),
+                                tbody: ({ children }) => (
+                                    <tbody className="bg-white dark:bg-card divide-y divide-gray-200 dark:divide-border">
+                                        {children}
+                                    </tbody>
+                                ),
+                                tr: ({ children }) => (
+                                    <tr className="hover:bg-gray-50 dark:hover:bg-muted/50 transition-colors">
+                                        {children}
+                                    </tr>
+                                ),
+                                p: ({ children }) => (
+                                    <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                        {children}
+                                    </p>
+                                ),
+                                ol: ({ children }) => (
+                                    <ol className="list-decimal list-inside text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                        {children}
+                                    </ol>
+                                ),
+                                ul: ({ children }) => (
+                                    <ul className="list-disc list-inside text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                        {children}
+                                    </ul>
+                                ),
+                                li: ({ children }) => (
+                                    <li className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed mb-3 last:mb-0">
+                                        {children}
+                                    </li>
+                                ),
+                            }}
+                        >
                             {agentResult.message.replace(/\\n/g, "\n")}
                         </ReactMarkdown>
                     </div>
@@ -114,11 +172,11 @@ export function StagehandPanel({ agent }: StagehandPanelProps) {
                                 <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration</h4>
                             </div>
                             <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                {(agentResult.duration.toFixed(1) - agentResult.usage.inference_time_ms / 1000).toFixed(1)}s + {(agentResult.usage.inference_time_ms / 1000).toFixed(1)}s = {agentResult.duration.toFixed(1)}s
+                                {agentResult.duration.toFixed(1)}s
                             </p>
                         </div>
                     )}
-                    {(
+                    {agentResult.usage && (
                         <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
                             <div className="flex items-center gap-2 mb-1">
                                 <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -127,20 +185,7 @@ export function StagehandPanel({ agent }: StagehandPanelProps) {
                                 <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Tokens</h4>
                             </div>
                             <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                {((agentResult.usage.input_tokens ?? 0) + (agentResult.usage.output_tokens ?? 0)).toLocaleString()}
-                            </p>
-                        </div>
-                    )}
-                    {agentResult.usage?.output_tokens !== undefined && agentResult.usage.output_tokens > 0 && (
-                        <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                </svg>
-                                <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Output Tokens</h4>
-                            </div>
-                            <p className="text-sm font-default font-semibold text-gray-900 dark:text-gray-100">
-                                {agentResult.usage.output_tokens.toLocaleString()}
+                                {((agentResult.usage.input_tokens ?? 0) + (agentResult.usage.output_tokens ?? 0)).toLocaleString()} (${agentResult.usage.total_cost?.toFixed(4) ?? "0.0000"})
                             </p>
                         </div>
                     )}

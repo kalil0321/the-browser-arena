@@ -628,3 +628,164 @@ export const addUsageCost = mutation({
         return { success: true };
     },
 });
+
+/**
+ * Demo mutations - for unauthenticated demo users
+ */
+
+/**
+ * Atomically claim a demo query slot for a device fingerprint.
+ * This prevents race conditions by checking the limit and incrementing usage
+ * in a single atomic transaction.
+ *
+ * @returns { allowed: true, usageId } if the demo query is permitted
+ * @returns { allowed: false, queriesUsed, maxQueries } if limit exceeded
+ */
+export const claimDemoQuerySlot = mutation({
+    args: {
+        deviceFingerprint: v.string(),
+        clientFingerprint: v.string(),
+        ipAddress: v.string(),
+        userAgent: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+
+        // First check: Look for existing usage by device fingerprint (primary check)
+        const existingByFingerprint = await ctx.db
+            .query("demoUsage")
+            .withIndex("by_fingerprint", (q) => q.eq("deviceFingerprint", args.deviceFingerprint))
+            .first();
+
+        if (existingByFingerprint) {
+            // Check if limit already exceeded for this fingerprint
+            if (existingByFingerprint.queriesUsed >= 1) {
+                return {
+                    allowed: false,
+                    queriesUsed: existingByFingerprint.queriesUsed,
+                    maxQueries: 1,
+                };
+            }
+
+            // Atomically increment usage
+            await ctx.db.patch(existingByFingerprint._id, {
+                queriesUsed: existingByFingerprint.queriesUsed + 1,
+                lastUsedAt: now,
+            });
+
+            return {
+                allowed: true,
+                usageId: existingByFingerprint._id,
+                queriesUsed: existingByFingerprint.queriesUsed + 1,
+                maxQueries: 1,
+            };
+        }
+
+        // Second check: IP-based rate limiting (defense in depth)
+        // This prevents bypassing fingerprint limits by spoofing cookies
+        // Only check if IP is not "unknown" (which happens when IP can't be determined)
+        if (args.ipAddress !== "unknown") {
+            const existingByIP = await ctx.db
+                .query("demoUsage")
+                .withIndex("by_ip", (q) => q.eq("ipAddress", args.ipAddress))
+                .first();
+
+            if (existingByIP && existingByIP.queriesUsed >= 1) {
+                // IP has already used a query, deny even with different fingerprint
+                return {
+                    allowed: false,
+                    queriesUsed: existingByIP.queriesUsed,
+                    maxQueries: 1,
+                };
+            }
+        }
+
+        // First usage - create new record with queriesUsed: 1
+        const usageId = await ctx.db.insert("demoUsage", {
+            deviceFingerprint: args.deviceFingerprint,
+            clientFingerprint: args.clientFingerprint,
+            ipAddress: args.ipAddress,
+            userAgent: args.userAgent,
+            queriesUsed: 1,
+            sessionIds: [],
+            firstUsedAt: now,
+            lastUsedAt: now,
+        });
+
+        return {
+            allowed: true,
+            usageId,
+            queriesUsed: 1,
+            maxQueries: 1,
+        };
+    },
+});
+
+/**
+ * Associate a session with a demo usage record
+ */
+export const associateDemoSession = mutation({
+    args: {
+        usageId: v.id("demoUsage"),
+        sessionId: v.id("sessions"),
+    },
+    handler: async (ctx, args) => {
+        const usage = await ctx.db.get(args.usageId);
+        if (!usage) {
+            throw new Error("Demo usage record not found");
+        }
+
+        await ctx.db.patch(args.usageId, {
+            sessionIds: [...usage.sessionIds, args.sessionId],
+        });
+    },
+});
+
+/**
+ * Create a demo session - no auth required
+ */
+export const createDemoSession = mutation({
+    args: {
+        instruction: v.string(),
+        browserData: v.optional(v.object({
+            sessionId: v.string(),
+            url: v.string(),
+        })),
+        agentName: v.optional(v.string()),
+        model: v.optional(v.string()),
+        isPrivate: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+
+        // Demo sessions use a special userId
+        const demoUserId = "demo-user";
+
+        const sessionId = await ctx.db.insert("sessions", {
+            userId: demoUserId,
+            instruction: args.instruction,
+            isPrivate: false, // Demo sessions are always public
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        // If browser data is provided, create the agent at the same time
+        let agentId = undefined;
+        if (args.browserData) {
+            agentId = await ctx.db.insert("agents", {
+                sessionId,
+                name: args.agentName ?? "stagehand",
+                model: args.model,
+                status: "running",
+                browser: {
+                    sessionId: args.browserData.sessionId,
+                    url: args.browserData.url,
+                },
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+
+        return { sessionId, agentId };
+    },
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, startTransition } from "react";
+import { useState, useRef, useEffect, startTransition, useMemo, useCallback, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useConvexAuth } from "convex/react";
 import { toast } from "sonner";
@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingDino } from "@/components/loading-dino";
+
+// Lazy load the LoadingDino component for better initial load performance
+const LoadingDino = lazy(() => import("@/components/loading-dino").then(mod => ({ default: mod.LoadingDino })));
 import { authClient } from "@/lib/auth/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -17,12 +19,16 @@ import { Bot, Sparkles, Settings, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { getApiKey } from "@/lib/api-keys";
+import { getApiKey, hasApiKey } from "@/lib/api-keys";
 import { Switch } from "@/components/ui/switch";
 import { OpenAI } from "@/components/logos/openai";
 import { GeminiLogo } from "@/components/logos/gemini";
 import { ClaudeLogo } from "@/components/logos/claude";
+import { BrowserUseLogo } from "@/components/logos/bu";
+import { SmoothLogo } from "@/components/logos/smooth";
+import { StagehandLogo } from "@/components/logos/stagehand";
 import { AgentConfigDialog } from "./agent-config-dialog";
+import { getClientFingerprint } from "@/lib/fingerprint";
 
 type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
 type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
@@ -62,7 +68,7 @@ const detectProviderFromModelName = (modelName: string): string => {
     if (modelName.startsWith("claude-")) {
         return "anthropic";
     }
-    if (modelName === "browser-use-llm") {
+    if (modelName === "browser-use-llm" || modelName === "bu-1.0") {
         return "browser-use";
     }
     return "";
@@ -105,6 +111,8 @@ const ProviderLogo: React.FC<{ provider: string; className?: string }> = ({ prov
             return <GeminiLogo className={cn("h-4 w-4", className)} />;
         case "anthropic":
             return <ClaudeLogo className={cn("h-4 w-4", className)} />;
+        case "browser-use":
+            return <BrowserUseLogo className={cn("h-4 w-4", className)} />;
         default:
             return <Bot className={cn("h-4 w-4 text-muted-foreground", className)} />;
     }
@@ -115,6 +123,7 @@ export interface ChatInputState {
     agentConfigs: AgentConfig[];
     hasSmoothApiKey: boolean;
     hasBrowserUseApiKey: boolean;
+    clientFingerprint?: string | null;
 }
 
 interface ChatInputProps {
@@ -133,6 +142,12 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
     const router = useRouter();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    // Device fingerprinting for demo mode
+    const [clientFingerprint, setClientFingerprint] = useState<string | null>(null);
+
+    // Store input when user hits demo limit to restore after signup
+    const [storedInputForDemo, setStoredInputForDemo] = useState<string | null>(null);
 
     // Get current user for API key access
     const user = useQuery(
@@ -163,25 +178,18 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     // Temporary state for dialog
     const [tempAgentConfigs, setTempAgentConfigs] = useState<AgentConfig[]>(agentConfigs);
 
-    // Check if user has API keys for privacy warnings
+    // Check if user has API keys for privacy warnings (use hasApiKey for synchronous check)
     useEffect(() => {
-        const checkApiKeys = async () => {
-            if (user?._id) {
-                try {
-                    const smoothKey = await getApiKey("smooth", user._id);
-                    setHasSmoothApiKey(!!smoothKey);
-
-                    const browserUseKey = await getApiKey("browser-use", user._id);
-                    setHasBrowserUseApiKey(!!browserUseKey);
-                } catch (error) {
-                    console.error("Failed to check API keys:", error);
-                }
-            } else {
-                setHasSmoothApiKey(false);
-                setHasBrowserUseApiKey(false);
-            }
-        };
-        checkApiKeys();
+        if (user?._id) {
+            // Use synchronous hasApiKey check instead of async getApiKey to avoid layout shift
+            const smoothKey = hasApiKey("smooth");
+            const browserUseKey = hasApiKey("browser-use");
+            setHasSmoothApiKey(smoothKey);
+            setHasBrowserUseApiKey(browserUseKey);
+        } else {
+            setHasSmoothApiKey(false);
+            setHasBrowserUseApiKey(false);
+        }
     }, [user?._id]);
 
     // Auto-resize textarea
@@ -192,20 +200,43 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         }
     }, [input]);
 
-    // Notify parent when agent selection changes
+    // Notify parent when agent selection changes - memoized to prevent unnecessary calls
+    const hasSmooth = useMemo(() => agentConfigs.some(c => c.agent === "smooth"), [agentConfigs]);
+    const hasBrowserUse = useMemo(() => agentConfigs.some(c => c.agent === "browser-use" || c.agent === "browser-use-cloud"), [agentConfigs]);
+
     useEffect(() => {
-        const hasSmooth = agentConfigs.some(c => c.agent === "smooth");
-        const hasBrowserUse = agentConfigs.some(c => c.agent === "browser-use" || c.agent === "browser-use-cloud");
         onAgentPresenceChange?.(hasSmooth, hasBrowserUse);
-    }, [agentConfigs, onAgentPresenceChange]);
+    }, [hasSmooth, hasBrowserUse, onAgentPresenceChange]);
+
+    // Generate device fingerprint on mount
+    useEffect(() => {
+        const generateFingerprint = async () => {
+            try {
+                const fingerprint = await getClientFingerprint();
+                console.log("[ChatInput] Generated client fingerprint:", fingerprint);
+                setClientFingerprint(fingerprint);
+            } catch (error) {
+                console.error("Failed to generate fingerprint:", error);
+            }
+        };
+        generateFingerprint();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (input.trim() && !isLoading && agentConfigs.length > 0) {
-            // Check if user is authenticated
+            // Check if user is authenticated - if not, try demo mode
             if (!isAuthenticated) {
-                setIsLoginDialogOpen(true);
-                return;
+                // Try demo mode if fingerprint is ready
+                if (clientFingerprint) {
+                    await handleDemoSubmit();
+                    return;
+                } else {
+                    toast.error("Loading... Please try again in a moment.", {
+                        duration: 3000,
+                    });
+                    return;
+                }
             }
 
             setIsLoading(true);
@@ -310,6 +341,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 // Use startTransition for better React 18 concurrent rendering
                 // and ensure navigation happens properly
                 startTransition(() => {
+                    setInput(""); // Clear input only on successful navigation
                     router.push(`/session/${sessionIdString}`);
                 });
             } catch (error) {
@@ -320,9 +352,112 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     description: "Please check your configuration and try again."
                 });
                 setIsLoading(false);
-            } finally {
-                setInput("");
+                // Don't clear input on error, let user retry
             }
+        }
+    };
+
+    const handleDemoSubmit = async () => {
+        setIsLoading(true);
+        try {
+            // Demo mode only supports one agent
+            if (agentConfigs.length !== 1) {
+                toast.error("Demo mode supports only one agent. Please select either Stagehand or Browser-Use.", {
+                    duration: 5000,
+                });
+                setIsLoading(false);
+                return;
+            }
+
+            const agent = agentConfigs[0];
+
+            // Demo mode only supports stagehand and browser-use (not cloud)
+            if (agent.agent !== "stagehand" && agent.agent !== "browser-use") {
+                toast.error("Demo mode only supports Stagehand or Browser-Use. Please select one of these.", {
+                    duration: 5000,
+                });
+                setIsLoading(false);
+                return;
+            }
+
+            // Call the demo endpoint
+            const response = await fetch("/api/agent/demo", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    instruction: input,
+                    agentType: agent.agent,
+                    model: agent.model,
+                    clientFingerprint: clientFingerprint,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error("Demo API Error:", response.status, errorData);
+
+                // Handle demo limit reached
+                if (response.status === 403 && errorData.error === "DEMO_LIMIT_REACHED") {
+                    setStoredInputForDemo(input); // Store the input for after signup
+                    setIsLoginDialogOpen(true);
+                    setIsLoading(false);
+                    return;
+                }
+
+                throw new Error(errorData.message || "Failed to create demo session");
+            }
+
+            const data = await response.json();
+
+            // Redirect to the session page
+            const sessionId = data.session?.id;
+            if (!sessionId) {
+                console.error("No session ID in response:", data);
+                throw new Error("Demo session created but no ID returned");
+            }
+
+            // Ensure sessionId is a string
+            const sessionIdString = String(sessionId);
+
+            // Store demo session in localStorage
+            try {
+                const currentInstruction = input;
+                const demoSession = {
+                    _id: sessionIdString,
+                    instruction: currentInstruction,
+                    userId: "demo-user",
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    _creationTime: Date.now(),
+                };
+                const existing = localStorage.getItem("demo_sessions");
+                const sessions = existing ? JSON.parse(existing) : [];
+                // Add to beginning and keep only last 10
+                const updated = [demoSession, ...sessions].slice(0, 10);
+                localStorage.setItem("demo_sessions", JSON.stringify(updated));
+            } catch (storageError) {
+                console.error("Failed to store demo session in localStorage:", storageError);
+            }
+
+            // Clear loading state before redirect
+            setIsLoading(false);
+
+            // Use startTransition for better React 18 concurrent rendering
+            startTransition(() => {
+                setInput(""); // Clear input only on successful navigation
+                router.push(`/demo/session/${sessionIdString}`);
+            });
+        } catch (error) {
+            console.error("Error submitting demo:", error);
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Demo failed: ${errorMessage}`, {
+                duration: 5000,
+                description: "Please try again or create an account for full access."
+            });
+            setIsLoading(false);
+            // Don't clear input on error, let user retry
         }
     };
 
@@ -337,6 +472,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             setIsLoginDialogOpen(false);
             setEmail("");
             setPassword("");
+
+            // Restore stored input if available
+            if (storedInputForDemo) {
+                setInput(storedInputForDemo);
+                setStoredInputForDemo(null);
+            }
+
             toast.success("Signed in successfully!", {
                 duration: 3000,
             });
@@ -365,6 +507,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             setEmail("");
             setPassword("");
             setName("");
+
+            // Restore stored input if available
+            if (storedInputForDemo) {
+                setInput(storedInputForDemo);
+                setStoredInputForDemo(null);
+            }
+
             toast.success("Account created successfully!", {
                 duration: 3000,
                 description: "Welcome to The Browser Arena!"
@@ -435,21 +584,31 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         }
     };
 
-    const chatInputState: ChatInputState = {
+    // Memoize chatInputState to prevent unnecessary re-renders
+    const chatInputState: ChatInputState = useMemo(() => ({
         isPrivate,
         agentConfigs,
         hasSmoothApiKey,
         hasBrowserUseApiKey,
-    };
+        clientFingerprint,
+    }), [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, clientFingerprint]);
 
     // Notify parent component whenever state changes
     useEffect(() => {
         onStateChange?.(chatInputState);
-    }, [isPrivate, agentConfigs, hasSmoothApiKey, hasBrowserUseApiKey, onStateChange]);
+    }, [chatInputState, onStateChange]);
 
     return (
         <>
-            {isLoading && <LoadingDino />}
+            {isLoading && (
+                <Suspense fallback={
+                    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md">
+                        <div className="text-lg text-foreground">Loading...</div>
+                    </div>
+                }>
+                    <LoadingDino />
+                </Suspense>
+            )}
             <div className="container mx-auto max-w-3xl px-4 font-mono text-white">
                 <div className="bg-background rounded-4xl w-full space-y-2 px-4 py-4">
                     <form
@@ -459,7 +618,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         <textarea
                             ref={textareaRef}
                             placeholder="Automate your tasks..."
-                            className="sm:text font-default relative w-full border-none bg-background pr-20 text-sm tracking-tight text-black focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
+                            className="sm:text font-default relative w-full border-none bg-background pr-20 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
@@ -602,11 +761,20 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                                                 <Label
                                                                     htmlFor={agentType}
                                                                     className={cn(
-                                                                        "text-[13px] font-medium cursor-pointer font-default",
+                                                                        "text-[13px] font-medium cursor-pointer font-default flex items-center gap-1.5",
                                                                         selected && "text-primary",
                                                                         (isDisabled || isMaxReached) && "cursor-not-allowed"
                                                                     )}
                                                                 >
+                                                                    {(agentType === "browser-use" || agentType === "browser-use-cloud") && (
+                                                                        <BrowserUseLogo className="h-3.5 w-3.5" />
+                                                                    )}
+                                                                    {agentType === "smooth" && (
+                                                                        <SmoothLogo className="h-3.5 w-3.5" />
+                                                                    )}
+                                                                    {(agentType === "stagehand" || agentType === "stagehand-bb-cloud") && (
+                                                                        <StagehandLogo className="h-3.5 w-3.5" />
+                                                                    )}
                                                                     {AGENT_LABELS[agentType]}
                                                                 </Label>
                                                                 {selected && MODEL_OPTIONS[agentType].length > 0 && (
@@ -721,7 +889,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             <DialogHeader>
                                 <DialogTitle>Sign In Required</DialogTitle>
                                 <DialogDescription>
-                                    Please sign in or create an account to submit a message.
+                                    Please sign in or create an account to submit a query.
                                 </DialogDescription>
                             </DialogHeader>
                             <Tabs defaultValue="signin" className="w-full">

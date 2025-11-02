@@ -24,7 +24,7 @@ export type Session = {
   updatedAt: number;
 };
 
-export function SessionsNav({ sessions }: { sessions?: Session[] }) {
+export function SessionsNav({ sessions, isDemo = false }: { sessions?: Session[]; isDemo?: boolean }) {
   const { isMobile } = useSidebar();
   const router = useRouter();
   const isEmpty = !sessions || sessions.length === 0;
@@ -40,6 +40,15 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
 
   const handleNewSession = () => {
     router.push("/");
+  };
+
+  // Determine session URL based on whether it's a demo session
+  const getSessionUrl = (session: Session) => {
+    // Check if it's a demo session (userId is "demo-user")
+    if (session.userId === "demo-user" || isDemo) {
+      return `/demo/session/${session._id}`;
+    }
+    return `/session/${session._id}`;
   };
 
   return (
@@ -85,7 +94,7 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
               <SidebarMenuButton tooltip={session.instruction} asChild>
                 <div className="flex items-center gap-1 group">
                   <Link
-                    href={`/session/${session._id}`}
+                    href={getSessionUrl(session)}
                     prefetch={true}
                     className={cn(
                       "flex items-center gap-2 rounded-lg py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors truncate flex-1"
@@ -94,13 +103,15 @@ export function SessionsNav({ sessions }: { sessions?: Session[] }) {
                     <MessageSquare className="size-4 shrink-0" />
                     <span className="truncate">{session.instruction}</span>
                   </Link>
-                  <button
-                    onClick={(e) => handleDelete(e, session._id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    title="Delete session"
-                  >
-                    <Trash2 className="size-3" />
-                  </button>
+                  {!isDemo && (
+                    <button
+                      onClick={(e) => handleDelete(e, session._id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      title="Delete session"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  )}
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { SidebarInset } from "@/components/ui/sidebar";
 import {
     Table,
@@ -16,6 +16,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { BrowserUseLogo } from "@/components/logos/bu";
+import { SmoothLogo } from "@/components/logos/smooth";
+import { StagehandLogo } from "@/components/logos/stagehand";
 import { useEffect, useMemo, useState } from "react";
 import {
     Select,
@@ -39,9 +42,12 @@ type SessionRow = {
 };
 
 export default function ArenaPage() {
-    const sessions = useQuery(api.queries.getAllSessions);
-    const agents = useQuery(api.queries.getAllAgents);
-    const stats = useQuery(api.queries.getArenaStats);
+    const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+
+    // Only query if authenticated
+    const sessions = useQuery(api.queries.getAllSessions, isAuthenticated ? {} : "skip");
+    const agents = useQuery(api.queries.getAllAgents, isAuthenticated ? {} : "skip");
+    const stats = useQuery(api.queries.getArenaStats, isAuthenticated ? {} : "skip");
 
     const [filterAgent, setFilterAgent] = useState<string>("all");
     const [filterModel, setFilterModel] = useState<string>("all");
@@ -98,6 +104,39 @@ export default function ArenaPage() {
     const formatDate = (timestamp: number) => {
         return new Date(timestamp).toLocaleString();
     };
+
+    // Show sign in prompt if not authenticated
+    if (!isAuthLoading && !isAuthenticated) {
+        return (
+            <SidebarInset className="flex items-center justify-center">
+                <div className="text-center max-w-md">
+                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                        Sign In Required
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Please sign in to view the arena and see all crowdsourced sessions, models, and agents.
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                        <Button asChild>
+                            <Link href="/">Go to Home</Link>
+                        </Button>
+                    </div>
+                </div>
+            </SidebarInset>
+        );
+    }
+
+    // Loading state while auth is being determined
+    if (isAuthLoading) {
+        return (
+            <SidebarInset className="flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-900 dark:border-gray-700 dark:border-t-gray-300 mx-auto"></div>
+                    <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+                </div>
+            </SidebarInset>
+        );
+    }
 
     return (
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -423,6 +462,15 @@ function SessionAgentsDisplay({
                         className={`size-1.5 rounded-full ${getStatusColor(agent.status)}`}
                         aria-hidden="true"
                     />
+                    {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
+                        <BrowserUseLogo className="h-3 w-3" />
+                    )}
+                    {agent.name === "smooth" && (
+                        <SmoothLogo className="h-3 w-3" />
+                    )}
+                    {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                        <StagehandLogo className="h-3 w-3" />
+                    )}
                     {agent.name}
                 </Badge>
             ))}

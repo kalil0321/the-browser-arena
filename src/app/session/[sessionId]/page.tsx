@@ -1,40 +1,59 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { useParams } from "next/navigation";
 import { SidebarInset } from "@/components/ui/sidebar";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { AgentPanel } from "@/components/agent-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { BrowserUseLogo } from "@/components/logos/bu";
+import { SmoothLogo } from "@/components/logos/smooth";
+import { StagehandLogo } from "@/components/logos/stagehand";
 
 export default function SessionPage() {
     const params = useParams();
-    const router = useRouter();
     const sessionId = params.sessionId as string;
     const sessionIdConvex = sessionId as any;
+    const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
 
     // View mode state: "grid" or "tabs"
     const [viewMode, setViewMode] = useState<"grid" | "tabs">("grid");
 
-    const session = useQuery(api.queries.getSession, {
-        sessionId: sessionIdConvex
-    });
+    const session = useQuery(
+        api.queries.getSession,
+        isAuthenticated ? { sessionId: sessionIdConvex } : "skip"
+    );
+    const agents = useQuery(
+        api.queries.getSessionAgents,
+        isAuthenticated ? { sessionId: sessionIdConvex } : "skip"
+    );
 
-    const agents = useQuery(api.queries.getSessionAgents, {
-        sessionId: sessionIdConvex
-    });
+    // Show proper error if not authenticated
+    if (!isAuthLoading && !isAuthenticated) {
+        return (
+            <SidebarInset className="flex items-center justify-center">
+                <div className="text-center max-w-md">
+                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                        Authentication Required
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        You must be logged in to view this session. Please sign in or check if this is a demo session.
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                        <Button asChild>
+                            <Link href="/">Go to Home</Link>
+                        </Button>
+                    </div>
+                </div>
+            </SidebarInset>
+        );
+    }
 
-    useEffect(() => {
-        if (session === null && session !== undefined) {
-            setTimeout(() => {
-                router.push("/");
-            }, 2000);
-        }
-    }, [session, router]);
-
-    if (session === undefined) {
+    // Loading state while auth is loading or queries are loading
+    if (isAuthLoading || (isAuthenticated && (session === undefined || agents === undefined))) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">
@@ -45,15 +64,28 @@ export default function SessionPage() {
         );
     }
 
-    if (session === null) {
+    // Session not found or not accessible
+    if (isAuthenticated && session === null) {
         return (
-            <SidebarInset className="flex items-center justify-center ">
-                <div className="text-center">
-                    <p className="text-gray-900 dark:text-gray-100 mb-2">Session not found</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Redirecting...</p>
+            <SidebarInset className="flex items-center justify-center">
+                <div className="text-center max-w-md">
+                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                        Session Not Found
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        This session doesn't exist or you don't have access to it. It may be private or belong to another user.
+                    </p>
+                    <Button asChild>
+                        <Link href="/">Go to Home</Link>
+                    </Button>
                 </div>
             </SidebarInset>
         );
+    }
+
+    // At this point, session must be defined (TypeScript assertion)
+    if (!session) {
+        return null;
     }
 
     // Determine grid layout based on number of agents
@@ -62,7 +94,8 @@ export default function SessionPage() {
         if (agents.length === 1) return "grid-cols-1";
         if (agents.length === 2) return "grid-cols-1 lg:grid-cols-2";
         if (agents.length === 3) return "grid-cols-1 lg:grid-cols-3";
-        return "grid-cols-1 lg:grid-cols-3"; // 4+ agents still use 3 columns
+        if (agents.length === 4) return "grid-cols-1 md:grid-cols-2"; // 2x2 grid for 4 agents
+        return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"; // 5+ agents use 2 columns on medium, 3 on large
     };
 
     // Show view mode toggle only when there are multiple agents
@@ -150,8 +183,22 @@ export default function SessionPage() {
                                 <TabsList className="w-full justify-start rounded-none border-b border-gray-200 dark:border-gray-800 dark:bg-black px-4 shrink-0">
                                     {agents.map((agent) => (
                                         <TabsTrigger key={agent._id} value={agent._id} className="capitalize text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:text-white data-[state=active]:underline">
-                                            <div className="flex items-center gap-2">
-                                                <span className="data-[state=active]:border-current transition-colors">{agent.name}</span>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
+                                                    <BrowserUseLogo className="h-4 w-4 shrink-0" />
+                                                )}
+                                                {agent.name === "smooth" && (
+                                                    <SmoothLogo className="h-4 w-4 shrink-0" />
+                                                )}
+                                                {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                                                    <StagehandLogo className="h-4 w-4 shrink-0" />
+                                                )}
+                                                <span className="data-[state=active]:border-current transition-colors truncate max-w-[120px]" title={agent.name}>
+                                                    {agent.name === "browser-use-cloud" ? "BU Cloud" :
+                                                        agent.name === "stagehand-bb-cloud" ? "SH BB Cloud" :
+                                                            agent.name === "stagehand-cloud" ? "SH Cloud" :
+                                                                agent.name}
+                                                </span>
                                                 {agent.status === "completed" && (
                                                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
