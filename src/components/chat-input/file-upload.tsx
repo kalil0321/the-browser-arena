@@ -94,7 +94,7 @@ export function FileUpload({
             onDrop={handleDrop}
         >
             {children}
-            
+
             {/* File display (single file) */}
             {file && (
                 <div className="flex flex-wrap gap-2 mb-2">

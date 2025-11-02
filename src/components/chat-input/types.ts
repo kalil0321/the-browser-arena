@@ -1,22 +1,22 @@
 export type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
 
-export type ModelType = 
-    | "google/gemini-2.5-flash" 
-    | "google/gemini-2.5-pro" 
-    | "openai/gpt-4.1" 
-    | "anthropic/claude-haiku-4.5" 
-    | "browser-use/bu-1.0" 
-    | "browser-use-llm" 
-    | "gemini-flash-latest" 
-    | "gpt-4.1" 
-    | "o3" 
-    | "claude-sonnet-4" 
-    | "openai/computer-use-preview" 
-    | "openai/computer-use-preview-2025-03-11" 
-    | "anthropic/claude-3-7-sonnet-latest" 
-    | "anthropic/claude-haiku-4-5-20251001" 
-    | "anthropic/claude-sonnet-4-20250514" 
-    | "anthropic/claude-sonnet-4-5-20250929" 
+export type ModelType =
+    | "google/gemini-2.5-flash"
+    | "google/gemini-2.5-pro"
+    | "openai/gpt-4.1"
+    | "anthropic/claude-haiku-4.5"
+    | "browser-use/bu-1.0"
+    | "browser-use-llm"
+    | "gemini-flash-latest"
+    | "gpt-4.1"
+    | "o3"
+    | "claude-sonnet-4"
+    | "openai/computer-use-preview"
+    | "openai/computer-use-preview-2025-03-11"
+    | "anthropic/claude-3-7-sonnet-latest"
+    | "anthropic/claude-haiku-4-5-20251001"
+    | "anthropic/claude-sonnet-4-20250514"
+    | "anthropic/claude-sonnet-4-5-20250929"
     | "google/gemini-2.5-computer-use-preview-10-2025";
 
 export interface AgentConfig {
