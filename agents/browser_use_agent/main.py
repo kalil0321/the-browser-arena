@@ -10,6 +10,7 @@ from anchorbrowser import Anchorbrowser
 import os
 import time
 from typing import Dict, Optional
+from .tools import tools
 
 
 def parse_provider_model(provider_model: str):
@@ -36,7 +37,9 @@ def get_llm(provider: str, model: str, user_api_keys: Dict = None):
     provider_lower = provider.lower()
 
     if provider_lower == "browser-use":
-        api_key = user_api_keys.get("browser_use_api_key") or os.getenv("BROWSER_USE_API_KEY")
+        api_key = user_api_keys.get("browser_use_api_key") or os.getenv(
+            "BROWSER_USE_API_KEY"
+        )
         if api_key:
             return ChatBrowserUse(api_key=api_key)
         # Fallback without explicit api_key if not provided
@@ -55,14 +58,18 @@ def get_llm(provider: str, model: str, user_api_keys: Dict = None):
         return ChatGoogle(model=model, api_key=api_key)
 
     if provider_lower == "anthropic":
-        api_key = user_api_keys.get("anthropic_api_key") or os.getenv("ANTHROPIC_API_KEY")
+        api_key = user_api_keys.get("anthropic_api_key") or os.getenv(
+            "ANTHROPIC_API_KEY"
+        )
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
         return ChatAnthropic(model=model, api_key=api_key)
 
     # Default to browser-use
-    api_key = user_api_keys.get("browser_use_api_key") or os.getenv("BROWSER_USE_API_KEY")
+    api_key = user_api_keys.get("browser_use_api_key") or os.getenv(
+        "BROWSER_USE_API_KEY"
+    )
     if api_key:
         return ChatBrowserUse(api_key=api_key)
     return ChatBrowserUse()
@@ -79,6 +86,7 @@ async def run_browser_use(
     google_api_key: str = None,
     anthropic_api_key: str = None,
     browser_use_api_key: str = None,
+    file_path: Optional[str] = None,
 ):
     """
     Run Browser-Use agent with the given prompt
@@ -94,6 +102,7 @@ async def run_browser_use(
         google_api_key: Optional user-provided Google API key
         anthropic_api_key: Optional user-provided Anthropic API key
         browser_use_api_key: Optional user-provided Browser-Use API key
+        file_path: Optional path to uploaded file to make available to the agent
 
     Returns:
         Tuple of (Browser-Use agent result, usage summary, timings dict)
@@ -123,6 +132,18 @@ async def run_browser_use(
     timings["browser_initialization"] = time.time() - browser_start
     print(f"⏱️  Browser initialization: {timings['browser_initialization']:.2f}s")
 
+    # Prepare available file paths if file was uploaded
+    available_file_paths = []
+    if file_path:
+        # Verify file exists
+        if os.path.exists(file_path):
+            available_file_paths = [file_path]
+            print(f"📎 File available for agent: {file_path}")
+        else:
+            print(
+                f"⚠️  Warning: File path provided but file does not exist: {file_path}"
+            )
+
     # Time Agent initialization
     agent_start = time.time()
     agent = Agent(
@@ -131,6 +152,8 @@ async def run_browser_use(
         browser=automation_browser,
         calculate_cost=True,
         sensitive_data=secrets,
+        tools=tools,
+        available_file_paths=available_file_paths if available_file_paths else None,
     )
     timings["agent_initialization"] = time.time() - agent_start
     print(f"⏱️  Agent initialization: {timings['agent_initialization']:.2f}s")

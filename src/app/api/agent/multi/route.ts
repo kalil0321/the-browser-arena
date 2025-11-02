@@ -29,7 +29,10 @@ export async function POST(request: NextRequest) {
             googleApiKey,
             anthropicApiKey,
             browserUseApiKey,
-            isPrivate
+            isPrivate,
+            smoothFileIds,
+            browserUseFilePath,
+            stagehandFileData
         } = await request.json() as {
             instruction: string;
             agents: AgentConfig[];
@@ -39,6 +42,9 @@ export async function POST(request: NextRequest) {
             anthropicApiKey?: string;
             browserUseApiKey?: string;
             isPrivate?: boolean;
+            smoothFileIds?: string[];
+            browserUseFilePath?: string;
+            stagehandFileData?: { name: string; data: string };
         };
 
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
@@ -141,6 +147,7 @@ export async function POST(request: NextRequest) {
                             task: instruction,
                             sessionId: dbSessionId, // Pass the shared session ID
                             apiKey: smoothApiKey, // Pass user's API key if provided
+                            ...(smoothFileIds && smoothFileIds.length > 0 ? { fileIds: smoothFileIds } : {}),
                         };
                         break;
                     case "stagehand-bb-cloud":
@@ -180,7 +187,8 @@ export async function POST(request: NextRequest) {
                                 browserSessionId,
                                 cdpUrl,
                                 liveViewUrl,
-                            } : {})
+                            } : {}),
+                            ...(browserUseFilePath ? { filePath: browserUseFilePath } : {}),
                         };
                         break;
                     case "browser-use-cloud":
@@ -208,6 +216,7 @@ export async function POST(request: NextRequest) {
                             anthropicApiKey,
                             ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
                             ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
+                            ...(stagehandFileData ? { fileData: stagehandFileData } : {}),
                         };
                         break;
                     default:

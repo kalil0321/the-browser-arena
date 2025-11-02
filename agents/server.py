@@ -1,4 +1,6 @@
 import os
+import tempfile
+import uuid
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
 import aiohttp
@@ -7,7 +9,7 @@ import uvicorn
 from anchorbrowser import Anchorbrowser
 from convex import ConvexClient
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -55,6 +57,7 @@ class AgentRequest(BaseModel):
     anthropicApiKey: Optional[str] = None
     browserUseApiKey: Optional[str] = None
     secrets: Optional[Dict[str, str]] = None
+    filePath: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -372,6 +375,7 @@ async def run_browser_use_task(
     google_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
     browser_use_api_key: Optional[str] = None,
+    file_path: Optional[str] = None,
 ):
     """Run Browser-Use agent in background and update Convex"""
     try:
@@ -392,6 +396,9 @@ async def run_browser_use_task(
                 "🔐 Passing secrets to Browser-Use agent:",
                 {"keys": list(secrets.keys()), "count": len(secrets)},
             )
+        if file_path:
+            print(f"📎 File provided for browser-use agent: {file_path}")
+
         result, usage, timings = await run_browser_use(
             prompt=instruction,
             cdp_url=cdp_url,
@@ -403,6 +410,7 @@ async def run_browser_use_task(
             google_api_key=google_api_key,
             anthropic_api_key=anthropic_api_key,
             browser_use_api_key=browser_use_api_key,
+            file_path=file_path,
         )
 
         # Log timing information
@@ -745,6 +753,7 @@ async def run_browser_use_agent(
             google_api_key=request.googleApiKey,
             anthropic_api_key=request.anthropicApiKey,
             browser_use_api_key=request.browserUseApiKey,
+            file_path=request.filePath,
         )
 
         return AgentResponse(
@@ -757,6 +766,40 @@ async def run_browser_use_agent(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to start Browser-Use agent: {str(e)}"
+        )
+
+
+@app.post("/upload-file")
+async def upload_file(file: UploadFile = File(...)):
+    """
+    Upload a file to be used by browser-use agent tasks.
+    
+    Saves the file to a temporary directory and returns the file path.
+    The file will be cleaned up after the task completes (or can be cleaned up manually).
+    """
+    try:
+        # Create temp directory if it doesn't exist
+        temp_dir = os.path.join(tempfile.gettempdir(), "browser_arena_uploads")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Generate unique filename to avoid conflicts
+        file_extension = os.path.splitext(file.filename)[1] if file.filename else ""
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(temp_dir, unique_filename)
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        print(f"📎 File uploaded: {file.filename} -> {file_path} ({len(content)} bytes)")
+        
+        return {"filePath": file_path, "filename": file.filename}
+    
+    except Exception as e:
+        print(f"❌ Error uploading file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to upload file: {str(e)}"
         )
 
 

@@ -5,6 +5,10 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { missingKey, serverMisconfigured, unauthorized, badRequest, providerUnavailable } from "@/lib/http-errors";
+import { tool } from "ai";
+import { z } from "zod";
+
+export const runtime = "nodejs"
 
 // Initialize the client
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
@@ -108,7 +112,7 @@ function computeCost(model: string | undefined, usage: any): number {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, thinkingModel, executionModel } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, thinkingModel, executionModel, fileData } = await request.json();
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
@@ -212,6 +216,11 @@ export async function POST(request: NextRequest) {
         after(async () => {
             const startTime = Date.now();
             try {
+                // Log file data if provided (no handling needed per requirements)
+                if (fileData) {
+                    console.log(`📎 File provided for stagehand: ${fileData.name} (${fileData.data.length} bytes base64)`);
+                }
+
                 const modelString = model ?? "google/gemini-2.5-flash";
                 const userKeys = {
                     openai: openaiApiKey,
@@ -229,7 +238,13 @@ export async function POST(request: NextRequest) {
                     },
                 });
 
-                await stagehand.init();
+                try {
+                    await stagehand.init();
+                    console.log("✅ Stagehand initialized successfully");
+                } catch (initError) {
+                    console.error("❌ Stagehand initialization failed:", initError);
+                    throw initError;
+                }
 
                 // Determine planning model (thinking model) - use thinkingModel if provided, otherwise fallback to model
                 const planningModel = thinkingModel || modelString;
@@ -242,7 +257,40 @@ export async function POST(request: NextRequest) {
                     // cua: true,
                     model: planningModel,
                     executionModel: executionModelString,
-                    // TODO: add tools later
+                    tools: {
+                        uploadFile: tool({
+                            description: "Upload a file to the browser",
+                            inputSchema: z.object({
+                                locator: z.string(),
+                            }),
+                            execute: async ({ locator }) => {
+                                const page = stagehand.context.pages()[0];
+                                if (!page) {
+                                    return {
+                                        error: "No page found",
+                                    };
+                                }
+
+                                const fileInput = await page.locator(locator).first();
+                                if (!fileInput) {
+                                    return {
+                                        error: `No file input element found with locator: ${locator}`,
+                                    };
+                                }
+
+                                await fileInput.setInputFiles({
+                                    name: fileData.name,
+                                    mimeType: fileData.mimeType,
+                                    buffer: fileData.data,
+                                });
+
+                                return {
+                                    content: `Successfully uploaded file "${fileData.name}" to element: ${locator}`,
+                                };
+                            },
+                        }),
+                    },
+                    systemPrompt: `You are a helpful assistant. You also have the ability to upload files to the browser using the uploadFile tool.`,
                 });
 
                 const { message, actions, usage, success, completed, metadata } = await agent.execute({
@@ -254,7 +302,10 @@ export async function POST(request: NextRequest) {
                 const endTime = Date.now();
                 const duration = (endTime - startTime) / 1000; // Convert to seconds
 
-                // Get recording before deleting
+                // Delete browser session
+                await browser.sessions.delete(browserSessionId);
+
+                // Get recording after deleting
                 let recordingUrl = "";
                 try {
                     const recording = await browser.sessions.recordings.primary.get(browserSessionId);
@@ -265,9 +316,6 @@ export async function POST(request: NextRequest) {
                 } catch (recordingError) {
                     console.error("Failed to get recording:", recordingError);
                 }
-
-                // Delete browser session
-                await browser.sessions.delete(browserSessionId);
 
                 const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
                 const llmCost = computeCost(model, usageData);
@@ -293,6 +341,28 @@ export async function POST(request: NextRequest) {
                     metadata,
                 }
 
+                console.log(payload)
+                // Check if payload is less than 1MB
+                if (JSON.stringify(payload).length > 1024 * 1024) {
+                    console.error("❌ Payload is too large:", JSON.stringify(payload).length);
+                    await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
+                        agentId,
+                        result: {
+                            usage: payload.usage,
+                            cost: payload.cost,
+                            duration: payload.duration,
+                            message: payload.message,
+                            agent: payload.agent,
+                            actions: [], // We don't want to save the actions
+                            success: payload.success,
+                            completed: payload.completed,
+                            metadata: payload.metadata,
+                        },
+                        status: success ? "completed" as const : "failed" as const,
+                    });
+                    return;
+                }
+
                 // Save result to Convex database using backend mutation (no auth required)
                 await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
                     agentId,
@@ -300,13 +370,7 @@ export async function POST(request: NextRequest) {
                     status: success ? "completed" as const : "failed" as const,
                 });
 
-                // Save recording URL if available
-                if (recordingUrl) {
-                    await convexBackend.mutation(api.mutations.updateAgentRecordingUrlFromBackend, {
-                        agentId,
-                        recordingUrl,
-                    });
-                }
+                // TODO: handle recording later.
 
                 console.log(JSON.stringify(payload, null, 2));
             } catch (error) {

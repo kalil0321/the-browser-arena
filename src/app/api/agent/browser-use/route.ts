@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
             googleApiKey,
             anthropicApiKey,
             browserUseApiKey,
+            filePath,
         } = await request.json();
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
                 ...(anthropicApiKey ? { anthropicApiKey } : {}),
                 ...(browserUseApiKey ? { browserUseApiKey } : {}),
                 userId: userId,
+                ...(filePath ? { filePath } : {}),
             }),
         });
 

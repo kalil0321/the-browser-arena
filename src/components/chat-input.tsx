@@ -15,7 +15,7 @@ const LoadingDino = lazy(() => import("@/components/loading-dino").then(mod => (
 import { authClient } from "@/lib/auth/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, Settings, CheckCircle2, XCircle, Plus, Trash2 } from "lucide-react";
+import { Bot, Sparkles, Settings, CheckCircle2, XCircle, Plus, Trash2, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -228,6 +228,14 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const [hasSmoothApiKey, setHasSmoothApiKey] = useState(false);
     const [hasBrowserUseApiKey, setHasBrowserUseApiKey] = useState(false);
 
+    // File upload state (single file only)
+    const [file, setFile] = useState<File | null>(null);
+    const [uploadedFileIds, setUploadedFileIds] = useState<Record<string, string>>({}); // Map file name to Smooth file ID
+    const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null); // For browser-use: server file path
+    const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     // Temporary state for dialog
     const [tempAgentConfigs, setTempAgentConfigs] = useState<AgentConfig[]>(agentConfigs);
 
@@ -318,14 +326,45 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 let anthropicApiKey: string | undefined = undefined;
                 let browserUseApiKey: string | undefined = undefined;
 
+                // Check if Smooth agent is selected
+                const hasSmoothAgent = agentConfigs.some(c => c.agent === "smooth");
+
                 if (user?._id) {
                     try {
                         // Get Smooth API key if Smooth agent is selected
-                        if (agentConfigs.some(c => c.agent === "smooth")) {
+                        if (hasSmoothAgent) {
                             const key = await getApiKey("smooth", user._id);
                             if (key) {
                                 smoothApiKey = key;
                                 console.log("?? Found user's Smooth API key in localStorage");
+                            }
+
+                            // Upload file to Smooth API if file is selected
+                            if (file) {
+                                if (!smoothApiKey) {
+                                    toast.error("Smooth API key required to upload files", {
+                                        duration: 5000,
+                                    });
+                                    setIsLoading(false);
+                                    return;
+                                }
+
+                                setIsUploadingFiles(true);
+                                try {
+                                    const uploadedIds = await uploadFilesToSmooth([file], smoothApiKey);
+                                    setUploadedFileIds(uploadedIds);
+                                    console.log("✅ File uploaded successfully to Smooth:", uploadedIds);
+                                } catch (error) {
+                                    console.error("❌ Error uploading file to Smooth:", error);
+                                    toast.error(`Failed to upload file: ${error instanceof Error ? error.message : "Unknown error"}`, {
+                                        duration: 5000,
+                                    });
+                                    setIsLoading(false);
+                                    setIsUploadingFiles(false);
+                                    return;
+                                } finally {
+                                    setIsUploadingFiles(false);
+                                }
                             }
                         }
 
@@ -365,6 +404,66 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     }
                 }
 
+                // Prepare file data for different agents
+                const hasBrowserUseAgent = agentConfigs.some(c => c.agent === "browser-use");
+                const hasStagehandAgent = agentConfigs.some(c => c.agent === "stagehand");
+
+                // For Smooth: prepare file IDs
+                const smoothFileIds = hasSmoothAgent && file
+                    ? (uploadedFileIds[file.name] ? [uploadedFileIds[file.name]] : [])
+                    : [];
+
+                // For browser-use and stagehand: upload file if selected
+                let browserUseFilePath: string | null = null;
+                let stagehandFileData: { name: string; data: string } | null = null;
+
+                if (file && (hasBrowserUseAgent || hasStagehandAgent)) {
+                    setIsUploadingFiles(true);
+                    try {
+                        if (hasBrowserUseAgent) {
+                            // Upload file to Python server for browser-use via Next.js API route
+                            const formData = new FormData();
+                            formData.append('file', file);
+
+                            const uploadResponse = await fetch('/api/agent/upload-file', {
+                                method: 'POST',
+                                body: formData,
+                            });
+
+                            if (!uploadResponse.ok) {
+                                const errorData = await uploadResponse.json().catch(() => ({}));
+                                throw new Error(errorData.error || `Failed to upload file to browser-use server: ${uploadResponse.statusText}`);
+                            }
+
+                            const uploadData = await uploadResponse.json();
+                            browserUseFilePath = uploadData.filePath;
+                            setUploadedFilePath(browserUseFilePath);
+                            console.log("✅ File uploaded to browser-use server:", browserUseFilePath);
+                        }
+
+                        if (hasStagehandAgent) {
+                            // Convert file to base64 for stagehand
+                            const arrayBuffer = await file.arrayBuffer();
+                            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                            stagehandFileData = {
+                                name: file.name,
+                                data: base64,
+                            };
+                            console.log("✅ File prepared for stagehand:", file.name);
+                        }
+                    } catch (error) {
+                        console.error("❌ Error preparing file:", error);
+                        toast.error(`Failed to prepare file: ${error instanceof Error ? error.message : "Unknown error"}`, {
+                            duration: 5000,
+                        });
+                        setIsLoading(false);
+                        setIsUploadingFiles(false);
+                        return;
+                    } finally {
+                        setIsUploadingFiles(false);
+                    }
+                }
+
                 // Call the multi-agent endpoint
                 const response = await fetch("/api/agent/multi", {
                     method: "POST",
@@ -380,6 +479,9 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         anthropicApiKey: anthropicApiKey,
                         browserUseApiKey: browserUseApiKey,
                         isPrivate: isPrivate,
+                        smoothFileIds: smoothFileIds.length > 0 ? smoothFileIds : undefined,
+                        browserUseFilePath: browserUseFilePath || undefined,
+                        stagehandFileData: stagehandFileData || undefined,
                     }),
                 });
 
@@ -410,6 +512,9 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 // and ensure navigation happens properly
                 startTransition(() => {
                     setInput(""); // Clear input only on successful navigation
+                    setFile(null); // Clear file after successful submission
+                    setUploadedFileIds({}); // Clear uploaded file IDs
+                    setUploadedFilePath(null); // Clear browser-use file path
                     router.push(`/session/${sessionIdString}`);
                 });
             } catch (error) {
@@ -675,6 +780,113 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         }
     };
 
+    // File upload handlers (single file only)
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selectedFile = e.target.files?.[0];
+        if (selectedFile) {
+            setFile(selectedFile);
+        }
+        // Reset input so same file can be selected again
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const handleRemoveFile = () => {
+        const fileName = file?.name;
+        if (fileName) {
+            // Remove from uploadedFileIds if file was uploaded
+            setUploadedFileIds(prevIds => {
+                const newIds = { ...prevIds };
+                delete newIds[fileName];
+                return newIds;
+            });
+        }
+        setFile(null);
+        setUploadedFilePath(null);
+    };
+
+    // Upload file to Smooth API (single file)
+    const uploadFilesToSmooth = async (filesToUpload: File[], apiKey: string): Promise<Record<string, string>> => {
+        const fileIds: Record<string, string> = {};
+        const smoothFileUrl = 'https://api.smooth.sh/api/v1/file';
+
+        // Only process first file (single file upload)
+        const file = filesToUpload[0];
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('name', file.name);
+            formData.append('purpose', `Uploaded via Browser Arena: ${file.name}`);
+
+            const response = await fetch(smoothFileUrl, {
+                method: 'POST',
+                headers: {
+                    'apikey': apiKey,
+                },
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Failed to upload ${file.name}`);
+            }
+
+            const data = await response.json();
+            if (data.id) {
+                fileIds[file.name] = data.id;
+                console.log(`✅ Uploaded file ${file.name} with ID: ${data.id}`);
+            } else {
+                throw new Error(`No file ID returned for ${file.name}`);
+            }
+        } catch (error) {
+            console.error(`❌ Error uploading file ${file.name}:`, error);
+            throw error;
+        }
+
+        return fileIds;
+    };
+
+    // Drag and drop handlers
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.types.includes('Files')) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Only hide if we're leaving the container (not just moving between children)
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.types.includes('Files')) {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const droppedFile = e.dataTransfer.files[0];
+        if (droppedFile) {
+            setFile(droppedFile);
+        }
+    };
+
     // Memoize chatInputState to prevent unnecessary re-renders
     const chatInputState: ChatInputState = useMemo(() => ({
         isPrivate,
@@ -701,7 +913,16 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 </Suspense>
             )}
             <div className="container mx-auto max-w-3xl px-4 font-mono text-white">
-                <div className="bg-background rounded-4xl w-full space-y-2 px-4 py-4">
+                <div
+                    className={cn(
+                        "bg-background rounded-4xl w-full space-y-2 px-4 py-4 transition-colors relative",
+                        isDragging && "ring-2 ring-primary ring-offset-2"
+                    )}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                >
                     <form
                         onSubmit={handleSubmit}
                         className="relative mx-auto overflow-hidden transition duration-200 mb-2 min-h-12 w-full max-w-full bg-background shadow-none"
@@ -709,36 +930,92 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         <textarea
                             ref={textareaRef}
                             placeholder="Automate your tasks..."
-                            className="sm:text font-default relative w-full border-none bg-background pr-20 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
+                            className="sm:text font-default relative w-full border-none bg-background pr-28 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             rows={1}
+                            disabled={isUploadingFiles}
                         />
-                        <button
-                            type="submit"
-                            disabled={!input.trim() || isLoading}
-                            className="absolute right-0 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black transition duration-200 hover:opacity-90 disabled:bg-gray-100 dark:bg-zinc-900 dark:disabled:bg-zinc-800"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="h-4 w-4 text-gray-300"
+                        <div className="absolute right-0 top-3 flex items-center gap-1">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                onChange={handleFileSelect}
+                                className="hidden"
+                                id="file-upload-input"
+                                disabled={isLoading || isUploadingFiles}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isLoading || isUploadingFiles}
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 transition duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Upload file"
                             >
-                                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                                <path d="M5 12l14 0" strokeDasharray="50%" strokeDashoffset="50%" />
-                                <path d="M13 18l6 -6" />
-                                <path d="M13 6l6 6" />
-                            </svg>
-                        </button>
+                                <Paperclip className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={!input.trim() || isLoading || isUploadingFiles}
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-black transition duration-200 hover:opacity-90 disabled:bg-gray-100 dark:bg-zinc-900 dark:disabled:bg-zinc-800"
+                            >
+                                {isUploadingFiles ? (
+                                    <svg className="animate-spin h-4 w-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="24"
+                                        height="24"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className="h-4 w-4 text-gray-300"
+                                    >
+                                        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                        <path d="M5 12l14 0" strokeDasharray="50%" strokeDashoffset="50%" />
+                                        <path d="M13 18l6 -6" />
+                                        <path d="M13 6l6 6" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
                     </form>
+
+                    {/* File display (single file) */}
+                    {file && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs text-foreground">
+                                <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                <span className="max-w-[200px] truncate">{file.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveFile}
+                                    disabled={isLoading || isUploadingFiles}
+                                    className="ml-1 hover:opacity-70 disabled:opacity-50"
+                                    title="Remove file"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Drag and drop hint */}
+                    {isDragging && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-primary/5 border-2 border-dashed border-primary rounded-4xl z-10 pointer-events-none">
+                            <div className="text-center">
+                                <Paperclip className="h-8 w-8 mx-auto mb-2 text-primary" />
+                                <p className="text-sm font-medium text-primary">Drop files here</p>
+                            </div>
+                        </div>
+                    )}
 
 
 
@@ -774,7 +1051,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                 const { provider } = formatModelName(config.model);
                                 const shortModelName = getShortModelName(config.model);
                                 const tooltipText = `${AGENT_LABELS[config.agent]} - ${config.model}${hasProperties ? " (Click to configure)" : ""}`;
-                                
+
                                 return (
                                     <button
                                         key={`${config.agent}-${index}-${config.model}`}
@@ -828,148 +1105,148 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                     {(Object.keys(AGENT_LABELS) as AgentType[])
                                         .filter((agentType) => agentType !== "stagehand-bb-cloud") // Commented out: Stagehand Cloud
                                         .map((agentType) => {
-                                        const instances = getAgentInstances(agentType);
-                                        const instanceCount = getAgentInstanceCount(agentType);
-                                        const isDisabled = false; // All agents are now enabled
-                                        const isMaxReached = tempAgentConfigs.length >= 4;
+                                            const instances = getAgentInstances(agentType);
+                                            const instanceCount = getAgentInstanceCount(agentType);
+                                            const isDisabled = false; // All agents are now enabled
+                                            const isMaxReached = tempAgentConfigs.length >= 4;
 
-                                        return (
-                                            <div key={agentType} className="space-y-2">
-                                                {/* Agent Type Header */}
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        {(agentType === "browser-use" || agentType === "browser-use-cloud") && (
-                                                            <BrowserUseLogo className="h-4 w-4" />
-                                                        )}
-                                                        {agentType === "smooth" && (
-                                                            <SmoothLogo className="h-4 w-4" />
-                                                        )}
-                                                        {(agentType === "stagehand" || agentType === "stagehand-bb-cloud") && (
-                                                            <StagehandLogo className="h-4 w-4" />
-                                                        )}
-                                                        <Label className="text-sm font-semibold font-default">
-                                                            {AGENT_LABELS[agentType]}
-                                                        </Label>
-                                                        {instanceCount > 0 && (
-                                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                                                {instanceCount}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                    {!isMaxReached && (
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => addAgentInstance(agentType)}
-                                                            disabled={isDisabled || isMaxReached}
-                                                            className="h-7 px-2 text-xs"
-                                                        >
-                                                            <Plus className="h-3.5 w-3.5 mr-1" />
-                                                            Add Instance
-                                                        </Button>
-                                                    )}
-                                                </div>
-
-                                                {/* Instance Cards */}
-                                                {instances.length > 0 ? (
-                                                    <div className="space-y-2 ml-6">
-                                                        {instances.map(({ config, index }, idx) => {
-                                                            const isMultiple = instances.length > 1;
-                                                            return (
-                                                                <div
-                                                                    key={`${agentType}-${index}`}
-                                                                    className={cn(
-                                                                        "rounded-md border p-3 transition-all",
-                                                                        "border-primary/30 bg-primary/5"
-                                                                    )}
-                                                                >
-                                                                    <div className="flex items-center gap-2 justify-between">
-                                                                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                                            {isMultiple && (
-                                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                                                                                    #{idx + 1}
-                                                                                </Badge>
-                                                                            )}
-                                                                            {MODEL_OPTIONS[agentType].length > 0 ? (
-                                                                                <div className="flex-1 min-w-0 font-mono">
-                                                                                    <Select
-                                                                                        value={config.model}
-                                                                                        onValueChange={(v) => updateAgentInstanceModel(index, v as ModelType)}
-                                                                                    >
-                                                                                        <SelectTrigger className="h-8 bg-background text-[12px]">
-                                                                                            <div className="flex items-center gap-2 w-full">
-                                                                                                {(() => {
-                                                                                                    const { provider, modelName } = formatModelName(config.model || "");
-                                                                                                    return (
-                                                                                                        <>
-                                                                                                            <ProviderLogo provider={provider} />
-                                                                                                            <span className="truncate text-[12px]">{modelName || "Select model"}</span>
-                                                                                                        </>
-                                                                                                    );
-                                                                                                })()}
-                                                                                            </div>
-                                                                                        </SelectTrigger>
-                                                                                        <SelectContent>
-                                                                                            {MODEL_OPTIONS[agentType].map((model) => {
-                                                                                                const { provider, modelName } = formatModelName(model);
-                                                                                                return (
-                                                                                                    <SelectItem key={model} value={model}>
-                                                                                                        <div className="flex items-center gap-2 py-0.5 font-mono">
-                                                                                                            <ProviderLogo provider={provider} />
-                                                                                                            <div className="flex flex-col">
-                                                                                                                <span className="font-medium leading-tight text-[12px]">{modelName}</span>
-                                                                                                                <span className="text-[11px] text-muted-foreground leading-tight">
-                                                                                                                    {getProviderName(provider)}
-                                                                                                                </span>
-                                                                                                            </div>
-                                                                                                        </div>
-                                                                                                    </SelectItem>
-                                                                                                );
-                                                                                            })}
-                                                                                        </SelectContent>
-                                                                                    </Select>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <span className="text-xs text-muted-foreground">
-                                                                                    {AGENT_LABELS[agentType]} (no model selection)
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        <Button
-                                                                            type="button"
-                                                                            variant="ghost"
-                                                                            size="sm"
-                                                                            onClick={() => removeAgentInstance(index)}
-                                                                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ) : (
-                                                    !isMaxReached && (
-                                                        <div className="ml-6">
+                                            return (
+                                                <div key={agentType} className="space-y-2">
+                                                    {/* Agent Type Header */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            {(agentType === "browser-use" || agentType === "browser-use-cloud") && (
+                                                                <BrowserUseLogo className="h-4 w-4" />
+                                                            )}
+                                                            {agentType === "smooth" && (
+                                                                <SmoothLogo className="h-4 w-4" />
+                                                            )}
+                                                            {agentType === "stagehand" && (
+                                                                <StagehandLogo className="h-4 w-4" />
+                                                            )}
+                                                            <Label className="text-sm font-semibold font-default">
+                                                                {AGENT_LABELS[agentType]}
+                                                            </Label>
+                                                            {instanceCount > 0 && (
+                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                                    {instanceCount}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        {!isMaxReached && (
                                                             <Button
                                                                 type="button"
-                                                                variant="outline"
+                                                                variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => toggleAgent(agentType)}
+                                                                onClick={() => addAgentInstance(agentType)}
                                                                 disabled={isDisabled || isMaxReached}
-                                                                className="h-8 w-full text-xs justify-start text-muted-foreground hover:text-foreground"
+                                                                className="h-7 px-2 text-xs"
                                                             >
-                                                                <Plus className="h-3.5 w-3.5 mr-2" />
-                                                                Click to add {AGENT_LABELS[agentType]}
+                                                                <Plus className="h-3.5 w-3.5 mr-1" />
+                                                                Add Instance
                                                             </Button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Instance Cards */}
+                                                    {instances.length > 0 ? (
+                                                        <div className="space-y-2 ml-6">
+                                                            {instances.map(({ config, index }, idx) => {
+                                                                const isMultiple = instances.length > 1;
+                                                                return (
+                                                                    <div
+                                                                        key={`${agentType}-${index}`}
+                                                                        className={cn(
+                                                                            "rounded-md border p-3 transition-all",
+                                                                            "border-primary/30 bg-primary/5"
+                                                                        )}
+                                                                    >
+                                                                        <div className="flex items-center gap-2 justify-between">
+                                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                                {isMultiple && (
+                                                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                                                                                        #{idx + 1}
+                                                                                    </Badge>
+                                                                                )}
+                                                                                {MODEL_OPTIONS[agentType].length > 0 ? (
+                                                                                    <div className="flex-1 min-w-0 font-mono">
+                                                                                        <Select
+                                                                                            value={config.model}
+                                                                                            onValueChange={(v) => updateAgentInstanceModel(index, v as ModelType)}
+                                                                                        >
+                                                                                            <SelectTrigger className="h-8 bg-background text-[12px]">
+                                                                                                <div className="flex items-center gap-2 w-full">
+                                                                                                    {(() => {
+                                                                                                        const { provider, modelName } = formatModelName(config.model || "");
+                                                                                                        return (
+                                                                                                            <>
+                                                                                                                <ProviderLogo provider={provider} />
+                                                                                                                <span className="truncate text-[12px]">{modelName || "Select model"}</span>
+                                                                                                            </>
+                                                                                                        );
+                                                                                                    })()}
+                                                                                                </div>
+                                                                                            </SelectTrigger>
+                                                                                            <SelectContent>
+                                                                                                {MODEL_OPTIONS[agentType].map((model) => {
+                                                                                                    const { provider, modelName } = formatModelName(model);
+                                                                                                    return (
+                                                                                                        <SelectItem key={model} value={model}>
+                                                                                                            <div className="flex items-center gap-2 py-0.5 font-mono">
+                                                                                                                <ProviderLogo provider={provider} />
+                                                                                                                <div className="flex flex-col">
+                                                                                                                    <span className="font-medium leading-tight text-[12px]">{modelName}</span>
+                                                                                                                    <span className="text-[11px] text-muted-foreground leading-tight">
+                                                                                                                        {getProviderName(provider)}
+                                                                                                                    </span>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        </SelectItem>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </SelectContent>
+                                                                                        </Select>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <span className="text-xs text-muted-foreground">
+                                                                                        {AGENT_LABELS[agentType]} (no model selection)
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                onClick={() => removeAgentInstance(index)}
+                                                                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                                                                            >
+                                                                                <Trash2 className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
-                                                    )
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                                    ) : (
+                                                        !isMaxReached && (
+                                                            <div className="ml-6">
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => toggleAgent(agentType)}
+                                                                    disabled={isDisabled || isMaxReached}
+                                                                    className="h-8 w-full text-xs justify-start text-muted-foreground hover:text-foreground"
+                                                                >
+                                                                    <Plus className="h-3.5 w-3.5 mr-2" />
+                                                                    Click to add {AGENT_LABELS[agentType]}
+                                                                </Button>
+                                                            </div>
+                                                        )
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                 </div>
                                 {tempAgentConfigs.length >= 4 && (
                                     <div className="mt-4 rounded-lg bg-warning/10 border border-warning/20 p-3 flex items-start gap-2">

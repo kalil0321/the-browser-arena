@@ -18,12 +18,17 @@ function requireSmoothApiKey(userApiKey?: string): string {
     return key;
 }
 
-async function runTask(task: string, apiKey: string) {
+async function runTask(task: string, apiKey: string, fileIds?: string[]) {
     try {
-        const payload = {
+        const payload: any = {
             task,
             device: 'desktop',
         };
+
+        // Add file IDs if provided
+        if (fileIds && fileIds.length > 0) {
+            payload.files = fileIds;
+        }
 
         const response = await fetch(smoothUrl, {
             method: 'POST',
@@ -115,10 +120,15 @@ async function pollTaskUntilComplete(
 
 export async function POST(request: NextRequest) {
     try {
-        const { task, sessionId: existingSessionId, apiKey: userApiKey } = await request.json();
+        const { task, sessionId: existingSessionId, apiKey: userApiKey, fileIds } = await request.json();
         if (!task || typeof task !== 'string' || !task.trim()) {
             return badRequest("Field 'task' is required");
         }
+
+        // Validate fileIds if provided
+        const validFileIds = fileIds && Array.isArray(fileIds) && fileIds.length > 0
+            ? fileIds.filter((id: any) => typeof id === 'string' && id.trim().length > 0)
+            : undefined;
 
         // Get user token for auth and API key in parallel where possible
         let apiKey: string;
@@ -140,7 +150,10 @@ export async function POST(request: NextRequest) {
         // Submit task to Smooth API
         let taskData: any;
         try {
-            taskData = await runTask(task, apiKey);
+            taskData = await runTask(task, apiKey, validFileIds);
+            if (validFileIds) {
+                console.log(`✅ Submitted task with ${validFileIds.length} file(s):`, validFileIds);
+            }
         } catch (e: any) {
             if (e instanceof Error && /HTTP error! status: (\d+)/.test(e.message)) {
                 const status = Number(e.message.match(/(\d+)/)?.[1]);
