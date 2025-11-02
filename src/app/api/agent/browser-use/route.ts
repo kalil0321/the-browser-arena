@@ -43,13 +43,31 @@ export async function POST(request: NextRequest) {
         if (!process.env.ANCHOR_API_KEY) {
             return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
         }
+        // Get current user to create browser profile
+        const user = await convex.query(api.auth.getCurrentUser, {});
+        if (!user) {
+            return unauthorized();
+        }
+        // getCurrentUser returns user with _id field (Convex document ID)
+        const userId = user._id;
+
+        // Create browser profile configuration using user_id
+        const browserConfig = {
+            browser: {
+                profile: {
+                    name: `profile-${userId}`,
+                    persist: true
+                }
+            }
+        };
+
         // CRITICAL: Parallelize browser session creation with Convex session creation
         // This saves 3-5 seconds by not blocking on browser session creation
         const [sessionResult, browserSession] = await Promise.all([
             convex.mutation(api.mutations.createSession, {
                 instruction,
             }),
-            browser.sessions.create(),
+            browser.sessions.create(browserConfig),
         ]);
 
         const { sessionId: dbSessionId } = sessionResult;
@@ -83,6 +101,7 @@ export async function POST(request: NextRequest) {
                 ...(googleApiKey ? { googleApiKey } : {}),
                 ...(anthropicApiKey ? { anthropicApiKey } : {}),
                 ...(browserUseApiKey ? { browserUseApiKey } : {}),
+                userId: userId,
             }),
         });
 

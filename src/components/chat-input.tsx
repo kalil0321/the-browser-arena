@@ -51,6 +51,23 @@ const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
     "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"]
 };
 
+// Helper to detect provider from browser-use cloud model names
+const detectProviderFromModelName = (modelName: string): string => {
+    if (modelName.startsWith("gpt-") || modelName === "o3") {
+        return "openai";
+    }
+    if (modelName.startsWith("gemini-")) {
+        return "google";
+    }
+    if (modelName.startsWith("claude-")) {
+        return "anthropic";
+    }
+    if (modelName === "browser-use-llm") {
+        return "browser-use";
+    }
+    return "";
+};
+
 // Helper to format model names
 const formatModelName = (model: string) => {
     const parts = model.split("/");
@@ -60,7 +77,8 @@ const formatModelName = (model: string) => {
         return { provider, modelName };
     }
     // Models without "/" (like Browser Use Cloud models)
-    return { provider: "", modelName: model };
+    const provider = detectProviderFromModelName(model);
+    return { provider, modelName: model };
 };
 
 // Helper to get provider display name
