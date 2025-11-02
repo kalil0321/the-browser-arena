@@ -241,7 +241,22 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
 
             setIsLoading(true);
             try {
-                console.log("Submitting:", input, "with agents:", agentConfigs);
+                const agentsForLog = agentConfigs.map(({ agent, model, secrets, thinkingModel, executionModel }) => ({
+                    agent,
+                    model,
+                    ...(thinkingModel ? { thinkingModel } : {}),
+                    ...(executionModel ? { executionModel } : {}),
+                    ...(secrets
+                        ? {
+                            secretKeys: Object.keys(secrets),
+                            secretCount: Object.keys(secrets).length,
+                        }
+                        : {}),
+                }));
+                console.log("Submitting multi-agent request", {
+                    instructionPreview: input.slice(0, 64),
+                    agents: agentsForLog,
+                });
 
                 // Get user's API keys if available
                 let smoothApiKey: string | undefined = undefined;
@@ -257,7 +272,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             const key = await getApiKey("smooth", user._id);
                             if (key) {
                                 smoothApiKey = key;
-                                console.log("🔑 Found user's Smooth API key in localStorage");
+                                console.log("?? Found user's Smooth API key in localStorage");
                             }
                         }
 
@@ -265,21 +280,21 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         const key1 = await getApiKey("openai", user._id);
                         if (key1) {
                             openaiApiKey = key1;
-                            console.log("🔑 Found user's OpenAI API key in localStorage");
+                            console.log("?? Found user's OpenAI API key in localStorage");
                         }
 
                         // Get Google API key if needed
                         const key2 = await getApiKey("google", user._id);
                         if (key2) {
                             googleApiKey = key2;
-                            console.log("🔑 Found user's Google API key in localStorage");
+                            console.log("?? Found user's Google API key in localStorage");
                         }
 
                         // Get Anthropic API key if needed
                         const key3 = await getApiKey("anthropic", user._id);
                         if (key3) {
                             anthropicApiKey = key3;
-                            console.log("🔑 Found user's Anthropic API key in localStorage");
+                            console.log("?? Found user's Anthropic API key in localStorage");
                         }
 
                         // Get Browser-Use API key if Browser-Use Cloud is selected
@@ -287,12 +302,12 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             const key4 = await getApiKey("browser-use", user._id);
                             if (key4) {
                                 browserUseApiKey = key4;
-                                console.log("🔑 Found user's Browser-Use API key in localStorage");
+                                console.log("?? Found user's Browser-Use API key in localStorage");
                             }
                         }
                     } catch (error) {
-                        console.error("⚠️ Failed to get API keys from localStorage:", error);
-                        console.log("ℹ️ Will fallback to server keys");
+                        console.error("?? Failed to get API keys from localStorage:", error);
+                        console.log("?? Will fallback to server keys");
                         // Continue without user keys - will fallback to server keys
                     }
                 }

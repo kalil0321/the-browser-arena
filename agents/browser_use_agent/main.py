@@ -9,7 +9,7 @@ from browser_use import (
 from anchorbrowser import Anchorbrowser
 import os
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 
 def parse_provider_model(provider_model: str):
@@ -74,6 +74,7 @@ async def run_browser_use(
     provider_model: str,
     browser: Anchorbrowser,
     session_id: str,
+    secrets: Optional[Dict[str, str]] = None,
     openai_api_key: str = None,
     google_api_key: str = None,
     anthropic_api_key: str = None,
@@ -88,6 +89,7 @@ async def run_browser_use(
         provider_model: Provider/model string (e.g., "openai/gpt-4", "browser-use/bu-1.0")
         browser: Anchorbrowser instance
         session_id: Browser session ID
+        secrets: Optional dictionary of secrets to inject as sensitive data into the agent
         openai_api_key: Optional user-provided OpenAI API key
         google_api_key: Optional user-provided Google API key
         anthropic_api_key: Optional user-provided Anthropic API key
@@ -128,6 +130,7 @@ async def run_browser_use(
         llm=llm,
         browser=automation_browser,
         calculate_cost=True,
+        sensitive_data=secrets,
     )
     timings["agent_initialization"] = time.time() - agent_start
     print(f"⏱️  Agent initialization: {timings['agent_initialization']:.2f}s")

@@ -18,7 +18,7 @@ const getBrowserUseClient = (userApiKey?: string) => {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId, browserUseApiKey } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, browserUseApiKey, secrets } = await request.json();
 
         // Get user token for auth
         const token = await getToken();
@@ -36,9 +36,17 @@ export async function POST(request: NextRequest) {
         console.log(browserUseApiKey ? "🔑 Using user's Browser-Use API key" : "ℹ️ Using server Browser-Use API key (fallback)");
 
         // Create task in Browser Use Cloud
+        if (secrets) {
+            console.log("🔐 Forwarding secrets to Browser-Use Cloud", {
+                keys: Object.keys(secrets),
+                count: Object.keys(secrets).length,
+            });
+        }
+
         const task = await client.tasks.createTask({
             task: instruction,
             llm: model || "browser-use-llm",
+            ...(secrets ? { secrets } : {}),
             // sessionId is optional - will auto-create if not provided
         });
 
