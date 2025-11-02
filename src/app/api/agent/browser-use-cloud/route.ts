@@ -16,6 +16,15 @@ const getBrowserUseClient = (userApiKey?: string) => {
     return new BrowserUseClient({ apiKey });
 };
 
+// Map UI model names to Browser Use Cloud API model names
+const mapModelToApiModel = (model: string): string => {
+    const modelMap: Record<string, string> = {
+        "claude-sonnet-4": "claude-sonnet-4-20250514",
+        // Add other mappings as needed
+    };
+    return modelMap[model] || model;
+};
+
 export async function POST(request: NextRequest) {
     try {
         const { instruction, model, sessionId: existingSessionId, browserUseApiKey, secrets } = await request.json();
@@ -35,6 +44,9 @@ export async function POST(request: NextRequest) {
         const client = getBrowserUseClient(browserUseApiKey);
         console.log(browserUseApiKey ? "🔑 Using user's Browser-Use API key" : "ℹ️ Using server Browser-Use API key (fallback)");
 
+        // Map model name to API-expected format
+        const apiModel = (model ? mapModelToApiModel(model) : "browser-use-llm") as any;
+
         // Create task in Browser Use Cloud
         if (secrets) {
             console.log("🔐 Forwarding secrets to Browser-Use Cloud", {
@@ -45,7 +57,7 @@ export async function POST(request: NextRequest) {
 
         const task = await client.tasks.createTask({
             task: instruction,
-            llm: model || "browser-use-llm",
+            llm: apiModel,
             ...(secrets ? { secrets } : {}),
             // sessionId is optional - will auto-create if not provided
         });
@@ -65,7 +77,7 @@ export async function POST(request: NextRequest) {
             agentId = await convex.mutation(api.mutations.createAgent, {
                 sessionId: existingSessionId,
                 name: "browser-use-cloud",
-                model: model || "browser-use-llm",
+                model: model || "browser-use-llm", // Keep original model name for DB
                 browser: {
                     sessionId: taskId,
                     url: liveViewUrl,

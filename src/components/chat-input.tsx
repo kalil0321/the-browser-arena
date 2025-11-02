@@ -15,7 +15,7 @@ const LoadingDino = lazy(() => import("@/components/loading-dino").then(mod => (
 import { authClient } from "@/lib/auth/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, Settings, CheckCircle2, XCircle } from "lucide-react";
+import { Bot, Sparkles, Settings, CheckCircle2, XCircle, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -31,9 +31,10 @@ import { AgentConfigDialog } from "./agent-config-dialog";
 import { getClientFingerprint } from "@/lib/fingerprint";
 
 type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
-type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4";
+type ModelType = "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "openai/gpt-4.1" | "anthropic/claude-haiku-4.5" | "browser-use/bu-1.0" | "browser-use-llm" | "gemini-flash-latest" | "gpt-4.1" | "o3" | "claude-sonnet-4" | "openai/computer-use-preview" | "openai/computer-use-preview-2025-03-11" | "anthropic/claude-3-7-sonnet-latest" | "anthropic/claude-haiku-4-5-20251001" | "anthropic/claude-sonnet-4-20250514" | "anthropic/claude-sonnet-4-5-20250929" | "google/gemini-2.5-computer-use-preview-10-2025";
 
 interface AgentConfig {
+    id?: string; // Unique identifier for this agent instance
     agent: AgentType;
     model: ModelType;
     secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
@@ -44,7 +45,7 @@ interface AgentConfig {
 const AGENT_LABELS: Record<AgentType, string> = {
     "stagehand": "Stagehand",
     "smooth": "Smooth",
-    "stagehand-bb-cloud": "Stagehand Cloud",
+    "stagehand-bb-cloud": "Stagehand Cloud", // Commented out in UI for now
     "browser-use": "BU",
     "browser-use-cloud": "BU Cloud"
 };
@@ -52,9 +53,9 @@ const AGENT_LABELS: Record<AgentType, string> = {
 const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
     "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
     "browser-use-cloud": ["browser-use-llm", "gemini-flash-latest", "gpt-4.1", "o3", "claude-sonnet-4"],
-    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
+    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openai/computer-use-preview-2025-03-11", "anthropic/claude-3-7-sonnet-latest", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-5-20250929", "google/gemini-2.5-computer-use-preview-10-2025"],
     "smooth": [], // Smooth uses its own models
-    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"]
+    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openai/computer-use-preview-2025-03-11", "anthropic/claude-3-7-sonnet-latest", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-5-20250929", "google/gemini-2.5-computer-use-preview-10-2025"] // Commented out in UI for now
 };
 
 // Helper to detect provider from browser-use cloud model names
@@ -118,6 +119,59 @@ const ProviderLogo: React.FC<{ provider: string; className?: string }> = ({ prov
     }
 };
 
+// Helper to get short model name for badges
+const getShortModelName = (model: string): string => {
+    const { provider, modelName } = formatModelName(model);
+    // Return short version of model name
+    if (modelName.toLowerCase().includes("gemini")) {
+        if (modelName.toLowerCase().includes("computer-use")) {
+            return "Gemini CUA";
+        }
+        if (modelName.toLowerCase().includes("pro")) {
+            return "Gemini Pro";
+        }
+        if (modelName.toLowerCase().includes("flash")) {
+            return "Gemini Flash";
+        }
+        return "Gemini";
+    }
+    if (modelName.toLowerCase().includes("gpt") || modelName === "gpt-4.1") {
+        return modelName;
+    }
+    if (modelName.toLowerCase().includes("computer-use")) {
+        return "Computer Use";
+    }
+    if (modelName.toLowerCase().includes("claude")) {
+        if (modelName === "claude-3-7-sonnet-latest") {
+            return "Claude 3.7 Sonnet CUA";
+        }
+        if (modelName === "claude-haiku-4-5-20251001") {
+            return "Claude Haiku CUA";
+        }
+        if (modelName === "claude-sonnet-4-20250514") {
+            return "Claude Sonnet 4 CUA";
+        }
+        if (modelName === "claude-sonnet-4-5-20250929") {
+            return "Claude Sonnet 4.5 CUA";
+        }
+        if (modelName.toLowerCase().includes("sonnet")) {
+            return "Claude Sonnet";
+        }
+        if (modelName.toLowerCase().includes("haiku")) {
+            return "Claude Haiku";
+        }
+        return "Claude";
+    }
+    if (modelName === "browser-use-llm" || modelName === "bu-1.0" || modelName === "browser-use/bu-1.0") {
+        return "BU LLM";
+    }
+    if (modelName === "o3") {
+        return "O3";
+    }
+    // Fallback: return model name as-is, truncate if too long
+    return modelName.length > 15 ? modelName.substring(0, 12) + "..." : modelName;
+};
+
 export interface ChatInputState {
     isPrivate: boolean;
     agentConfigs: AgentConfig[];
@@ -164,8 +218,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
 
     // Agent configuration state
     const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([
-        { agent: "browser-use", model: "browser-use/bu-1.0" },
-        { agent: "smooth", model: "google/gemini-2.5-flash" }
+        { id: `agent-${Date.now()}`, agent: "browser-use", model: "browser-use/bu-1.0" }
     ]);
 
     // Privacy state
@@ -560,35 +613,58 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         setIsDialogOpen(false);
     };
 
+    const addAgentInstance = (agent: AgentType) => {
+        if (tempAgentConfigs.length >= 4) {
+            return; // Max limit reached
+        }
+        const defaultModel = MODEL_OPTIONS[agent][0] || "google/gemini-2.5-flash";
+        const newId = `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        setTempAgentConfigs([...tempAgentConfigs, { id: newId, agent, model: defaultModel }]);
+    };
+
+    const removeAgentInstance = (index: number) => {
+        setTempAgentConfigs(tempAgentConfigs.filter((_, i) => i !== index));
+    };
+
+    const updateAgentInstanceModel = (index: number, model: ModelType) => {
+        setTempAgentConfigs(tempAgentConfigs.map((c, i) =>
+            i === index ? { ...c, model } : c
+        ));
+    };
+
     const toggleAgent = (agent: AgentType) => {
-        const exists = tempAgentConfigs.find(c => c.agent === agent);
-        if (exists) {
-            setTempAgentConfigs(tempAgentConfigs.filter(c => c.agent !== agent));
-        } else {
-            // Add with default model
-            const defaultModel = MODEL_OPTIONS[agent][0] || "google/gemini-2.5-flash";
-            setTempAgentConfigs([...tempAgentConfigs, { agent, model: defaultModel }]);
+        // Always add an instance if under limit, never remove
+        if (tempAgentConfigs.length < 4) {
+            addAgentInstance(agent);
         }
     };
 
-    const updateAgentModel = (agent: AgentType, model: ModelType) => {
-        setTempAgentConfigs(tempAgentConfigs.map(c =>
-            c.agent === agent ? { ...c, model } : c
-        ));
+    const getAgentInstanceCount = (agent: AgentType): number => {
+        return tempAgentConfigs.filter(c => c.agent === agent).length;
     };
 
-    const isAgentSelected = (agent: AgentType) => {
-        return tempAgentConfigs.some(c => c.agent === agent);
-    };
-
-    const getAgentModel = (agent: AgentType): ModelType | undefined => {
-        return tempAgentConfigs.find(c => c.agent === agent)?.model;
+    const getAgentInstances = (agent: AgentType): Array<{ config: AgentConfig; index: number }> => {
+        return tempAgentConfigs
+            .map((config, index) => ({ config, index }))
+            .filter(({ config }) => config.agent === agent);
     };
 
     const handlePropertiesSave = (updatedConfig: AgentConfig) => {
-        setAgentConfigs(agentConfigs.map(c =>
-            c.agent === updatedConfig.agent ? updatedConfig : c
-        ));
+        // Match by id first (if present), then fall back to agent and model
+        let found = false;
+        setAgentConfigs(agentConfigs.map(c => {
+            // If both have ids and they match
+            if (updatedConfig.id && c.id && c.id === updatedConfig.id) {
+                found = true;
+                return updatedConfig;
+            }
+            // If no id is present, fall back to matching agent+model (only first match)
+            if (!updatedConfig.id && !found && c.agent === updatedConfig.agent && c.model === updatedConfig.model) {
+                found = true;
+                return updatedConfig;
+            }
+            return c;
+        }));
         setPropertiesDialogAgent(null);
     };
 
@@ -695,11 +771,15 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             {/* Agent Pills (hide Smooth) */}
                             {agentConfigs.filter(c => c.agent !== "smooth").map((config, index) => {
                                 const hasProperties = config.agent !== "smooth";
+                                const { provider } = formatModelName(config.model);
+                                const shortModelName = getShortModelName(config.model);
+                                const tooltipText = `${AGENT_LABELS[config.agent]} - ${config.model}${hasProperties ? " (Click to configure)" : ""}`;
+                                
                                 return (
                                     <button
-                                        key={`${config.agent}-${index}`}
+                                        key={`${config.agent}-${index}-${config.model}`}
                                         type="button"
-                                        onClick={() => hasProperties && setPropertiesDialogAgent({ ...config })}
+                                        onClick={() => hasProperties && setPropertiesDialogAgent({ ...config, id: config.id || `agent-${index}-${Date.now()}` })}
                                         disabled={isLoading || !hasProperties}
                                         className={cn(
                                             "h-6 px-2 text-[10px] rounded-full transition-colors flex items-center gap-1 shrink-0",
@@ -708,9 +788,11 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 cursor-default",
                                             isLoading && "opacity-50 cursor-not-allowed"
                                         )}
-                                        title={hasProperties ? `Configure ${AGENT_LABELS[config.agent]}` : AGENT_LABELS[config.agent]}
+                                        title={tooltipText}
                                     >
                                         <span className="capitalize">{AGENT_LABELS[config.agent]}</span>
+                                        <span className="text-[9px] text-muted-foreground">•</span>
+                                        <span className="text-[9px] truncate max-w-[60px]">{shortModelName}</span>
                                         {hasProperties && (
                                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -742,112 +824,149 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                 </div>
                             </DialogHeader>
                             <div className="py-3">
-                                <div className="space-y-2.5">
-                                    {(Object.keys(AGENT_LABELS) as AgentType[]).map((agentType) => {
-                                        const selected = isAgentSelected(agentType);
-                                        const currentModel = getAgentModel(agentType);
+                                <div className="space-y-4">
+                                    {(Object.keys(AGENT_LABELS) as AgentType[])
+                                        .filter((agentType) => agentType !== "stagehand-bb-cloud") // Commented out: Stagehand Cloud
+                                        .map((agentType) => {
+                                        const instances = getAgentInstances(agentType);
+                                        const instanceCount = getAgentInstanceCount(agentType);
                                         const isDisabled = false; // All agents are now enabled
-                                        const isMaxReached = !selected && tempAgentConfigs.length >= 4;
+                                        const isMaxReached = tempAgentConfigs.length >= 4;
 
                                         return (
-                                            <div
-                                                key={agentType}
-                                                className={cn(
-                                                    "group relative rounded-md border p-3 transition-all",
-                                                    selected
-                                                        ? "border-primary bg-primary/5 shadow-sm"
-                                                        : "border-border hover:border-primary/50 hover:bg-accent/50",
-                                                    (isDisabled || isMaxReached) && "opacity-50 cursor-not-allowed"
-                                                )}
-                                                role="button"
-                                                tabIndex={0}
-                                                onClick={() => !isDisabled && !isMaxReached && toggleAgent(agentType)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' || e.key === ' ') {
-                                                        e.preventDefault();
-                                                        !isDisabled && !isMaxReached && toggleAgent(agentType);
-                                                    }
-                                                }}
-                                            >
-                                                <div className="flex items-start justify-between gap-2.5">
-                                                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-1.5 mb-1">
-                                                                <Label
-                                                                    htmlFor={agentType}
+                                            <div key={agentType} className="space-y-2">
+                                                {/* Agent Type Header */}
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        {(agentType === "browser-use" || agentType === "browser-use-cloud") && (
+                                                            <BrowserUseLogo className="h-4 w-4" />
+                                                        )}
+                                                        {agentType === "smooth" && (
+                                                            <SmoothLogo className="h-4 w-4" />
+                                                        )}
+                                                        {(agentType === "stagehand" || agentType === "stagehand-bb-cloud") && (
+                                                            <StagehandLogo className="h-4 w-4" />
+                                                        )}
+                                                        <Label className="text-sm font-semibold font-default">
+                                                            {AGENT_LABELS[agentType]}
+                                                        </Label>
+                                                        {instanceCount > 0 && (
+                                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                                {instanceCount}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    {!isMaxReached && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => addAgentInstance(agentType)}
+                                                            disabled={isDisabled || isMaxReached}
+                                                            className="h-7 px-2 text-xs"
+                                                        >
+                                                            <Plus className="h-3.5 w-3.5 mr-1" />
+                                                            Add Instance
+                                                        </Button>
+                                                    )}
+                                                </div>
+
+                                                {/* Instance Cards */}
+                                                {instances.length > 0 ? (
+                                                    <div className="space-y-2 ml-6">
+                                                        {instances.map(({ config, index }, idx) => {
+                                                            const isMultiple = instances.length > 1;
+                                                            return (
+                                                                <div
+                                                                    key={`${agentType}-${index}`}
                                                                     className={cn(
-                                                                        "text-[13px] font-medium cursor-pointer font-default flex items-center gap-1.5",
-                                                                        selected && "text-primary",
-                                                                        (isDisabled || isMaxReached) && "cursor-not-allowed"
+                                                                        "rounded-md border p-3 transition-all",
+                                                                        "border-primary/30 bg-primary/5"
                                                                     )}
                                                                 >
-                                                                    {(agentType === "browser-use" || agentType === "browser-use-cloud") && (
-                                                                        <BrowserUseLogo className="h-3.5 w-3.5" />
-                                                                    )}
-                                                                    {agentType === "smooth" && (
-                                                                        <SmoothLogo className="h-3.5 w-3.5" />
-                                                                    )}
-                                                                    {(agentType === "stagehand" || agentType === "stagehand-bb-cloud") && (
-                                                                        <StagehandLogo className="h-3.5 w-3.5" />
-                                                                    )}
-                                                                    {AGENT_LABELS[agentType]}
-                                                                </Label>
-                                                                {selected && MODEL_OPTIONS[agentType].length > 0 && (
-                                                                    <div className="ml-2 min-w-[140px] font-mono">
-                                                                        <Select
-                                                                            value={currentModel}
-                                                                            onValueChange={(v) => updateAgentModel(agentType, v as ModelType)}
-                                                                        >
-                                                                            <SelectTrigger className="h-7 bg-background text-[12px]">
-                                                                                <div className="flex items-center gap-2 w-full">
-                                                                                    {(() => {
-                                                                                        const { provider, modelName } = formatModelName(currentModel || "");
-                                                                                        return (
-                                                                                            <>
-                                                                                                <ProviderLogo provider={provider} />
-                                                                                                <span className="truncate text-[12px]">{modelName || "Select model"}</span>
-                                                                                            </>
-                                                                                        );
-                                                                                    })()}
-                                                                                </div>
-                                                                            </SelectTrigger>
-                                                                            <SelectContent>
-                                                                                {MODEL_OPTIONS[agentType].map((model) => {
-                                                                                    const { provider, modelName } = formatModelName(model);
-                                                                                    return (
-                                                                                        <SelectItem key={model} value={model}>
-                                                                                            <div className="flex items-center gap-2 py-0.5 font-mono">
-                                                                                                <ProviderLogo provider={provider} />
-                                                                                                <div className="flex flex-col">
-                                                                                                    <span className="font-medium leading-tight text-[12px]">{modelName}</span>
-                                                                                                    <span className="text-[11px] text-muted-foreground leading-tight">
-                                                                                                        {getProviderName(provider)}
-                                                                                                    </span>
-                                                                                                </div>
+                                                                    <div className="flex items-center gap-2 justify-between">
+                                                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                            {isMultiple && (
+                                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                                                                                    #{idx + 1}
+                                                                                </Badge>
+                                                                            )}
+                                                                            {MODEL_OPTIONS[agentType].length > 0 ? (
+                                                                                <div className="flex-1 min-w-0 font-mono">
+                                                                                    <Select
+                                                                                        value={config.model}
+                                                                                        onValueChange={(v) => updateAgentInstanceModel(index, v as ModelType)}
+                                                                                    >
+                                                                                        <SelectTrigger className="h-8 bg-background text-[12px]">
+                                                                                            <div className="flex items-center gap-2 w-full">
+                                                                                                {(() => {
+                                                                                                    const { provider, modelName } = formatModelName(config.model || "");
+                                                                                                    return (
+                                                                                                        <>
+                                                                                                            <ProviderLogo provider={provider} />
+                                                                                                            <span className="truncate text-[12px]">{modelName || "Select model"}</span>
+                                                                                                        </>
+                                                                                                    );
+                                                                                                })()}
                                                                                             </div>
-                                                                                        </SelectItem>
-                                                                                    );
-                                                                                })}
-                                                                            </SelectContent>
-                                                                        </Select>
+                                                                                        </SelectTrigger>
+                                                                                        <SelectContent>
+                                                                                            {MODEL_OPTIONS[agentType].map((model) => {
+                                                                                                const { provider, modelName } = formatModelName(model);
+                                                                                                return (
+                                                                                                    <SelectItem key={model} value={model}>
+                                                                                                        <div className="flex items-center gap-2 py-0.5 font-mono">
+                                                                                                            <ProviderLogo provider={provider} />
+                                                                                                            <div className="flex flex-col">
+                                                                                                                <span className="font-medium leading-tight text-[12px]">{modelName}</span>
+                                                                                                                <span className="text-[11px] text-muted-foreground leading-tight">
+                                                                                                                    {getProviderName(provider)}
+                                                                                                                </span>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </SelectItem>
+                                                                                                );
+                                                                                            })}
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <span className="text-xs text-muted-foreground">
+                                                                                    {AGENT_LABELS[agentType]} (no model selection)
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            onClick={() => removeAgentInstance(index)}
+                                                                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
                                                                     </div>
-                                                                )}
-                                                                {selected && (
-                                                                    <Badge variant="default" className="ml-1 px-1.5 py-0.5 text-[10px]">
-                                                                        <CheckCircle2 className="h-3 w-3" />
-                                                                        <span>Active</span>
-                                                                    </Badge>
-                                                                )}
-                                                                {isDisabled && (
-                                                                    <Badge variant="outline" className="ml-1 px-1.5 py-0.5 text-[10px]">
-                                                                        <XCircle className="h-3 w-3" />
-                                                                        <span>Unavailable</span>
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
-                                                </div>
+                                                ) : (
+                                                    !isMaxReached && (
+                                                        <div className="ml-6">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => toggleAgent(agentType)}
+                                                                disabled={isDisabled || isMaxReached}
+                                                                className="h-8 w-full text-xs justify-start text-muted-foreground hover:text-foreground"
+                                                            >
+                                                                <Plus className="h-3.5 w-3.5 mr-2" />
+                                                                Click to add {AGENT_LABELS[agentType]}
+                                                            </Button>
+                                                        </div>
+                                                    )
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -856,7 +975,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                     <div className="mt-4 rounded-lg bg-warning/10 border border-warning/20 p-3 flex items-start gap-2">
                                         <XCircle className="h-4 w-4 text-warning-foreground mt-0.5 shrink-0" />
                                         <p className="text-xs text-warning-foreground font-default">
-                                            Maximum of 4 agents allowed. Deselect an agent to add another.
+                                            Maximum of 4 agent instances allowed. Remove an instance to add another.
                                         </p>
                                     </div>
                                 )}
