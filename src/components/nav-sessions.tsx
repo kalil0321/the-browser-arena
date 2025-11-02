@@ -55,9 +55,9 @@ export function SessionsNav({ sessions, isDemo = false }: { sessions?: Session[]
     <div className="flex flex-col gap-3">
       <div className="px-2 py-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <Link href="/sessions" prefetch={true} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Sessions
-          </span>
+          </Link>
           <button
             className="inline-flex items-center justify-center rounded-md p-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
             title="New session"
