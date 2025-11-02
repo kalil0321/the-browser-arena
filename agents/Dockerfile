@@ -4,9 +4,12 @@
 # Run: docker run -p 8080:8080 \
 #      -e CONVEX_URL=your_convex_url \
 #      -e ANCHOR_API_KEY=your_key \
+#      -e AGENT_SERVER_API_KEY=your_api_key \
 #      agent-server
 #
 # Note: Environment variables must be provided via -e flags or docker-compose
+# AGENT_SERVER_API_KEY is required for API authentication
+# Generate with: openssl rand -hex 32
 
 # Use Python 3.12 slim image as base
 FROM python:3.12-slim
@@ -30,7 +33,16 @@ COPY . .
 
 # Install Python dependencies using uv
 # Using --system installs packages system-wide (no virtual environment in Docker)
-RUN uv pip install --system .
+# Install dependencies directly from pyproject.toml (without installing the package itself)
+RUN uv pip install --system \
+    "aiohttp>=3.9.0" \
+    "anchorbrowser>=0.1.0" \
+    "browser-use>=0.9.0" \
+    "fastapi>=0.115.0" \
+    "uvicorn[standard]>=0.32.0" \
+    "convex>=0.5.0" \
+    "python-dotenv>=1.0.0" \
+    "pydantic>=2.10.0"
 
 # Create directory for temporary file uploads
 RUN mkdir -p /tmp/browser_arena_uploads

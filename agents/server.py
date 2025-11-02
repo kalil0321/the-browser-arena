@@ -9,8 +9,9 @@ import uvicorn
 from anchorbrowser import Anchorbrowser
 from convex import ConvexClient
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 # Import agent functions
@@ -36,6 +37,29 @@ if not ANCHOR_API_KEY:
     raise ValueError("ANCHOR_API_KEY environment variable is required")
 
 anchor_browser = Anchorbrowser(api_key=ANCHOR_API_KEY)
+
+# Initialize API key for server authentication
+AGENT_SERVER_API_KEY = os.getenv("AGENT_SERVER_API_KEY")
+if not AGENT_SERVER_API_KEY:
+    raise ValueError("AGENT_SERVER_API_KEY environment variable is required")
+
+# Security scheme for API key authentication
+security = HTTPBearer()
+
+
+async def verify_api_key(
+    authorization: HTTPAuthorizationCredentials = Depends(security)
+) -> None:
+    """
+    Verify that the provided API key matches the server's API key.
+    """
+    provided_key = authorization.credentials
+    
+    if not provided_key or provided_key != AGENT_SERVER_API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key. Provide a valid API key in the Authorization header as 'Bearer <key>'",
+        )
 
 
 # Pydantic models
@@ -663,7 +687,11 @@ async def health_convex():
 
 
 @app.post("/agent/skyvern", response_model=AgentResponse)
-async def run_skyvern_agent(request: AgentRequest, background_tasks: BackgroundTasks):
+async def run_skyvern_agent(
+    request: AgentRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(verify_api_key),
+):
     """
     Start a Skyvern agent task in the background
 
@@ -680,7 +708,9 @@ async def run_skyvern_agent(request: AgentRequest, background_tasks: BackgroundT
 
 @app.post("/agent/browser-use", response_model=AgentResponse)
 async def run_browser_use_agent(
-    request: AgentRequest, background_tasks: BackgroundTasks
+    request: AgentRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(verify_api_key),
 ):
     """
     Start a Browser-Use agent task in the background
@@ -770,7 +800,10 @@ async def run_browser_use_agent(
 
 
 @app.post("/upload-file")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(
+    file: UploadFile = File(...),
+    _: None = Depends(verify_api_key),
+):
     """
     Upload a file to be used by browser-use agent tasks.
     

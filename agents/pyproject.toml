@@ -1,8 +1,11 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "agents"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.9.0",
@@ -14,3 +17,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pydantic>=2.10.0",
 ]
+
+[tool.setuptools]
+packages = ["browser_use_agent", "skyvern_agent"]
+
+[tool.setuptools.package-data]
+"*" = ["*.py"]
