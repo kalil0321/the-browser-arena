@@ -20,7 +20,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./agents
-          file: Dockerfile
+          file: ./agents/Dockerfile
           push: false # Don't push, just test the build
           platforms: linux/amd64
           tags: kalil0321/agent-server:test
