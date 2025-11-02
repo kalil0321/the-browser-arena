@@ -19,8 +19,8 @@ jobs:
       - name: Build Docker image (test only, no push)
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./agents/Dockerfile
+          context: ./agents
+          file: Dockerfile
           push: false # Don't push, just test the build
           platforms: linux/amd64
           tags: kalil0321/agent-server:test

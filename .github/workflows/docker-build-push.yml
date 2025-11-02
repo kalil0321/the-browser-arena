@@ -25,6 +25,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify build context files
+        run: |
+          echo "Checking files in agents directory:"
+          ls -la agents/ | head -20
+          echo ""
+          echo "Checking for required files:"
+          test -f agents/Dockerfile && echo "✅ Dockerfile found" || echo "❌ Dockerfile missing"
+          test -f agents/pyproject.toml && echo "✅ pyproject.toml found" || echo "❌ pyproject.toml missing"
+          test -f agents/uv.lock && echo "✅ uv.lock found" || echo "❌ uv.lock missing"
+
       - name: Validate secrets
         run: |
           if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
@@ -65,8 +75,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./agents/Dockerfile
+          context: ./agents
+          file: Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
