@@ -45,7 +45,7 @@ export default defineSchema({
 
     // Demo usage table - tracks device fingerprints for demo rate limiting
     demoUsage: defineTable({
-        deviceFingerprint: v.string(), // hybrid: client fingerprint + server hash
+        deviceFingerprint: v.string(), // server-generated signed fingerprint
         clientFingerprint: v.string(), // client-only fingerprint for easy lookups
         ipAddress: v.string(),
         userAgent: v.string(),
@@ -55,5 +55,6 @@ export default defineSchema({
         lastUsedAt: v.number(),
     })
         .index("by_fingerprint", ["deviceFingerprint"])
-        .index("by_client_fingerprint", ["clientFingerprint"]),
+        .index("by_client_fingerprint", ["clientFingerprint"])
+        .index("by_ip", ["ipAddress"]),
 });

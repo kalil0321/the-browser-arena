@@ -651,53 +651,73 @@ export const claimDemoQuerySlot = mutation({
     handler: async (ctx, args) => {
         const now = Date.now();
 
-        const existing = await ctx.db
+        // First check: Look for existing usage by device fingerprint (primary check)
+        const existingByFingerprint = await ctx.db
             .query("demoUsage")
             .withIndex("by_fingerprint", (q) => q.eq("deviceFingerprint", args.deviceFingerprint))
             .first();
 
-        if (existing) {
-            // Check if limit already exceeded
-            if (existing.queriesUsed >= 1) {
+        if (existingByFingerprint) {
+            // Check if limit already exceeded for this fingerprint
+            if (existingByFingerprint.queriesUsed >= 1) {
                 return {
                     allowed: false,
-                    queriesUsed: existing.queriesUsed,
+                    queriesUsed: existingByFingerprint.queriesUsed,
                     maxQueries: 1,
                 };
             }
 
             // Atomically increment usage
-            await ctx.db.patch(existing._id, {
-                queriesUsed: existing.queriesUsed + 1,
+            await ctx.db.patch(existingByFingerprint._id, {
+                queriesUsed: existingByFingerprint.queriesUsed + 1,
                 lastUsedAt: now,
             });
 
             return {
                 allowed: true,
-                usageId: existing._id,
-                queriesUsed: existing.queriesUsed + 1,
-                maxQueries: 1,
-            };
-        } else {
-            // First usage - create new record with queriesUsed: 1
-            const usageId = await ctx.db.insert("demoUsage", {
-                deviceFingerprint: args.deviceFingerprint,
-                clientFingerprint: args.clientFingerprint,
-                ipAddress: args.ipAddress,
-                userAgent: args.userAgent,
-                queriesUsed: 1,
-                sessionIds: [],
-                firstUsedAt: now,
-                lastUsedAt: now,
-            });
-
-            return {
-                allowed: true,
-                usageId,
-                queriesUsed: 1,
+                usageId: existingByFingerprint._id,
+                queriesUsed: existingByFingerprint.queriesUsed + 1,
                 maxQueries: 1,
             };
         }
+
+        // Second check: IP-based rate limiting (defense in depth)
+        // This prevents bypassing fingerprint limits by spoofing cookies
+        // Only check if IP is not "unknown" (which happens when IP can't be determined)
+        if (args.ipAddress !== "unknown") {
+            const existingByIP = await ctx.db
+                .query("demoUsage")
+                .withIndex("by_ip", (q) => q.eq("ipAddress", args.ipAddress))
+                .first();
+
+            if (existingByIP && existingByIP.queriesUsed >= 1) {
+                // IP has already used a query, deny even with different fingerprint
+                return {
+                    allowed: false,
+                    queriesUsed: existingByIP.queriesUsed,
+                    maxQueries: 1,
+                };
+            }
+        }
+
+        // First usage - create new record with queriesUsed: 1
+        const usageId = await ctx.db.insert("demoUsage", {
+            deviceFingerprint: args.deviceFingerprint,
+            clientFingerprint: args.clientFingerprint,
+            ipAddress: args.ipAddress,
+            userAgent: args.userAgent,
+            queriesUsed: 1,
+            sessionIds: [],
+            firstUsedAt: now,
+            lastUsedAt: now,
+        });
+
+        return {
+            allowed: true,
+            usageId,
+            queriesUsed: 1,
+            maxQueries: 1,
+        };
     },
 });
 

@@ -5,7 +5,7 @@ import { Stagehand } from "@browserbasehq/stagehand";
 import { after } from "next/server";
 import { api } from "../../../../../convex/_generated/api";
 import { badRequest, mapProviderError, serverMisconfigured } from "@/lib/http-errors";
-import { createHybridFingerprint } from "@/lib/fingerprint";
+import { getOrCreateSignedFingerprint } from "@/lib/fingerprint";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
@@ -112,16 +112,22 @@ export async function POST(request: NextRequest) {
             return badRequest("Field 'agentType' must be 'stagehand' or 'browser-use'");
         }
 
-        if (!clientFingerprint || typeof clientFingerprint !== 'string') {
-            return badRequest("Field 'clientFingerprint' is required");
-        }
+        // clientFingerprint is optional now - we use it for display purposes but not for rate limiting
+        // Rate limiting is now based on server-generated signed fingerprint from cookies
 
         // Get IP and User-Agent
         const ip = getClientIP(request);
         const userAgent = request.headers.get("user-agent") || "";
 
-        // Create hybrid fingerprint
-        const deviceFingerprint = await createHybridFingerprint(clientFingerprint, ip, userAgent);
+        // Get or create server-side signed fingerprint from cookie
+        // This prevents clients from spoofing the fingerprint
+        const cookieName = "demo_fingerprint";
+        const cookieValue = request.cookies.get(cookieName)?.value || null;
+        const { fingerprint: deviceFingerprint, cookieValue: fingerprintCookie } =
+            await getOrCreateSignedFingerprint(cookieValue, ip, userAgent);
+
+        // Use clientFingerprint if provided, otherwise use a placeholder
+        const effectiveClientFingerprint = clientFingerprint || "unknown";
 
         // Create Convex client without auth for demo endpoint
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -131,12 +137,13 @@ export async function POST(request: NextRequest) {
         // usage in a single transaction
         const claimResult = await convex.mutation(api.mutations.claimDemoQuerySlot, {
             deviceFingerprint,
-            clientFingerprint,
+            clientFingerprint: effectiveClientFingerprint,
             ipAddress: ip,
             userAgent: userAgent,
         });
 
-        if (!claimResult.allowed) {
+        if (!claimResult.allowed || !claimResult.usageId) {
+            // Return response without setting cookie if limit reached
             return NextResponse.json(
                 {
                     error: "DEMO_LIMIT_REACHED",
@@ -336,8 +343,8 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        // Return session info immediately
-        return NextResponse.json({
+        // Return session info immediately with cookie set
+        const response = NextResponse.json({
             session: {
                 id: dbSessionId,
             },
@@ -345,6 +352,18 @@ export async function POST(request: NextRequest) {
             liveViewUrl: liveViewUrl,
             isDemo: true,
         });
+
+        // Set cookie for server-generated fingerprint
+        // Cookie expires in 1 year to persist across sessions
+        response.cookies.set(cookieName, fingerprintCookie, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 60 * 60 * 24 * 365, // 1 year
+            path: "/",
+        });
+
+        return response;
     } catch (error) {
         console.error("❌ Error in demo POST handler:", error);
         return NextResponse.json(
