@@ -188,7 +188,7 @@ interface ChatInputProps {
 export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputProps) {
 
     // Use this as default input
-    const [input, setInput] = useState("Find top hacker news post");
+    const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);

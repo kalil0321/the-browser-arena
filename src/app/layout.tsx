@@ -8,6 +8,7 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/s
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { AppThemeApplier } from "../components/app-theme-applier";
+import { Analytics } from "@vercel/analytics/react";
 
 const appSans = Pixelify_Sans({
   variable: "--font-sans",
@@ -126,6 +127,7 @@ export default async function RootLayout({
             </SidebarProvider>
             <Toaster position="bottom-right" richColors />
           </ConvexClientProvider>
+          <Analytics />
         </ThemeProvider>
       </body>
     </html>
