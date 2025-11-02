@@ -13,8 +13,8 @@ export function HelpButton() {
             <SidebarMenuItem>
                 <SidebarMenuButton
                     onClick={() => {
-                        // Open help modal or navigate to help page
-                        window.open("https://help.example.com", "_blank");
+                        // Open GitHub issue creation page
+                        window.open("https://github.com/kalil0321/the-browser-arena/issues/new", "_blank");
                     }}
                     className="w-full justify-start"
                 >
