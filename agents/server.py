@@ -1,6 +1,9 @@
 import os
+import sys
 import tempfile
+import time
 import uuid
+import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
 import aiohttp
@@ -14,8 +17,8 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
-    Header,
     HTTPException,
+    Request,
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +28,19 @@ from pydantic import BaseModel
 # Import agent functions
 from browser_use_agent import run_browser_use
 
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+
+logger = logging.getLogger("agent-server")
+logger.setLevel(logging.INFO)
 
 # Load environment variables from project root
 load_dotenv("../.env.local")
@@ -63,6 +79,7 @@ async def verify_api_key(
     provided_key = authorization.credentials
 
     if not provided_key or provided_key != AGENT_SERVER_API_KEY:
+        logger.warning("Invalid API key provided")
         raise HTTPException(
             status_code=401,
             detail="Invalid or missing API key. Provide a valid API key in the Authorization header as 'Bearer <key>'",
@@ -102,11 +119,14 @@ class AgentResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print("🚀 Agent server starting up...")
-    print(f"📡 Connected to Convex: {CONVEX_URL}")
+    logger.info("🚀 Agent server starting up...")
+    logger.info(f"📡 Connected to Convex: {CONVEX_URL}")
+    logger.info(
+        f"🔑 API key authentication: {'enabled' if AGENT_SERVER_API_KEY else 'disabled'}"
+    )
     yield
     # Shutdown
-    print("👋 Agent server shutting down...")
+    logger.info("👋 Agent server shutting down...")
 
 
 # Create FastAPI app
@@ -116,6 +136,64 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+# Request ID middleware (must be after app creation)
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    """Add request ID for tracking"""
+    request_id = str(uuid.uuid4())[:8]
+    request.state.request_id = request_id
+
+    start_time = time.time()
+
+    # Log request
+    logger.info(
+        f"[{request_id}] {request.method} {request.url.path} "
+        f"from {request.client.host if request.client else 'unknown'}"
+    )
+
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+
+        # Log response
+        logger.info(
+            f"[{request_id}] {request.method} {request.url.path} "
+            f"-> {response.status_code} ({process_time:.3f}s)"
+        )
+
+        response.headers["X-Request-ID"] = request_id
+        return response
+    except Exception as e:
+        process_time = time.time() - start_time
+        logger.error(
+            f"[{request_id}] {request.method} {request.url.path} "
+            f"-> ERROR ({process_time:.3f}s): {str(e)}",
+            exc_info=True,
+        )
+        raise
+
+
+# Exception handler for unhandled errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle all unhandled exceptions"""
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.error(f"[{request_id}] Unhandled exception: {str(exc)}", exc_info=True)
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "request_id": request_id,
+            "detail": str(exc)
+            if os.getenv("ENVIRONMENT") == "development"
+            else "An error occurred",
+        },
+    )
+
 
 # Add CORS middleware
 app.add_middleware(
@@ -221,19 +299,16 @@ async def upload_recording_to_convex(
                 if response.status == 200:
                     result = await response.json()
                     recording_url = result.get("recordingUrl")
-                    print(f"✅ Recording uploaded successfully: {recording_url}")
+                    logger.info(f"✅ Recording uploaded successfully: {recording_url}")
                     return recording_url
                 else:
                     error_text = await response.text()
-                    print(
-                        f"⚠️  Failed to upload recording: {response.status} - {error_text}"
+                    logger.warning(
+                        f"Failed to upload recording: HTTP {response.status} - {error_text}"
                     )
                     return None
     except Exception as e:
-        print(f"⚠️  Error uploading recording: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
+        logger.error(f"Error uploading recording: {str(e)}", exc_info=True)
         return None
 
 
@@ -297,26 +372,36 @@ async def run_browser_use_task(
     file_path: Optional[str] = None,
 ):
     """Run Browser-Use agent in background and update Convex"""
+    task_start_time = time.time()
+    logger.info(
+        f"[Agent {agent_id[:8]}] Starting Browser-Use task for session {session_id[:8]}"
+    )
+
     try:
         # Update status to running
-        print(f"🔄 Updating Browser-Use agent {agent_id} status to running...")
+        logger.info(f"[Agent {agent_id[:8]}] Updating status to 'running'")
         try:
             convex_client.mutation(
                 "mutations:updateAgentStatusFromBackend",
                 {"agentId": agent_id, "status": "running"},
             )
         except Exception as convex_error:
-            print(f"⚠️  Warning: Could not update status to running: {convex_error}")
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Could not update status to running: {convex_error}",
+                exc_info=True,
+            )
 
         # Run the agent
-        print(f"🤖 Starting Browser-Use execution for: {instruction}")
+        logger.info(
+            f"[Agent {agent_id[:8]}] Starting execution - Instruction: {instruction[:100]}..."
+        )
         if secrets:
-            print(
-                "🔐 Passing secrets to Browser-Use agent:",
-                {"keys": list(secrets.keys()), "count": len(secrets)},
+            logger.info(
+                f"[Agent {agent_id[:8]}] Passing {len(secrets)} secrets to Browser-Use agent "
+                f"(keys: {', '.join(list(secrets.keys())[:3])}{'...' if len(secrets) > 3 else ''})"
             )
         if file_path:
-            print(f"📎 File provided for browser-use agent: {file_path}")
+            logger.info(f"[Agent {agent_id[:8]}] File provided: {file_path}")
 
         result, usage, timings = await run_browser_use(
             prompt=instruction,
@@ -334,18 +419,21 @@ async def run_browser_use_task(
 
         # Log timing information
         if timings:
-            print("\n📊 Browser-Use Agent Timing Summary:")
-            print(f"  Total: {timings.get('total', 0):.2f}s")
-            print(f"  - LLM Init: {timings.get('llm_initialization', 0):.2f}s")
-            print(f"  - Browser Init: {timings.get('browser_initialization', 0):.2f}s")
-            print(f"  - Agent Init: {timings.get('agent_initialization', 0):.2f}s")
-            print(f"  - Agent Execution: {timings.get('agent_execution', 0):.2f}s")
-            print(f"  - Usage Summary: {timings.get('usage_summary', 0):.2f}s")
+            logger.info(
+                f"[Agent {agent_id[:8]}] Timing Summary - "
+                f"Total: {timings.get('total', 0):.2f}s | "
+                f"LLM Init: {timings.get('llm_initialization', 0):.2f}s | "
+                f"Browser Init: {timings.get('browser_initialization', 0):.2f}s | "
+                f"Agent Init: {timings.get('agent_initialization', 0):.2f}s | "
+                f"Execution: {timings.get('agent_execution', 0):.2f}s"
+            )
 
         # Fetch and upload recording before deleting session
         recording_url = None
         try:
-            print(f"📹 Fetching recording for session {browser_session_id}...")
+            logger.info(
+                f"[Agent {agent_id[:8]}] Fetching recording for session {browser_session_id[:8]}..."
+            )
             recording = anchor_browser.sessions.recordings.primary.get(
                 browser_session_id
             )
@@ -365,26 +453,31 @@ async def run_browser_use_task(
                 )
 
             if recording_content:
-                print(f"📦 Recording size: {len(recording_content)} bytes")
+                logger.info(
+                    f"[Agent {agent_id[:8]}] Recording size: {len(recording_content)} bytes"
+                )
                 recording_url = await upload_recording_to_convex(
                     agent_id, recording_content
                 )
             else:
-                print("⚠️  Could not extract recording content")
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Could not extract recording content"
+                )
         except Exception as e:
-            print(f"⚠️  Failed to fetch/upload recording: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Failed to fetch/upload recording: {str(e)}",
+                exc_info=True,
+            )
 
         # Debug logging
-        print(f"📊 Result type: {type(result)}")
-        print(f"📊 Usage type: {type(usage)}")
+        logger.debug(
+            f"[Agent {agent_id[:8]}] Result type: {type(result)}, Usage type: {type(usage)}"
+        )
         if usage:
-            print(f"📊 Usage contents: {usage}")
+            logger.debug(f"[Agent {agent_id[:8]}] Usage: {usage}")
 
         # Update with result
-        print("💾 Saving Browser-Use results to Convex...")
+        logger.info(f"[Agent {agent_id[:8]}] Saving results to Convex...")
 
         # Extract result data safely - convert everything to JSON-serializable types
         try:
@@ -394,7 +487,9 @@ async def run_browser_use_task(
                 else str(result)
             )
         except Exception as e:
-            print(f"⚠️  Warning: Could not get final_result: {e}")
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Could not get final_result: {e}", exc_info=True
+            )
             final_result = "Result extraction failed"
 
         try:
@@ -402,7 +497,10 @@ async def run_browser_use_task(
                 result.is_successful() if hasattr(result, "is_successful") else True
             )
         except Exception as e:
-            print(f"⚠️  Warning: Could not get is_successful: {e}")
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Could not get is_successful: {e}",
+                exc_info=True,
+            )
             is_successful = True
 
         try:
@@ -413,7 +511,9 @@ async def run_browser_use_task(
                 else 0
             )
         except Exception as e:
-            print(f"⚠️  Warning: Could not get duration: {e}")
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Could not get duration: {e}", exc_info=True
+            )
             duration = 0
 
         # Convert usage to a simple dict with only JSON-serializable values
@@ -449,16 +549,22 @@ async def run_browser_use_task(
                     "browser_cost": browser_cost,
                 }
             except Exception as e:
-                print(f"⚠️  Warning: Could not serialize usage: {e}")
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Could not serialize usage: {e}",
+                    exc_info=True,
+                )
                 usage_dict = {"raw": str(usage)}
 
         extracted_content = result.extracted_content()
         action_results = result.action_results()
         action_names = result.action_names()
 
-        print(f"📋 Extracted content: {extracted_content}")
-        print(f"📋 Action results: {action_results}")
-        print(f"📋 Action names: {action_names}")
+        logger.debug(
+            f"[Agent {agent_id[:8]}] Extracted content length: {len(extracted_content) if extracted_content else 0}"
+        )
+        logger.debug(
+            f"[Agent {agent_id[:8]}] Actions count: {len(action_names) if action_names else 0}"
+        )
 
         # Extract actions/history from result - ensure JSON serializable for Convex
         actions = []
@@ -491,12 +597,17 @@ async def run_browser_use_task(
                     }
                     actions.append(to_jsonable(action_entry))
             else:
-                print(
-                    f"⚠️  Warning: Action names and results do not match: {action_names} != {action_results}"
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Action names and results do not match: "
+                    f"names={len(action_names) if action_names else 0}, "
+                    f"results={len(action_results) if action_results else 0}"
                 )
                 actions = []
         except Exception as e:
-            print(f"⚠️  Warning: Failed to serialize actions: {e}")
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Failed to serialize actions: {e}",
+                exc_info=True,
+            )
             actions = []
 
         # Send payload to backend first
@@ -519,22 +630,32 @@ async def run_browser_use_task(
         )
 
         if recording_url:
-            print(f"✅ Recording saved: {recording_url}")
+            logger.info(f"[Agent {agent_id[:8]}] Recording saved: {recording_url}")
 
-        print(f"✅ Browser-Use agent {agent_id} completed successfully")
+        task_duration = time.time() - task_start_time
+        logger.info(
+            f"[Agent {agent_id[:8]}] ✅ Completed successfully in {task_duration:.2f}s - "
+            f"Session: {session_id[:8]}, Success: {is_successful}"
+        )
 
         # Delete browser session after payload is sent to backend
         try:
             anchor_browser.sessions.delete(browser_session_id)
-            print(f"🗑️  Deleted browser session {browser_session_id}")
+            logger.info(
+                f"[Agent {agent_id[:8]}] Deleted browser session {browser_session_id[:8]}"
+            )
         except Exception as e:
-            print(f"⚠️  Failed to delete browser session: {str(e)}")
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Failed to delete browser session: {str(e)}",
+                exc_info=True,
+            )
 
     except Exception as e:
-        print(f"❌ Browser-Use agent {agent_id} failed: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
+        task_duration = time.time() - task_start_time
+        logger.error(
+            f"[Agent {agent_id[:8]}] ❌ Failed after {task_duration:.2f}s: {str(e)}",
+            exc_info=True,
+        )
 
         # Update with error
         try:
@@ -546,8 +667,12 @@ async def run_browser_use_task(
                     "error": str(e),
                 },
             )
+            logger.info(f"[Agent {agent_id[:8]}] Updated Convex with error status")
         except Exception as convex_error:
-            print(f"❌ Failed to update error status in Convex: {convex_error}")
+            logger.error(
+                f"[Agent {agent_id[:8]}] Failed to update error status in Convex: {convex_error}",
+                exc_info=True,
+            )
 
 
 # API Endpoints
@@ -595,6 +720,13 @@ async def run_browser_use_agent(
     If browserSessionId, cdpUrl, and liveViewUrl are provided, uses those instead of creating a new session.
     This allows the Next.js API to create the browser session in parallel, saving 3-5 seconds.
     """
+    request_id = uuid.uuid4().hex[:8]
+    logger.info(
+        f"[Request {request_id}] Browser-Use agent request - "
+        f"Session: {request.sessionId[:8]}, Model: {request.providerModel}, "
+        f"Has browser session: {bool(request.browserSessionId)}"
+    )
+
     try:
         # Use provided browser session if available, otherwise create new one
         if request.browserSessionId and request.cdpUrl and request.liveViewUrl:
@@ -661,6 +793,11 @@ async def run_browser_use_agent(
             file_path=request.filePath,
         )
 
+        logger.info(
+            f"[Request {request_id}] Browser-Use agent started - "
+            f"Agent ID: {agent_id[:8]}, Browser Session: {browser_session_id[:8]}"
+        )
+
         return AgentResponse(
             sessionId=request.sessionId,
             agentId=agent_id,
@@ -668,7 +805,14 @@ async def run_browser_use_agent(
             liveUrl=live_view_url,
         )
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        logger.error(
+            f"[Request {request_id}] Failed to start Browser-Use agent: {str(e)}",
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to start Browser-Use agent: {str(e)}"
         )
@@ -700,14 +844,14 @@ async def upload_file(
             content = await file.read()
             f.write(content)
 
-        print(
-            f"📎 File uploaded: {file.filename} -> {file_path} ({len(content)} bytes)"
+        logger.info(
+            f"File uploaded: {file.filename} -> {file_path} ({len(content)} bytes)"
         )
 
         return {"filePath": file_path, "filename": file.filename}
 
     except Exception as e:
-        print(f"❌ Error uploading file: {str(e)}")
+        logger.error(f"Error uploading file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
 
