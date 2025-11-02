@@ -108,7 +108,7 @@ function computeCost(model: string | undefined, usage: any): number {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, thinkingModel, executionModel } = await request.json();
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
@@ -230,7 +230,20 @@ export async function POST(request: NextRequest) {
                 });
 
                 await stagehand.init();
-                const agent = await stagehand.agent();
+
+                // Determine planning model (thinking model) - use thinkingModel if provided, otherwise fallback to model
+                const planningModel = thinkingModel || modelString;
+
+                // Determine execution model - use executionModel if provided, otherwise fallback to planningModel
+                const executionModelString = executionModel || planningModel;
+
+                const agent = await stagehand.agent({
+                    // Computer Use Agent (CUA) - commented out until proper setup is completed
+                    // cua: true,
+                    model: planningModel,
+                    executionModel: executionModelString,
+                    // TODO: add tools later
+                });
 
                 const { message, actions, usage, success, completed, metadata } = await agent.execute({
                     highlightCursor: true,
