@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useConvexAuth } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -17,7 +17,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, LogIn, LogOut, Loader2, Mail } from "lucide-react";
+import { User, LogIn, LogOut, Loader2, Mail, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
 export function UserInfo() {
@@ -32,6 +32,12 @@ export function UserInfo() {
     const [name, setName] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [activeAuthTab, setActiveAuthTab] = useState<"signin" | "signup">("signin");
+
+    // Clear errors when switching tabs
+    useEffect(() => {
+        setError(null);
+    }, [activeAuthTab]);
 
     const handleSignIn = async () => {
         setIsSubmitting(true);
@@ -44,8 +50,20 @@ export function UserInfo() {
             // Clear form on success
             setEmail("");
             setPassword("");
+            setError(null);
         } catch (err: any) {
-            setError(err?.message || "Sign in failed");
+            // Extract error message from Better Auth error response
+            let errorMsg = "Sign in failed. Please check your credentials and try again.";
+            if (err?.message) {
+                errorMsg = err.message;
+            } else if (err?.error?.message) {
+                errorMsg = err.error.message;
+            } else if (err?.data?.message) {
+                errorMsg = err.data.message;
+            } else if (typeof err === "string") {
+                errorMsg = err;
+            }
+            setError(errorMsg);
         } finally {
             setIsSubmitting(false);
         }
@@ -64,8 +82,20 @@ export function UserInfo() {
             setEmail("");
             setPassword("");
             setName("");
+            setError(null);
         } catch (err: any) {
-            setError(err?.message || "Sign up failed");
+            // Extract error message from Better Auth error response
+            let errorMsg = "Sign up failed. Please check your information and try again.";
+            if (err?.message) {
+                errorMsg = err.message;
+            } else if (err?.error?.message) {
+                errorMsg = err.error.message;
+            } else if (err?.data?.message) {
+                errorMsg = err.data.message;
+            } else if (typeof err === "string") {
+                errorMsg = err;
+            }
+            setError(errorMsg);
         } finally {
             setIsSubmitting(false);
         }
@@ -163,7 +193,11 @@ export function UserInfo() {
                     <div className="p-1">
                         <DropdownMenuLabel className="px-2 py-1.5">Account</DropdownMenuLabel>
                         <div className="px-2 pb-2">
-                            <Tabs defaultValue="signin" className="w-full">
+                            <Tabs
+                                value={activeAuthTab}
+                                onValueChange={(value) => setActiveAuthTab(value as "signin" | "signup")}
+                                className="w-full"
+                            >
                                 <TabsList className="grid w-full grid-cols-2 mb-3">
                                     <TabsTrigger value="signin" className="text-xs">
                                         Sign In
@@ -174,8 +208,9 @@ export function UserInfo() {
                                 </TabsList>
                                 <TabsContent value="signin" className="space-y-3 mt-0">
                                     {error && (
-                                        <div className="text-xs text-red-600 dark:text-red-400 p-2 bg-red-500/10 rounded">
-                                            {error}
+                                        <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 p-2 bg-red-500/10 border border-red-500/20 rounded">
+                                            <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                            <span className="flex-1">{error}</span>
                                         </div>
                                     )}
                                     <div className="space-y-2">
@@ -184,6 +219,13 @@ export function UserInfo() {
                                             placeholder="Email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && email && password && !isSubmitting) {
+                                                    handleSignIn();
+                                                }
+                                            }}
+                                            disabled={isSubmitting}
+                                            autoComplete="email"
                                             className="h-9 text-xs"
                                         />
                                         <Input
@@ -191,12 +233,14 @@ export function UserInfo() {
                                             placeholder="Password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="h-9 text-xs"
                                             onKeyDown={(e) => {
-                                                if (e.key === "Enter" && email && password) {
+                                                if (e.key === "Enter" && email && password && !isSubmitting) {
                                                     handleSignIn();
                                                 }
                                             }}
+                                            disabled={isSubmitting}
+                                            autoComplete="current-password"
+                                            className="h-9 text-xs"
                                         />
                                     </div>
                                     <Button
@@ -216,8 +260,9 @@ export function UserInfo() {
                                 </TabsContent>
                                 <TabsContent value="signup" className="space-y-3 mt-0">
                                     {error && (
-                                        <div className="text-xs text-red-600 dark:text-red-400 p-2 bg-red-500/10 rounded">
-                                            {error}
+                                        <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 p-2 bg-red-500/10 border border-red-500/20 rounded">
+                                            <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                            <span className="flex-1">{error}</span>
                                         </div>
                                     )}
                                     <div className="space-y-2">
@@ -226,6 +271,13 @@ export function UserInfo() {
                                             placeholder="Name"
                                             value={name}
                                             onChange={(e) => setName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && name && email && password && !isSubmitting) {
+                                                    handleSignUp();
+                                                }
+                                            }}
+                                            disabled={isSubmitting}
+                                            autoComplete="name"
                                             className="h-9 text-xs"
                                         />
                                         <Input
@@ -233,6 +285,13 @@ export function UserInfo() {
                                             placeholder="Email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && name && email && password && !isSubmitting) {
+                                                    handleSignUp();
+                                                }
+                                            }}
+                                            disabled={isSubmitting}
+                                            autoComplete="email"
                                             className="h-9 text-xs"
                                         />
                                         <Input
@@ -240,12 +299,14 @@ export function UserInfo() {
                                             placeholder="Password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="h-9 text-xs"
                                             onKeyDown={(e) => {
-                                                if (e.key === "Enter" && email && password && name) {
+                                                if (e.key === "Enter" && name && email && password && !isSubmitting) {
                                                     handleSignUp();
                                                 }
                                             }}
+                                            disabled={isSubmitting}
+                                            autoComplete="new-password"
+                                            className="h-9 text-xs"
                                         />
                                     </div>
                                     <Button

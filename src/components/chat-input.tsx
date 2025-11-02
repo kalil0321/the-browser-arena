@@ -15,7 +15,7 @@ const LoadingDino = lazy(() => import("@/components/loading-dino").then(mod => (
 import { authClient } from "@/lib/auth/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, Settings, CheckCircle2, XCircle, Plus, Trash2, Paperclip, X } from "lucide-react";
+import { Bot, Sparkles, Settings, CheckCircle2, XCircle, Plus, Trash2, Paperclip, X, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -215,6 +215,22 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const [name, setName] = useState("");
     const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
+    const [activeAuthTab, setActiveAuthTab] = useState<"signin" | "signup">("signin");
+
+    // Clear errors when dialog opens/closes
+    useEffect(() => {
+        if (!isLoginDialogOpen) {
+            setAuthError(null);
+            setEmail("");
+            setPassword("");
+            setName("");
+        }
+    }, [isLoginDialogOpen]);
+
+    // Clear errors when switching tabs
+    useEffect(() => {
+        setAuthError(null);
+    }, [activeAuthTab]);
 
     // Agent configuration state
     const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([
@@ -645,6 +661,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             setIsLoginDialogOpen(false);
             setEmail("");
             setPassword("");
+            setAuthError(null);
 
             // Restore stored input if available
             if (storedInputForDemo) {
@@ -656,7 +673,17 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 duration: 3000,
             });
         } catch (err: any) {
-            const errorMsg = err?.message || "Sign in failed";
+            // Extract error message from Better Auth error response
+            let errorMsg = "Sign in failed. Please check your credentials and try again.";
+            if (err?.message) {
+                errorMsg = err.message;
+            } else if (err?.error?.message) {
+                errorMsg = err.error.message;
+            } else if (err?.data?.message) {
+                errorMsg = err.data.message;
+            } else if (typeof err === "string") {
+                errorMsg = err;
+            }
             setAuthError(errorMsg);
             toast.error("Sign in failed", {
                 description: errorMsg,
@@ -680,6 +707,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
             setEmail("");
             setPassword("");
             setName("");
+            setAuthError(null);
 
             // Restore stored input if available
             if (storedInputForDemo) {
@@ -692,7 +720,17 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 description: "Welcome to The Browser Arena!"
             });
         } catch (err: any) {
-            const errorMsg = err?.message || "Sign up failed";
+            // Extract error message from Better Auth error response
+            let errorMsg = "Sign up failed. Please check your information and try again.";
+            if (err?.message) {
+                errorMsg = err.message;
+            } else if (err?.error?.message) {
+                errorMsg = err.error.message;
+            } else if (err?.data?.message) {
+                errorMsg = err.data.message;
+            } else if (typeof err === "string") {
+                errorMsg = err;
+            }
             setAuthError(errorMsg);
             toast.error("Sign up failed", {
                 description: errorMsg,
@@ -1303,15 +1341,20 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                     Please sign in or create an account to submit a query.
                                 </DialogDescription>
                             </DialogHeader>
-                            <Tabs defaultValue="signin" className="w-full">
+                            <Tabs
+                                value={activeAuthTab}
+                                onValueChange={(value) => setActiveAuthTab(value as "signin" | "signup")}
+                                className="w-full"
+                            >
                                 <TabsList className="grid w-full grid-cols-2">
                                     <TabsTrigger value="signin">Sign In</TabsTrigger>
                                     <TabsTrigger value="signup">Sign Up</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="signin" className="space-y-4 mt-4">
                                     {authError && (
-                                        <div className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-500/10 rounded">
-                                            {authError}
+                                        <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400 p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+                                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                            <span className="flex-1">{authError}</span>
                                         </div>
                                     )}
                                     <div className="space-y-2">
@@ -1322,6 +1365,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                             placeholder="Enter your email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && email && password && !isSubmittingAuth) {
+                                                    handleSignIn();
+                                                }
+                                            }}
+                                            disabled={isSubmittingAuth}
+                                            autoComplete="email"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -1332,6 +1382,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                             placeholder="Enter your password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && email && password && !isSubmittingAuth) {
+                                                    handleSignIn();
+                                                }
+                                            }}
+                                            disabled={isSubmittingAuth}
+                                            autoComplete="current-password"
                                         />
                                     </div>
                                     <Button
@@ -1339,13 +1396,21 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                         disabled={isSubmittingAuth || !email || !password}
                                         className="w-full"
                                     >
-                                        {isSubmittingAuth ? "Signing in..." : "Sign In"}
+                                        {isSubmittingAuth ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Signing in...
+                                            </>
+                                        ) : (
+                                            "Sign In"
+                                        )}
                                     </Button>
                                 </TabsContent>
                                 <TabsContent value="signup" className="space-y-4 mt-4">
                                     {authError && (
-                                        <div className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-500/10 rounded">
-                                            {authError}
+                                        <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400 p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+                                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                            <span className="flex-1">{authError}</span>
                                         </div>
                                     )}
                                     <div className="space-y-2">
@@ -1356,6 +1421,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                             placeholder="Enter your name"
                                             value={name}
                                             onChange={(e) => setName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && name && email && password && !isSubmittingAuth) {
+                                                    handleSignUp();
+                                                }
+                                            }}
+                                            disabled={isSubmittingAuth}
+                                            autoComplete="name"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -1366,6 +1438,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                             placeholder="Enter your email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && name && email && password && !isSubmittingAuth) {
+                                                    handleSignUp();
+                                                }
+                                            }}
+                                            disabled={isSubmittingAuth}
+                                            autoComplete="email"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -1376,6 +1455,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                             placeholder="Create a password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && name && email && password && !isSubmittingAuth) {
+                                                    handleSignUp();
+                                                }
+                                            }}
+                                            disabled={isSubmittingAuth}
+                                            autoComplete="new-password"
                                         />
                                     </div>
                                     <Button
@@ -1383,7 +1469,14 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                         disabled={isSubmittingAuth || !email || !password || !name}
                                         className="w-full"
                                     >
-                                        {isSubmittingAuth ? "Signing up..." : "Sign Up"}
+                                        {isSubmittingAuth ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Signing up...
+                                            </>
+                                        ) : (
+                                            "Sign Up"
+                                        )}
                                     </Button>
                                 </TabsContent>
                             </Tabs>
