@@ -85,10 +85,16 @@ export async function POST(request: NextRequest) {
         }
 
         // Call Python agent server with browser session info (no blocking browser creation!)
+        const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+        if (!agentServerApiKey) {
+            return NextResponse.json({ error: "AGENT_SERVER_API_KEY is not configured" }, { status: 500 });
+        }
+
         const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/browser-use`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                "Authorization": `Bearer ${agentServerApiKey}`,
             },
             body: JSON.stringify({
                 sessionId: dbSessionId,

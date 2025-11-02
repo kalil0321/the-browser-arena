@@ -66,9 +66,9 @@ export default function RoadmapPage() {
             case "upcoming":
                 return <Badge variant="outline">Upcoming</Badge>;
             case "in-progress":
-                return <Badge variant="info">In Progress</Badge>;
+                return <Badge variant="secondary">In Progress</Badge>;
             case "released":
-                return <Badge variant="success">Released</Badge>;
+                return <Badge variant="default">Released</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }

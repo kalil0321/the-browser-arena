@@ -299,10 +299,17 @@ export async function POST(request: NextRequest) {
                     // Browser-Use execution
                     const providerModel = model || "browser-use/bu-1.0";
 
+                    const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+                    if (!agentServerApiKey) {
+                        console.error("AGENT_SERVER_API_KEY is not configured");
+                        // Continue anyway - demo mode should still work but will fail
+                    }
+
                     const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/browser-use`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
+                            ...(agentServerApiKey ? { "Authorization": `Bearer ${agentServerApiKey}` } : {}),
                         },
                         body: JSON.stringify({
                             sessionId: dbSessionId,

@@ -72,15 +72,15 @@ export default function ArenaPage() {
         return sessions.filter((session) => {
             const sessionAgents = agentsBySession.get(session._id) || [];
 
-            if (filterAgent !== "all" && !sessionAgents.some(a => a.name === filterAgent)) {
+            if (filterAgent !== "all" && !sessionAgents.some((a: any) => a.name === filterAgent)) {
                 return false;
             }
 
-            if (filterModel !== "all" && !sessionAgents.some(a => a.model === filterModel)) {
+            if (filterModel !== "all" && !sessionAgents.some((a: any) => a.model === filterModel)) {
                 return false;
             }
 
-            if (filterStatus !== "all" && !sessionAgents.some(a => a.status === filterStatus)) {
+            if (filterStatus !== "all" && !sessionAgents.some((a: any) => a.status === filterStatus)) {
                 return false;
             }
 
@@ -365,8 +365,8 @@ export default function ArenaPage() {
                             {filteredSessions &&
                                 filteredSessions.map((session: SessionRow) => {
                                     const sessionAgents = agentsBySession.get(session._id) || [];
-                                    const modelsUsed = Array.from(
-                                        new Set(sessionAgents.map((a) => a.model).filter(Boolean))
+                                    const modelsUsed: string[] = Array.from(
+                                        new Set(sessionAgents.map((a: any) => a.model).filter(Boolean))
                                     );
 
                                     return (
@@ -395,7 +395,7 @@ export default function ArenaPage() {
                                             <TableCell>
                                                 <div className="flex flex-wrap gap-1">
                                                     {modelsUsed.length > 0 ? (
-                                                        modelsUsed.map((model) => (
+                                                        modelsUsed.map((model: string) => (
                                                             <Badge
                                                                 key={model}
                                                                 variant="secondary"

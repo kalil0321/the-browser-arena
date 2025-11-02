@@ -30,10 +30,16 @@ export async function POST(request: NextRequest) {
         });
 
         // Call Python agent server immediately after session is created
+        const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+        if (!agentServerApiKey) {
+            return NextResponse.json({ error: "AGENT_SERVER_API_KEY is not configured" }, { status: 500 });
+        }
+
         const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/skyvern`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                "Authorization": `Bearer ${agentServerApiKey}`,
             },
             body: JSON.stringify({
                 sessionId: dbSessionId,

@@ -233,16 +233,25 @@ export async function POST(request: NextRequest) {
                 const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
                 try {
+                    // Add API key for Python server endpoints
+                    const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+                    const headers: HeadersInit = {
+                        "Content-Type": "application/json",
+                    };
+
+                    // Add Authorization header for Python agent server endpoints
+                    if (!isLocalEndpoint && agentServerApiKey) {
+                        headers["Authorization"] = `Bearer ${agentServerApiKey}`;
+                    }
+
+                    // Forward the authorization cookie for local endpoints
+                    if (isLocalEndpoint && request.headers.get('cookie')) {
+                        headers['cookie'] = request.headers.get('cookie')!;
+                    }
+
                     const response = await fetch(fetchUrl, {
                         method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            // Forward the authorization cookie for local endpoints
-                            ...(isLocalEndpoint && request.headers.get('cookie')
-                                ? { 'cookie': request.headers.get('cookie')! }
-                                : {}
-                            ),
-                        },
+                        headers,
                         body: JSON.stringify(payload),
                         signal: controller.signal,
                     });

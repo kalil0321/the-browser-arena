@@ -21,11 +21,19 @@ export async function POST(request: NextRequest) {
         }
 
         // Forward file to Python server
+        const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+        if (!agentServerApiKey) {
+            return NextResponse.json({ error: "AGENT_SERVER_API_KEY is not configured" }, { status: 500 });
+        }
+
         const pythonFormData = new FormData();
         pythonFormData.append('file', file);
 
         const response = await fetch(`${AGENT_SERVER_URL}/upload-file`, {
             method: 'POST',
+            headers: {
+                "Authorization": `Bearer ${agentServerApiKey}`,
+            },
             body: pythonFormData,
         });
 
