@@ -27,7 +27,7 @@ const mapModelToApiModel = (model: string): string => {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId, browserUseApiKey } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, browserUseApiKey, secrets } = await request.json();
 
         // Get user token for auth
         const token = await getToken();
@@ -48,9 +48,17 @@ export async function POST(request: NextRequest) {
         const apiModel = (model ? mapModelToApiModel(model) : "browser-use-llm") as any;
 
         // Create task in Browser Use Cloud
+        if (secrets) {
+            console.log("🔐 Forwarding secrets to Browser-Use Cloud", {
+                keys: Object.keys(secrets),
+                count: Object.keys(secrets).length,
+            });
+        }
+
         const task = await client.tasks.createTask({
             task: instruction,
             llm: apiModel,
+            ...(secrets ? { secrets } : {}),
             // sessionId is optional - will auto-create if not provided
         });
 

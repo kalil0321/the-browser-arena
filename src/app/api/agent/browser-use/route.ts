@@ -13,7 +13,15 @@ const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model } = await request.json();
+        const {
+            instruction,
+            model,
+            secrets,
+            openaiApiKey,
+            googleApiKey,
+            anthropicApiKey,
+            browserUseApiKey,
+        } = await request.json();
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
@@ -88,6 +96,11 @@ export async function POST(request: NextRequest) {
                 browserSessionId,
                 cdpUrl,
                 liveViewUrl,
+                ...(secrets ? { secrets } : {}),
+                ...(openaiApiKey ? { openaiApiKey } : {}),
+                ...(googleApiKey ? { googleApiKey } : {}),
+                ...(anthropicApiKey ? { anthropicApiKey } : {}),
+                ...(browserUseApiKey ? { browserUseApiKey } : {}),
                 userId: userId,
             }),
         });

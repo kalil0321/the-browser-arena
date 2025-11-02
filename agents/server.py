@@ -1,6 +1,6 @@
 import os
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Dict, Optional
 import aiohttp
 
 import uvicorn
@@ -54,6 +54,7 @@ class AgentRequest(BaseModel):
     googleApiKey: Optional[str] = None
     anthropicApiKey: Optional[str] = None
     browserUseApiKey: Optional[str] = None
+    secrets: Optional[Dict[str, str]] = None
 
 
 class AgentResponse(BaseModel):
@@ -366,6 +367,7 @@ async def run_browser_use_task(
     cdp_url: str,
     browser_session_id: str,
     provider_model: str,
+    secrets: Optional[Dict[str, str]] = None,
     openai_api_key: Optional[str] = None,
     google_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
@@ -385,12 +387,18 @@ async def run_browser_use_task(
 
         # Run the agent
         print(f"🤖 Starting Browser-Use execution for: {instruction}")
+        if secrets:
+            print(
+                "🔐 Passing secrets to Browser-Use agent:",
+                {"keys": list(secrets.keys()), "count": len(secrets)},
+            )
         result, usage, timings = await run_browser_use(
             prompt=instruction,
             cdp_url=cdp_url,
             provider_model=provider_model,
             browser=anchor_browser,
             session_id=browser_session_id,
+            secrets=secrets,
             openai_api_key=openai_api_key,
             google_api_key=google_api_key,
             anthropic_api_key=anthropic_api_key,
@@ -732,6 +740,7 @@ async def run_browser_use_agent(
             cdp_url=cdp_url,
             browser_session_id=browser_session_id,
             provider_model=request.providerModel,
+            secrets=request.secrets,
             openai_api_key=request.openaiApiKey,
             google_api_key=request.googleApiKey,
             anthropic_api_key=request.anthropicApiKey,
