@@ -235,9 +235,9 @@ export async function POST(request: NextRequest) {
                     duration,
                     message,
                     actions,
-                    success,
+                    success: true,
                     agent: "stagehand-cloud",
-                    completed,
+                    completed: true,
                     metadata: {
                         ...metadata,
                         browserbaseSessionId: result?.sessionId ?? "",

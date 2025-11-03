@@ -306,16 +306,16 @@ export async function POST(request: NextRequest) {
                 await browser.sessions.delete(browserSessionId);
 
                 // Get recording after deleting
-                let recordingUrl = "";
-                try {
-                    const recording = await browser.sessions.recordings.primary.get(browserSessionId);
-                    const arrayBuffer = await recording.arrayBuffer();
-                    const base64 = Buffer.from(arrayBuffer).toString('base64');
-                    recordingUrl = `data:video/mp4;base64,${base64}`;
-                    console.log("Recording captured, length:", recordingUrl.length);
-                } catch (recordingError) {
-                    console.error("Failed to get recording:", recordingError);
-                }
+                // let recordingUrl = "";
+                // try {
+                //     const recording = await browser.sessions.recordings.primary.get(browserSessionId);
+                //     const arrayBuffer = await recording.arrayBuffer();
+                //     const base64 = Buffer.from(arrayBuffer).toString('base64');
+                //     recordingUrl = `data:video/mp4;base64,${base64}`;
+                //     console.log("Recording captured, length:", recordingUrl.length);
+                // } catch (recordingError) {
+                //     console.error("Failed to get recording:", recordingError);
+                // }
 
                 const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
                 const llmCost = computeCost(model, usageData);
@@ -335,9 +335,9 @@ export async function POST(request: NextRequest) {
                     duration,
                     message,
                     actions,
-                    success,
+                    success: true,
                     agent: "stagehand",
-                    completed,
+                    completed: true,
                     metadata,
                 }
 

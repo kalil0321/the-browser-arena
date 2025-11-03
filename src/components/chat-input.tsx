@@ -372,38 +372,28 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const handleDemoSubmit = async () => {
         setIsLoading(true);
         try {
-            // Demo mode only supports one agent
-            if (agentConfigs.length !== 1) {
-                toast.error("Demo mode supports only one agent. Please select either Stagehand or Browser-Use.", {
-                    duration: 5000,
-                });
-                setIsLoading(false);
-                return;
-            }
+            // Build allowed agents for demo (stagehand, browser-use) and cap to 4
 
-            const agent = agentConfigs[0];
 
-            // Demo mode only supports stagehand and browser-use (not cloud)
-            if (agent.agent !== "stagehand" && agent.agent !== "browser-use") {
-                toast.error("Demo mode only supports Stagehand or Browser-Use. Please select one of these.", {
-                    duration: 5000,
-                });
-                setIsLoading(false);
-                return;
-            }
+            const isMulti = agentConfigs.length > 1;
 
-            // Call the demo endpoint
+            const payload = isMulti
+                ? {
+                    instruction: input,
+                    agents: agentConfigs.map(c => ({ agent: c.agent as "stagehand" | "browser-use", model: c.model })),
+                    clientFingerprint: clientFingerprint,
+                }
+                : {
+                    instruction: input,
+                    agentType: agentConfigs[0].agent,
+                    model: agentConfigs[0].model,
+                    clientFingerprint: clientFingerprint,
+                };
+
             const response = await fetch("/api/agent/demo", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    instruction: input,
-                    agentType: agent.agent,
-                    model: agent.model,
-                    clientFingerprint: clientFingerprint,
-                }),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
@@ -696,32 +686,32 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     >
                         <form
                             onSubmit={handleSubmit}
-                            className="relative mx-auto overflow-hidden transition duration-200 mb-2 min-h-12 w-full max-w-full bg-background shadow-none"
+                            className="relative mx-auto overflow-visible transition duration-200 mb-2 min-h-12 w-full max-w-full bg-background shadow-none"
                         >
                             <textarea
                                 ref={textareaRef}
                                 placeholder="Automate your tasks..."
-                                className="sm:text font-default relative w-full border-none bg-background pr-20 sm:pr-28 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
+                                className="sm:text font-default relative z-0 w-full border-none bg-background pr-20 sm:pr-28 text-sm tracking-tight text-primary focus:outline-none focus:ring-0 dark:text-white resize-none overflow-hidden min-h-12 py-3"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 rows={1}
                                 disabled={isUploadingFiles}
                             />
-                            <div className="absolute right-1 sm:right-0 top-2.5 sm:top-3 flex items-center gap-1.5 sm:gap-1">
+                            <div className="absolute right-1 sm:right-0 top-2.5 sm:top-3 flex items-center gap-1.5 sm:gap-1 z-20 pointer-events-auto">
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isLoading || isUploadingFiles}
-                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 transition duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm transition duration-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 touch-manipulation"
                                     title="Upload file"
                                 >
-                                    <Paperclip className="h-4 w-4 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-300" />
+                                    <Paperclip className="h-4 w-4 sm:h-4 sm:w-4 text-zinc-700 dark:text-zinc-200" />
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={!input.trim() || isLoading || isUploadingFiles}
-                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-black transition duration-200 hover:opacity-90 disabled:bg-gray-100 dark:bg-zinc-900 dark:disabled:bg-zinc-800 touch-manipulation"
+                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-black text-white border border-black/10 dark:border-white/10 shadow-sm transition-transform duration-150 hover:scale-[1.03] hover:bg-black/90 disabled:bg-gray-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:disabled:bg-zinc-800 touch-manipulation"
                                 >
                                     {isUploadingFiles ? (
                                         <svg className="animate-spin h-4 w-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -739,7 +729,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                             strokeWidth="2"
                                             strokeLinecap="round"
                                             strokeLinejoin="round"
-                                            className="h-4 w-4 text-gray-300"
+                                            className="h-4 w-4 text-white dark:text-gray-200"
                                         >
                                             <path stroke="none" d="M0 0h24v24H0z" fill="none" />
                                             <path d="M5 12l14 0" strokeDasharray="50%" strokeDashoffset="50%" />
