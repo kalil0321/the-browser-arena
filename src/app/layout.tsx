@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     siteName: "The Browser Arena",
     images: [
       {
-        url: "/open-graph.jpeg",
+        url: "/opengraph-image.jpg",
         width: 1200,
         height: 630,
         alt: "The Browser Arena Open Graph",
@@ -77,7 +77,7 @@ export const metadata: Metadata = {
     title: "The Browser Arena",
     description:
       "Test and compare browser agents easily.",
-    images: ["/open-graph.jpeg"],
+    images: ["/opengraph-image.jpg"],
   },
   icons: {
     icon: "/favicon.ico",
