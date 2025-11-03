@@ -60,17 +60,13 @@ export default function Home() {
         {/* Subtle info notes at the bottom - Fixed height to prevent layout shift */}
         <div className="mt-auto w-full max-w-4xl pb-4 pt-6 sm:pb-6 sm:pt-8">
           <div className="space-y-2 min-h-[60px] flex flex-col justify-start px-2">
-            {hasSmooth && (
-              <p className="text-[10px] sm:text-xs text-muted-foreground font-default opacity-60 leading-relaxed">
-                <strong>Note:</strong> To use Smooth, get your API key from <a href="https://app.smooth.sh" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">app.smooth.sh</a> and add it in Settings. Free credits on signup.
-              </p>
-            )}
-            {hasBrowserUse && (
-              <p className="text-[10px] sm:text-xs text-muted-foreground font-default opacity-60 leading-relaxed">
-                <strong>Optional:</strong> Configure API keys for LLM providers (OpenAI, Anthropic, Google) in Settings. Get a Browser-Use API key at <a href="https://cloud.browser-use.com/new-api-key" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">cloud.browser-use.com</a>. Free credits on signup.
-              </p>
-            )}
-            <p className="text-[10px] sm:text-xs text-muted-foreground font-default opacity-60 leading-relaxed">
+            <p className="text-[12px] sm:text-xs text-muted-foreground font-default opacity-60 leading-relaxed">
+              <strong>Note:</strong> To use Smooth, get your API key from <a href="https://app.smooth.sh" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">app.smooth.sh</a> and add it in Settings. Free credits on signup.
+            </p>
+            <p className="text-[12px] sm:text-xs text-muted-foreground font-default opacity-60 leading-relaxed">
+              <strong>Optional:</strong> Configure API keys for LLM providers (OpenAI, Anthropic, Google) in Settings. Get a Browser-Use API key at <a href="https://cloud.browser-use.com/new-api-key" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">cloud.browser-use.com</a>. Free credits on signup.
+            </p>
+            <p className="text-[12px] sm:text-xs text-muted-foreground font-default opacity-60 leading-relaxed">
               <strong>GitHub:</strong> Check out the repo <a href="https://github.com/kalil0321/the-browser-arena" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">kalil0321/the-browser-arena</a> and give it a ⭐.
             </p>
           </div>
