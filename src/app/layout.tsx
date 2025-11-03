@@ -111,7 +111,16 @@ export default async function RootLayout({
   const appThemeCookie = cookieStore.get("appTheme")?.value;
   return (
     <html lang="en" suppressHydrationWarning data-theme={appThemeCookie === "pro" ? "pro" : undefined}>
-      <head></head>
+      <head>
+        <meta property="og:image" content="<generated>" />
+        <meta property="og:image:type" content="<generated>" />
+        <meta property="og:image:width" content="<generated>" />
+        <meta property="og:image:height" content="<generated>" />
+        <meta name="twitter:image" content="<generated>" />
+        <meta name="twitter:image:type" content="<generated>" />
+        <meta name="twitter:image:width" content="<generated>" />
+        <meta name="twitter:image:height" content="<generated>" />
+      </head>
       <body
         className={`${appSans.variable} ${appMono.variable} ${defaultFont.variable} ${interFont.variable} antialiased relative min-h-screen`}
       >
