@@ -140,6 +140,8 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
       return
     }
 
+    console.log(`[${requestId}] stagehand.init (cdpUrl) starting, verbose=${process.env.NODE_ENV === 'production' ? 0 : 1}, disablePino=${process.env.NODE_ENV === 'production'}`)
+
     const stagehand = new Stagehand({
       env: 'LOCAL',
       verbose: process.env.NODE_ENV === 'production' ? 0 : 1,
