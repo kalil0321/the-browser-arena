@@ -37,7 +37,7 @@ export const createAuth = (
             enabled: true,
             requireEmailVerification: false,
         },
-        trustedOrigins: [siteUrl, "https://www.thebrowserarena.com", "https://agent.thebrowserarena.com"],
+        trustedOrigins: ["https://www.thebrowserarena.com", "https://agent.thebrowserarena.com", "https://thebrowserarena.com", "http://localhost:3000"],
         plugins: [
             // The Convex plugin is required for Convex compatibility
             convex(),

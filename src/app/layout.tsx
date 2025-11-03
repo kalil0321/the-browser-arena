@@ -31,7 +31,7 @@ const interFont = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://thebrowserarena.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://www.thebrowserarena.com.com"),
   title: {
     default: "The Browser Arena",
     template: "%s | The Browser Arena",
