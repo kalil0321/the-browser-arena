@@ -4,6 +4,7 @@ import { bearerAuth } from '../lib/auth.js'
 import { getConvexBackendClient } from '../lib/convex.js'
 import { Stagehand } from '@browserbasehq/stagehand'
 import { tool } from 'ai'
+import { randomUUID } from 'node:crypto'
 
 export const router = Router()
 
@@ -72,9 +73,24 @@ function computeCost(model: string | undefined, usage: any): number {
 }
 
 router.post('/stagehand', bearerAuth, async (req, res) => {
+  const requestId = randomUUID()
+  const routeStart = Date.now()
+  try {
+    const body = req.body || {}
+    const safe = {
+      ...body,
+      keys: body.keys ? Object.fromEntries(Object.entries(body.keys).map(([k, v]: any) => [k, v ? `${String(v).slice(0, 4)}…` : v])) : undefined,
+      fileData: body.fileData ? { name: body.fileData.name, mimeType: body.fileData.mimeType, data: `<${body.fileData.data?.length || 0}b>` } : undefined,
+    }
+    console.log(`[${requestId}] → POST /agent/stagehand`, safe)
+  } catch {
+    console.log(`[${requestId}] → POST /agent/stagehand (body log failed)`)
+  }
+
   const parse = bodySchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'Invalid request', details: parse.error.flatten() })
+    console.error(`[${requestId}] ✖ validation`, parse.error.flatten())
+    res.status(400).json({ error: 'Invalid request', details: parse.error.flatten(), requestId })
     return
   }
 
@@ -97,24 +113,30 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
   let agentId = maybeAgentId || ''
   try {
     if (!agentId) {
+      const t = Date.now()
+      console.log(`[${requestId}] creating agent (session=${sessionId})`)
       agentId = await convex.createAgentFromBackend({
         sessionId,
         name: 'stagehand',
         model,
         browser: { sessionId: 'external', url: liveViewUrl || '' },
       })
+      console.log(`[${requestId}] created agent ${agentId} in ${Date.now() - t}ms`)
     }
 
     await convex.updateAgentStatusRunning(agentId)
+    console.log(`[${requestId}] status → running (${agentId})`)
     if (liveViewUrl) {
       await convex.updateAgentBrowserUrl(agentId, liveViewUrl)
+      console.log(`[${requestId}] liveViewUrl updated`)
     }
 
     const modelString = model || 'google/gemini-2.5-flash'
     const apiKey = determineKey(modelString, keys || {})
     if (!apiKey) {
       await convex.updateAgentStatusFailed(agentId, 'Missing model API key')
-      res.status(500).json({ error: 'Server misconfigured: missing model API key' })
+      console.error(`[${requestId}] ✖ apiKey for model ${modelString}`)
+      res.status(500).json({ error: 'Server misconfigured: missing model API key', requestId, step: 'apiKey' })
       return
     }
 
@@ -128,11 +150,19 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 
     // Initialize and run
     // @ts-ignore stagehand.init() may return debug/session info depending on env
-    const initResult = await stagehand.init()
+    console.log(`[${requestId}] stagehand.init (cdpUrl) starting`)
+    const initT = Date.now()
+    const initResult = await stagehand.init().catch(async (e: any) => {
+      console.error(`[${requestId}] ✖ stagehand.init`, { error: e?.message, stack: e?.stack })
+      await convex.updateAgentStatusFailed(agentId, `init failed: ${e?.message || String(e)}`)
+      throw e
+    })
+    console.log(`[${requestId}] stagehand.init done in ${Date.now() - initT}ms`)
 
     const planningModel = thinkingModel || modelString
     const execution = executionModel || planningModel
 
+    console.log(`[${requestId}] creating stagehand agent (plan=${planningModel}, exec=${execution})`)
     const agent = await stagehand.agent({
       model: planningModel,
       executionModel: execution,
@@ -141,15 +171,23 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
         : undefined,
     })
 
+    console.log(`[${requestId}] agent.execute start (instructionLen=${instruction.length})`)
+    const execT = Date.now()
     const result = await agent.execute({
       instruction,
       highlightCursor: true,
+    }).catch(async (e: any) => {
+      console.error(`[${requestId}] ✖ agent.execute`, { error: e?.message, stack: e?.stack })
+      await stagehand.close().catch(() => { })
+      await convex.updateAgentStatusFailed(agentId, `execute failed: ${e?.message || String(e)}`)
+      throw e
     })
+    console.log(`[${requestId}] agent.execute done in ${Date.now() - execT}ms`)
     const endTime = Date.now()
     const duration = (endTime - startTime) / 1000 // Convert to seconds
 
     // Clean up
-    await stagehand.close()
+    await stagehand.close().catch((e: any) => console.warn(`[${requestId}] stagehand.close warning`, { error: e?.message }))
 
     // Calculate costs
     const usageData = result?.usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 }
@@ -187,24 +225,26 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     // Check if payload is too large (over 1MB)
     const payloadSize = JSON.stringify(payload).length
     if (payloadSize > 1024 * 1024) {
-      console.error('❌ Payload is too large:', payloadSize)
+      console.error(`[${requestId}] ❌ payload too large: ${payloadSize}b, trimming actions`)
       // Send a trimmed version without actions
       const trimmedPayload = {
         ...payload,
         actions: [], // Remove actions to save space
       }
-      await convex.updateAgentResult(agentId, trimmedPayload, 'completed')
+      await convex.updateAgentResult(agentId, trimmedPayload, 'completed').catch((e: any) => console.error(`[${requestId}] updateAgentResult (trimmed) failed`, { error: e?.message }))
     } else {
-      await convex.updateAgentResult(agentId, payload, 'completed')
+      await convex.updateAgentResult(agentId, payload, 'completed').catch((e: any) => console.error(`[${requestId}] updateAgentResult failed`, { error: e?.message }))
     }
 
-    res.status(200).json({ agentId, liveUrl: liveViewUrl || '' })
+    console.log(`[${requestId}] ✔ success in ${Date.now() - routeStart}ms`)
+    res.status(200).json({ agentId, liveUrl: liveViewUrl || '', requestId })
   } catch (e: any) {
     const message = e?.message || String(e)
     try {
       if (agentId) await convex.updateAgentStatusFailed(agentId, message)
     } catch { }
-    res.status(500).json({ error: 'Stagehand execution failed', message })
+    console.error(`[${requestId}] ❌ failed`, { error: message, stack: e?.stack })
+    res.status(500).json({ error: 'Stagehand execution failed', message, requestId })
   }
 })
 
