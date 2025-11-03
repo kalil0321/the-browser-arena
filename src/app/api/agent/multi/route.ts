@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
 
                 // For local Next.js endpoints, we need to use absolute URL or call directly
                 const fetchUrl = isLocalEndpoint
-                    ? `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${endpoint}`
+                    ? `${process.env.NODE_ENV === 'production' ? 'https://www.thebrowserarena.com' : 'http://localhost:3000'}${endpoint}`
                     : endpoint;
 
                 console.log("[api/agent/multi] Launching agent:", agentConfig.agent, "endpoint:", fetchUrl);
