@@ -637,7 +637,6 @@ export default function SettingsPage() {
 
                   <p className="text-sm text-muted-foreground">
                     Your Smooth API key is used to authenticate requests to the Smooth service.
-                    If not provided, the default server key will be used.
                   </p>
 
                   {/* Current Key Status */}
