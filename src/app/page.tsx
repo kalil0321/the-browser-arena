@@ -70,6 +70,9 @@ export default function Home() {
                 <strong>Optional:</strong> Configure API keys for LLM providers (OpenAI, Anthropic, Google) in Settings. Get a Browser-Use API key at <a href="https://cloud.browser-use.com/new-api-key" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">cloud.browser-use.com</a>. Free credits on signup.
               </p>
             )}
+            <p className="text-[10px] sm:text-xs text-muted-foreground font-default opacity-60 leading-relaxed">
+              <strong>GitHub:</strong> Check out the repo <a href="https://github.com/kalil0321/the-browser-arena" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">kalil0321/the-browser-arena</a> and give it a ⭐.
+            </p>
           </div>
         </div>
       </div>
