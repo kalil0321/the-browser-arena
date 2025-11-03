@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         convex.setAuth(token);
 
         // Check global session limit (5 sessions)
-        const MAX_SESSIONS = 50;
+        const MAX_SESSIONS = 100;
         const usageStats = await convex.query(api.queries.getUserUsageStats, {});
         const currentSessionCount = usageStats?.totalSessions ?? 0;
         if (currentSessionCount >= MAX_SESSIONS) {

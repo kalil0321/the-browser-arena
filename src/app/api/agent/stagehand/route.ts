@@ -1,22 +1,25 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { Stagehand } from "@browserbasehq/stagehand";
 import AnchorBrowser from "anchorbrowser";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
-import { missingKey, serverMisconfigured, unauthorized, badRequest, providerUnavailable } from "@/lib/http-errors";
-import { tool } from "ai";
-import { z } from "zod";
+import { missingKey, serverMisconfigured, unauthorized, badRequest } from "@/lib/http-errors";
 
 export const runtime = "nodejs"
+
+// Stagehand server URL - dev: localhost:3001, prod: stagehand.thebrowserarena.com
+const STAGEHAND_SERVER_URL = process.env.STAGEHAND_SERVER_URL ||
+    (process.env.NODE_ENV === "production"
+        ? "https://stagehand.thebrowserarena.com"
+        : "http://localhost:3001");
 
 // Initialize the client
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 
-// Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
+// Backend Convex client (no auth) for status updates from this route if needed
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-// For explicit headfull session configuration (optional, default to false)
+// Browser session configuration
 const config = {
     browser: {
         headless: {
@@ -25,90 +28,6 @@ const config = {
     }
 };
 
-const determineKey = (model: string | undefined, userKeys: { openai?: string; google?: string; anthropic?: string }) => {
-    if (!model) {
-        // Default to Google if no model specified
-        if (userKeys.google?.trim()) {
-            console.log("✅ Using user-provided Google API key");
-            return userKeys.google.trim();
-        }
-        return process.env.GOOGLE_API_KEY;
-    }
-    const provider = model.split("/")[0];
-    if (provider === "google") {
-        if (userKeys.google?.trim()) {
-            console.log("✅ Using user-provided Google API key");
-            return userKeys.google.trim();
-        }
-        return process.env.GOOGLE_API_KEY;
-    }
-    if (provider === "openai") {
-        if (userKeys.openai?.trim()) {
-            console.log("✅ Using user-provided OpenAI API key");
-            return userKeys.openai.trim();
-        }
-        return process.env.OPENAI_API_KEY;
-    }
-    if (provider === "anthropic") {
-        if (userKeys.anthropic?.trim()) {
-            console.log("✅ Using user-provided Anthropic API key");
-            return userKeys.anthropic.trim();
-        }
-        return process.env.ANTHROPIC_API_KEY;
-    }
-
-    // Fallback to OpenAI
-    if (userKeys.openai?.trim()) {
-        console.log("✅ Using user-provided OpenAI API key");
-        return userKeys.openai.trim();
-    }
-    return process.env.OPENAI_API_KEY;
-}
-
-// LLM pricing per 1M tokens
-const pricing: Record<string, { in: number; out: number; cached: number }> = {
-    "google/gemini-2.5-flash": {
-        in: 0.3 / 1_000_000,
-        out: 2.5 / 1_000_000,
-        cached: 0.03 / 1_000_000,
-    },
-    "google/gemini-2.5-pro": {
-        in: 1.25 / 1_000_000,
-        out: 10.0 / 1_000_000,
-        cached: 0.3125 / 1_000_000,
-    },
-    "openai/gpt-4.1": {
-        in: 2.0 / 1_000_000,
-        out: 8.0 / 1_000_000,
-        cached: 0.5 / 1_000_000,
-    },
-    "anthropic/claude-haiku-4.5": {
-        in: 1.0 / 1_000_000,
-        out: 5.0 / 1_000_000,
-        cached: 0.1 / 1_000_000,
-    },
-};
-
-function computeCost(model: string | undefined, usage: any): number {
-    if (!usage) return 0;
-
-    const modelKey = model ?? "google/gemini-2.5-flash";
-    const price = pricing[modelKey] || {
-        in: 0.5 / 1_000_000,
-        out: 3.0 / 1_000_000,
-        cached: 0.1 / 1_000_000,
-    };
-
-    const inputTokens = usage.input_tokens || 0;
-    const outputTokens = usage.output_tokens || 0;
-    const cachedTokens = usage.cached_tokens || usage.input_tokens_cached || 0;
-
-    return (
-        inputTokens * price.in +
-        outputTokens * price.out +
-        cachedTokens * price.cached
-    );
-}
 
 export async function POST(request: NextRequest) {
     try {
@@ -132,9 +51,10 @@ export async function POST(request: NextRequest) {
         if (!process.env.ANCHOR_API_KEY) {
             return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
         }
-        const providerKey = determineKey(model, { openai: openaiApiKey, google: googleApiKey, anthropic: anthropicApiKey });
-        if (!providerKey) {
-            return serverMisconfigured("Missing LLM provider API key", { model });
+
+        const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+        if (!agentServerApiKey) {
+            return NextResponse.json({ error: "AGENT_SERVER_API_KEY is not configured" }, { status: 500 });
         }
 
         // Get current user to create browser profile
@@ -213,189 +133,58 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
         }
 
+        // Fire-and-forget: run Stagehand in background to avoid frontend timeout
         after(async () => {
-            const startTime = Date.now();
             try {
-                // Log file data if provided (no handling needed per requirements)
-                if (fileData) {
-                    console.log(`📎 File provided for stagehand: ${fileData.name} (${fileData.data.length} bytes base64)`);
-                }
-
-                const modelString = model ?? "google/gemini-2.5-flash";
-                const userKeys = {
-                    openai: openaiApiKey,
-                    google: googleApiKey,
-                    anthropic: anthropicApiKey,
-                };
-                const stagehand = new Stagehand({
-                    env: "LOCAL",
-                    model: {
-                        modelName: modelString,
-                        apiKey: determineKey(model, userKeys),
+                const resp = await fetch(`${STAGEHAND_SERVER_URL}/agent/stagehand`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${agentServerApiKey}`,
                     },
-                    localBrowserLaunchOptions: {
-                        cdpUrl: cdpUrl,
-                    },
-                });
-
-                try {
-                    await stagehand.init();
-                    console.log("✅ Stagehand initialized successfully");
-                } catch (initError) {
-                    console.error("❌ Stagehand initialization failed:", initError);
-                    throw initError;
-                }
-
-                // Determine planning model (thinking model) - use thinkingModel if provided, otherwise fallback to model
-                const planningModel = thinkingModel || modelString;
-
-                // Determine execution model - use executionModel if provided, otherwise fallback to planningModel
-                const executionModelString = executionModel || planningModel;
-
-                const agent = await stagehand.agent({
-                    // Computer Use Agent (CUA) - commented out until proper setup is completed
-                    // cua: true,
-                    model: planningModel,
-                    executionModel: executionModelString,
-                    tools: {
-                        uploadFile: tool({
-                            description: "Upload a file to the browser",
-                            inputSchema: z.object({
-                                locator: z.string(),
-                            }),
-                            execute: async ({ locator }) => {
-                                const page = stagehand.context.pages()[0];
-                                if (!page) {
-                                    return {
-                                        error: "No page found",
-                                    };
-                                }
-
-                                const fileInput = await page.locator(locator).first();
-                                if (!fileInput) {
-                                    return {
-                                        error: `No file input element found with locator: ${locator}`,
-                                    };
-                                }
-
-                                await fileInput.setInputFiles({
-                                    name: fileData.name,
-                                    mimeType: fileData.mimeType,
-                                    buffer: fileData.data,
-                                });
-
-                                return {
-                                    content: `Successfully uploaded file "${fileData.name}" to element: ${locator}`,
-                                };
-                            },
-                        }),
-                    },
-                    systemPrompt: `You are a helpful assistant. You also have the ability to upload files to the browser using the uploadFile tool.`,
-                });
-
-                const { message, actions, usage, success, completed, metadata } = await agent.execute({
-                    highlightCursor: true,
-                    instruction,
-                });
-
-                await stagehand.close();
-                const endTime = Date.now();
-                const duration = (endTime - startTime) / 1000; // Convert to seconds
-
-                // Delete browser session
-                await browser.sessions.delete(browserSessionId);
-
-                // Get recording after deleting
-                // let recordingUrl = "";
-                // try {
-                //     const recording = await browser.sessions.recordings.primary.get(browserSessionId);
-                //     const arrayBuffer = await recording.arrayBuffer();
-                //     const base64 = Buffer.from(arrayBuffer).toString('base64');
-                //     recordingUrl = `data:video/mp4;base64,${base64}`;
-                //     console.log("Recording captured, length:", recordingUrl.length);
-                // } catch (recordingError) {
-                //     console.error("Failed to get recording:", recordingError);
-                // }
-
-                const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
-                const llmCost = computeCost(model, usageData);
-                // Anchor Browser pricing: $0.01 base + $0.05 per hour
-                const hours = Math.max(duration / 3600, 0);
-                const browserCost = 0.01 + 0.05 * hours;
-                const cost = llmCost + browserCost;
-
-                const payload = {
-                    usage: {
-                        ...usageData,
-                        total_cost: cost,
-                        browser_cost: browserCost,
-                        llm_cost: llmCost,
-                    },
-                    cost, // Also keep cost field for backward compatibility
-                    duration,
-                    message,
-                    actions,
-                    success: true,
-                    agent: "stagehand",
-                    completed: true,
-                    metadata,
-                }
-
-                console.log(payload)
-                // Check if payload is less than 1MB
-                if (JSON.stringify(payload).length > 1024 * 1024) {
-                    console.error("❌ Payload is too large:", JSON.stringify(payload).length);
-                    await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
+                    body: JSON.stringify({
+                        sessionId: dbSessionId,
+                        instruction,
+                        model: model ?? "google/gemini-2.5-flash",
+                        thinkingModel,
+                        executionModel,
+                        cdpUrl,
+                        liveViewUrl,
                         agentId,
-                        result: {
-                            usage: payload.usage,
-                            cost: payload.cost,
-                            duration: payload.duration,
-                            message: payload.message,
-                            agent: payload.agent,
-                            actions: [], // We don't want to save the actions
-                            success: payload.success,
-                            completed: payload.completed,
-                            metadata: payload.metadata,
+                        userId: userId,
+                        keys: {
+                            openai: openaiApiKey,
+                            google: googleApiKey,
+                            anthropic: anthropicApiKey,
                         },
-                        status: success ? "completed" as const : "failed" as const,
-                    });
-                    return;
-                }
-
-                // Save result to Convex database using backend mutation (no auth required)
-                await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
-                    agentId,
-                    result: payload,
-                    status: success ? "completed" as const : "failed" as const,
+                        ...(fileData ? { fileData } : {}),
+                    }),
                 });
 
-                // TODO: handle recording later.
-
-                console.log(JSON.stringify(payload, null, 2));
-            } catch (error) {
-                console.error("❌ Error in background execution:", error);
-                try {
-                    // Update agent status to failed using backend mutation
+                if (!resp.ok) {
+                    // Mark failed so UI can reflect error
                     await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
                         agentId,
                         status: "failed",
                     });
-
-                    await browser.sessions.delete(browserSessionId);
-                } catch (cleanupError) {
-                    console.error("❌ Error cleaning up session:", cleanupError);
                 }
+            } catch (err) {
+                try {
+                    await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
+                        agentId,
+                        status: "failed",
+                    });
+                } catch { }
             }
         });
 
-        // return session object and live view url
+        // Return session info with live URL immediately (non-blocking)
         return NextResponse.json({
             session: {
                 id: dbSessionId,
             },
             agentId,
-            liveViewUrl: liveViewUrl,
+            liveViewUrl,
         });
     } catch (error) {
         console.error("❌ Error in POST handler:", error);
