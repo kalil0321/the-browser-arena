@@ -5,13 +5,8 @@ import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { missingKey, serverMisconfigured, unauthorized, badRequest } from "@/lib/http-errors";
 
-export const runtime = "nodejs"
-
 // Stagehand server URL - dev: localhost:3001, prod: stagehand.thebrowserarena.com
-const STAGEHAND_SERVER_URL = process.env.STAGEHAND_SERVER_URL ||
-    (process.env.NODE_ENV === "production"
-        ? "https://stagehand.thebrowserarena.com"
-        : "http://localhost:3001");
+const STAGEHAND_SERVER_URL = "https://stagehand.thebrowserarena.com"
 
 // Initialize the client
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
