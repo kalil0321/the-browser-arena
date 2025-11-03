@@ -21,6 +21,7 @@ interface AgentConfig {
 
 export async function POST(request: NextRequest) {
     try {
+        console.log("[api/agent/multi] POST request received");
         const {
             instruction,
             agents,
@@ -47,6 +48,8 @@ export async function POST(request: NextRequest) {
             stagehandFileData?: { name: string; data: string };
         };
 
+        console.log("[api/agent/multi] Agents requested:", agents?.map(a => a.agent));
+
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
 
         // Get user token for auth
         const token = await getToken();
+        console.log("[api/agent/multi] Token fetched:", !!token);
 
         if (!token) {
             return unauthorized();
@@ -73,6 +77,7 @@ export async function POST(request: NextRequest) {
         const MAX_SESSIONS = 3;
         const usageStats = await convex.query(api.queries.getUserUsageStats, {});
         const currentSessionCount = usageStats?.totalSessions ?? 0;
+        console.log("[api/agent/multi] Current session count:", currentSessionCount);
         if (currentSessionCount >= MAX_SESSIONS) {
             return NextResponse.json(
                 {
@@ -91,10 +96,12 @@ export async function POST(request: NextRequest) {
         }
         // getCurrentUser returns user with _id field (Convex document ID)
         const userId = user._id;
+        console.log("[api/agent/multi] User ID:", userId);
 
         // Check if we need browser sessions for browser-use agents (not browser-use-cloud)
         const browserUseAgents = agents.filter(a => a.agent === "browser-use");
         const needsBrowserSessions = browserUseAgents.length > 0;
+        console.log("[api/agent/multi] Browser sessions needed:", needsBrowserSessions, "count:", browserUseAgents.length);
 
         // Create browser profile configuration using user_id
         const browserConfig = {
@@ -119,6 +126,7 @@ export async function POST(request: NextRequest) {
             if (!process.env.ANCHOR_API_KEY) {
                 return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
             }
+            console.log("[api/agent/multi] Creating browser sessions, count:", browserUseAgents.length);
             browserUseAgents.forEach(() => {
                 parallelPromises.push(browser.sessions.create(browserConfig));
             });
@@ -129,6 +137,7 @@ export async function POST(request: NextRequest) {
         const browserSessions = needsBrowserSessions
             ? parallelResults.slice(1) as any[]
             : [];
+        console.log("[api/agent/multi] Session created:", dbSessionId, "browser sessions:", browserSessions.length);
 
         // Launch all agents in parallel
         let browserSessionIndex = 0;
@@ -228,6 +237,8 @@ export async function POST(request: NextRequest) {
                     ? `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${endpoint}`
                     : endpoint;
 
+                console.log("[api/agent/multi] Launching agent:", agentConfig.agent, "endpoint:", fetchUrl);
+
                 // Create an AbortController for timeout handling
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
@@ -259,6 +270,7 @@ export async function POST(request: NextRequest) {
                     clearTimeout(timeoutId);
 
                     if (!response.ok) {
+                        console.log("[api/agent/multi] Agent response failed:", agentConfig.agent, "status:", response.status, response.statusText);
                         if (isLocalEndpoint) {
                             // Local endpoints already return standardized errors; forward as-is
                             const text = await response.text();
@@ -269,6 +281,7 @@ export async function POST(request: NextRequest) {
                     }
 
                     const agentData = await response.json();
+                    console.log("[api/agent/multi] Agent launched successfully:", agentConfig.agent, "agentId:", agentData?.agentId);
 
                     return {
                         agent: agentConfig.agent,
@@ -282,13 +295,16 @@ export async function POST(request: NextRequest) {
                     if (fetchError.name === 'AbortError' || fetchError.code === 'UND_ERR_HEADERS_TIMEOUT') {
                         const errorMsg = `Timeout while connecting to ${agentConfig.agent} agent server. ` +
                             `Make sure the Python agent server is running at ${AGENT_SERVER_URL}`;
+                        console.log("[api/agent/multi] Agent timeout:", agentConfig.agent, errorMsg);
                         throw new Error(errorMsg);
                     }
 
                     // Re-throw other errors
+                    console.log("[api/agent/multi] Agent fetch error:", agentConfig.agent, fetchError?.message || String(fetchError));
                     throw fetchError;
                 }
             } catch (error) {
+                console.log("[api/agent/multi] Agent failed:", agentConfig.agent, error instanceof Error ? error.message : String(error));
                 return {
                     agent: agentConfig.agent,
                     success: false,
@@ -299,6 +315,14 @@ export async function POST(request: NextRequest) {
 
         // Wait for all agents to launch
         const results = await Promise.all(agentPromises);
+        const successCount = results.filter(r => r.success).length;
+        const failureCount = results.length - successCount;
+        console.log("[api/agent/multi] Agent launch complete - success:", successCount, "failures:", failureCount);
+        if (failureCount > 0) {
+            results.filter(r => !r.success).forEach(r => {
+                console.log("[api/agent/multi] Failed agent:", r.agent, "error:", r.error);
+            });
+        }
 
         // Check if at least one agent launched successfully
         const successfulAgents = results.filter(r => r.success);
@@ -317,7 +341,7 @@ export async function POST(request: NextRequest) {
             agents: results,
         });
     } catch (error) {
-        console.error("? Error in POST handler:", error);
+        console.error("[api/agent/multi] Unhandled error in POST handler:", error);
         return NextResponse.json(
             {
                 error: "Internal server error",
