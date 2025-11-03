@@ -390,6 +390,7 @@ async def run_browser_use_task(
                 f"[Agent {agent_id[:8]}] Could not update status to running: {convex_error}",
                 exc_info=True,
             )
+            raise convex_error
 
         # Run the agent
         logger.info(
@@ -430,44 +431,44 @@ async def run_browser_use_task(
 
         # Fetch and upload recording before deleting session
         recording_url = None
-        try:
-            logger.info(
-                f"[Agent {agent_id[:8]}] Fetching recording for session {browser_session_id[:8]}..."
-            )
-            recording = anchor_browser.sessions.recordings.primary.get(
-                browser_session_id
-            )
+        # try:
+        #     logger.info(
+        #         f"[Agent {agent_id[:8]}] Fetching recording for session {browser_session_id[:8]}..."
+        #     )
+        #     recording = anchor_browser.sessions.recordings.primary.get(
+        #         browser_session_id
+        #     )
 
-            # Get recording content as bytes
-            # Anchor Browser SDK returns recording with .content property
-            if hasattr(recording, "content"):
-                recording_content = recording.content
-            elif hasattr(recording, "read"):
-                recording_content = recording.read()
-            elif isinstance(recording, bytes):
-                recording_content = recording
-            else:
-                # Try to get bytes directly
-                recording_content = (
-                    bytes(recording) if hasattr(recording, "__bytes__") else None
-                )
+        #     # Get recording content as bytes
+        #     # Anchor Browser SDK returns recording with .content property
+        #     if hasattr(recording, "content"):
+        #         recording_content = recording.content
+        #     elif hasattr(recording, "read"):
+        #         recording_content = recording.read()
+        #     elif isinstance(recording, bytes):
+        #         recording_content = recording
+        #     else:
+        #         # Try to get bytes directly
+        #         recording_content = (
+        #             bytes(recording) if hasattr(recording, "__bytes__") else None
+        #         )
 
-            if recording_content:
-                logger.info(
-                    f"[Agent {agent_id[:8]}] Recording size: {len(recording_content)} bytes"
-                )
-                recording_url = await upload_recording_to_convex(
-                    agent_id, recording_content
-                )
-            else:
-                logger.warning(
-                    f"[Agent {agent_id[:8]}] Could not extract recording content"
-                )
-        except Exception as e:
-            logger.warning(
-                f"[Agent {agent_id[:8]}] Failed to fetch/upload recording: {str(e)}",
-                exc_info=True,
-            )
+        #     if recording_content:
+        #         logger.info(
+        #             f"[Agent {agent_id[:8]}] Recording size: {len(recording_content)} bytes"
+        #         )
+        #         recording_url = await upload_recording_to_convex(
+        #             agent_id, recording_content
+        #         )
+        #     else:
+        #         logger.warning(
+        #             f"[Agent {agent_id[:8]}] Could not extract recording content"
+        #         )
+        # except Exception as e:
+        #     logger.warning(
+        #         f"[Agent {agent_id[:8]}] Failed to fetch/upload recording: {str(e)}",
+        #         exc_info=True,
+        #     )
 
         # Debug logging
         logger.debug(
