@@ -119,7 +119,7 @@ export default async function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem suppressHydrationWarning>
           <AppThemeApplier />
           <ConvexClientProvider>
-            <SidebarProvider defaultOpen={defaultOpen}>
+            <SidebarProvider defaultOpen={true}>
               <div className="relative flex h-screen w-full">
                 <DashboardSidebar />
                 {children}
