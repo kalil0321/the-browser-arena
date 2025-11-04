@@ -30,7 +30,7 @@ export function AgentPills({
                         onClick={() => hasProperties && onConfigClick({ ...config, id: config.id || `agent-${index}-${Date.now()}` })}
                         disabled={isLoading || !hasProperties}
                         className={cn(
-                            "h-8 sm:h-6 px-2.5 sm:px-2 py-1.5 sm:py-0 text-[11px] sm:text-[10px] rounded-full transition-colors flex items-center gap-1.5 sm:gap-1 shrink-0 touch-manipulation min-w-[44px] sm:min-w-0",
+                            "h-8 sm:h-6 px-2.5 sm:px-2 py-1.5 sm:py-0 text-[11px] sm:text-[10px] rounded-full flex items-center gap-1.5 sm:gap-1 shrink-0 touch-manipulation min-w-[44px] sm:min-w-0",
                             hasProperties
                                 ? "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 active:bg-zinc-300 dark:active:bg-zinc-600"
                                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 cursor-default",

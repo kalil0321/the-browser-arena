@@ -681,12 +681,12 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 >
                     <div
                         className={cn(
-                            "bg-background rounded-4xl w-full space-y-2 px-3 py-3 sm:px-4 sm:py-4 transition-colors relative"
+                            "bg-background rounded-4xl w-full space-y-2 px-3 py-3 sm:px-4 sm:py-4 relative"
                         )}
                     >
                         <form
                             onSubmit={handleSubmit}
-                            className="relative mx-auto overflow-visible transition duration-200 mb-2 min-h-12 w-full max-w-full bg-background shadow-none"
+                            className="relative mx-auto overflow-visible mb-2 min-h-12 w-full max-w-full bg-background shadow-none"
                         >
                             <textarea
                                 ref={textareaRef}
@@ -703,7 +703,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isLoading || isUploadingFiles}
-                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm transition duration-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 touch-manipulation"
+                                    className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 touch-manipulation"
                                     title="Upload file"
                                 >
                                     <Paperclip className="h-4 w-4 sm:h-4 sm:w-4 text-zinc-700 dark:text-zinc-200" />
