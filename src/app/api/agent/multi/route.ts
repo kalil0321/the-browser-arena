@@ -19,6 +19,146 @@ interface AgentConfig {
     executionModel?: string; // For stagehand: model used for execution
 }
 
+interface RequiredKeys {
+    smoothApiKey?: boolean;
+    openaiApiKey?: boolean;
+    googleApiKey?: boolean;
+    anthropicApiKey?: boolean;
+    browserUseApiKey?: boolean;
+}
+
+/**
+ * Determines which API keys are required for a given agent configuration
+ */
+function getRequiredKeysForAgent(agentConfig: AgentConfig): RequiredKeys {
+    const required: RequiredKeys = {};
+
+    switch (agentConfig.agent) {
+        case "smooth":
+            required.smoothApiKey = true;
+            break;
+        case "browser-use-cloud":
+            required.browserUseApiKey = true;
+            break;
+        case "stagehand":
+        case "stagehand-bb-cloud":
+        case "browser-use":
+            // These agents require LLM API keys based on model
+            const model = agentConfig.model?.toLowerCase() || "";
+            const thinkingModel = agentConfig.thinkingModel?.toLowerCase() || "";
+            const executionModel = agentConfig.executionModel?.toLowerCase() || "";
+
+            // Helper function to determine which API key is needed based on model string
+            const determineModelProvider = (modelStr: string): "openai" | "google" | "anthropic" | null => {
+                if (!modelStr) return null;
+                
+                // Handle provider/model format (e.g., "openai/gpt-4", "google/gemini-2.5-flash")
+                const parts = modelStr.split("/");
+                if (parts.length > 1) {
+                    const provider = parts[0];
+                    if (provider === "openai") return "openai";
+                    if (provider === "google") return "google";
+                    if (provider === "anthropic") return "anthropic";
+                }
+                
+                // Check model name patterns
+                if (modelStr.includes("openai") || modelStr.includes("gpt")) {
+                    return "openai";
+                }
+                if (modelStr.includes("google") || modelStr.includes("gemini")) {
+                    return "google";
+                }
+                if (modelStr.includes("anthropic") || modelStr.includes("claude")) {
+                    return "anthropic";
+                }
+                
+                return null;
+            };
+
+            // Check primary model
+            const modelProvider = determineModelProvider(model);
+            if (modelProvider === "openai") {
+                required.openaiApiKey = true;
+            } else if (modelProvider === "google") {
+                required.googleApiKey = true;
+            } else if (modelProvider === "anthropic") {
+                required.anthropicApiKey = true;
+            } else if (model) {
+                // Default to OpenAI if model is specified but doesn't match patterns
+                required.openaiApiKey = true;
+            } else {
+                // Default to Google if no model specified
+                required.googleApiKey = true;
+            }
+
+            // Check thinking model (for stagehand)
+            const thinkingProvider = determineModelProvider(thinkingModel);
+            if (thinkingProvider === "openai") {
+                required.openaiApiKey = true;
+            } else if (thinkingProvider === "google") {
+                required.googleApiKey = true;
+            } else if (thinkingProvider === "anthropic") {
+                required.anthropicApiKey = true;
+            }
+
+            // Check execution model (for stagehand)
+            const executionProvider = determineModelProvider(executionModel);
+            if (executionProvider === "openai") {
+                required.openaiApiKey = true;
+            } else if (executionProvider === "google") {
+                required.googleApiKey = true;
+            } else if (executionProvider === "anthropic") {
+                required.anthropicApiKey = true;
+            }
+
+            // Browser-use optionally needs browserUseApiKey (but not required for BYOK check)
+            break;
+    }
+
+    return required;
+}
+
+/**
+ * Checks if all required BYOK keys are provided for all agents
+ */
+function hasAllRequiredKeys(
+    agents: AgentConfig[],
+    apiKeys: {
+        smoothApiKey?: string;
+        openaiApiKey?: string;
+        googleApiKey?: string;
+        anthropicApiKey?: string;
+        browserUseApiKey?: string;
+    }
+): { hasAllKeys: boolean; missingKeys: string[] } {
+    const missingKeys: string[] = [];
+
+    for (const agentConfig of agents) {
+        const required = getRequiredKeysForAgent(agentConfig);
+
+        if (required.smoothApiKey && !apiKeys.smoothApiKey?.trim()) {
+            missingKeys.push(`Smooth API key (required for ${agentConfig.agent})`);
+        }
+        if (required.openaiApiKey && !apiKeys.openaiApiKey?.trim()) {
+            missingKeys.push(`OpenAI API key (required for ${agentConfig.agent} with model ${agentConfig.model})`);
+        }
+        if (required.googleApiKey && !apiKeys.googleApiKey?.trim()) {
+            missingKeys.push(`Google API key (required for ${agentConfig.agent} with model ${agentConfig.model})`);
+        }
+        if (required.anthropicApiKey && !apiKeys.anthropicApiKey?.trim()) {
+            missingKeys.push(`Anthropic API key (required for ${agentConfig.agent} with model ${agentConfig.model})`);
+        }
+        if (required.browserUseApiKey && !apiKeys.browserUseApiKey?.trim()) {
+            missingKeys.push(`Browser-Use API key (required for ${agentConfig.agent})`);
+        }
+    }
+
+    return {
+        hasAllKeys: missingKeys.length === 0,
+        missingKeys
+    };
+}
+
 export async function POST(request: NextRequest) {
     try {
         console.log("[api/agent/multi] POST request received");
@@ -73,20 +213,40 @@ export async function POST(request: NextRequest) {
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
+        // Check if user has BYOK (Bring Your Own Key) for all agents
+        const byokCheck = hasAllRequiredKeys(agents, {
+            smoothApiKey,
+            openaiApiKey,
+            googleApiKey,
+            anthropicApiKey,
+            browserUseApiKey,
+        });
+
         // Check global session limit (3 sessions)
         const MAX_SESSIONS = 3;
         const usageStats = await convex.query(api.queries.getUserUsageStats, {});
         const currentSessionCount = usageStats?.totalSessions ?? 0;
         console.log("[api/agent/multi] Current session count:", currentSessionCount);
-        if (currentSessionCount >= MAX_SESSIONS) {
-            return NextResponse.json(
-                {
-                    error: `Session limit reached. Maximum ${MAX_SESSIONS} sessions allowed.`,
-                    limit: MAX_SESSIONS,
-                    currentSessions: currentSessionCount
-                },
-                { status: 403 }
-            );
+        
+        // If user has BYOK for all agents, allow them to exceed the limit
+        if (!byokCheck.hasAllKeys) {
+            // Not all agents have BYOK - check session limit
+            if (currentSessionCount >= MAX_SESSIONS) {
+                const missingKeysList = byokCheck.missingKeys.join(", ");
+                return NextResponse.json(
+                    {
+                        error: `Session limit reached. Maximum ${MAX_SESSIONS} sessions allowed.`,
+                        limit: MAX_SESSIONS,
+                        currentSessions: currentSessionCount,
+                        message: `To run more sessions, please add API keys for all agents in Settings. Missing: ${missingKeysList}`,
+                        missingKeys: byokCheck.missingKeys
+                    },
+                    { status: 403 }
+                );
+            }
+        } else {
+            // All agents have BYOK - bypass session limit
+            console.log("[api/agent/multi] All agents have BYOK - bypassing session limit");
         }
 
         // Get current user to create browser profile
