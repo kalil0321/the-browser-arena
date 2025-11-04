@@ -1,4 +1,4 @@
-# Browser Agent Arena
+# The Browser Arena
 
 Compare AI browser automation agents side-by-side. Submit a task, watch agents run in real-time, and compare speed, cost, and success.
 
@@ -55,9 +55,6 @@ npx convex deploy
 ```
 
 Open http://localhost:3000
-
-
-
 
 ```
 
