@@ -7,6 +7,9 @@ Env vars:
 - CONVEX_URL (required)
 - OPENAI_API_KEY / GOOGLE_API_KEY / ANTHROPIC_API_KEY (optional fallbacks)
 
+
+To run locally: `vercel dev`
+
 Install and build:
 
 ```bash
