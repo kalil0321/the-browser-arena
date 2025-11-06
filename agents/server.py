@@ -104,6 +104,7 @@ class AgentRequest(BaseModel):
     googleApiKey: Optional[str] = None
     anthropicApiKey: Optional[str] = None
     browserUseApiKey: Optional[str] = None
+    openrouterApiKey: Optional[str] = None
     secrets: Optional[Dict[str, str]] = None
     filePath: Optional[str] = None
 
@@ -230,11 +231,15 @@ pricing = {
         "out": 5.0 / 1_000_000,
         "cached": 0.1 / 1_000_000,
     },
+    "openrouter/moonshotai/kimi-k2-thinking": {
+        "in": 0.6 / 1_000_000,
+        "out": 2.5 / 1_000_000,
+        "cached": 0.06 / 1_000_000,
+    },
 }
 
 
 def compute_cost(model: str, usage: dict) -> float:
-    # total_prompt_tokens=17920  total_prompt_cached_tokens=0 total_completion_tokens=433 total_tokens=18353 total_cost=0.0 entry_count=4
     total_cost = usage.get("total_cost", 0)
     if total_cost == 0:
         price = pricing.get(
@@ -369,6 +374,7 @@ async def run_browser_use_task(
     google_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
     browser_use_api_key: Optional[str] = None,
+    openrouter_api_key: Optional[str] = None,
     file_path: Optional[str] = None,
 ):
     """Run Browser-Use agent in background and update Convex"""
@@ -415,6 +421,7 @@ async def run_browser_use_task(
             google_api_key=google_api_key,
             anthropic_api_key=anthropic_api_key,
             browser_use_api_key=browser_use_api_key,
+            openrouter_api_key=openrouter_api_key,
             file_path=file_path,
         )
 

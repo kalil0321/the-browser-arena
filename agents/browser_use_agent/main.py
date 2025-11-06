@@ -14,6 +14,8 @@ from .tools import tools
 
 
 def parse_provider_model(provider_model: str):
+    if provider_model.startswith("openrouter/"):
+        return "openrouter", provider_model.split("/", 1).join("/")
     if not provider_model:
         return "browser-use", "bu-1.0"
     provider, model = provider_model.split("/", 1)
@@ -65,6 +67,14 @@ def get_llm(provider: str, model: str, user_api_keys: Dict = None):
             raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
         return ChatAnthropic(model=model, api_key=api_key)
+    
+    if provider_lower == "openrouter":
+        api_key = user_api_keys.get("openrouter_api_key") or os.getenv(
+            "OPENROUTER_API_KEY"
+        )
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY environment variable is required")
+        return ChatOpenAI(model=model, api_key=api_key, base_url="https://openrouter.ai/api/v1")
 
     # Default to browser-use
     api_key = user_api_keys.get("browser_use_api_key") or os.getenv(
@@ -86,6 +96,7 @@ async def run_browser_use(
     google_api_key: str = None,
     anthropic_api_key: str = None,
     browser_use_api_key: str = None,
+    openrouter_api_key: str = None,
     file_path: Optional[str] = None,
 ):
     """
@@ -102,6 +113,7 @@ async def run_browser_use(
         google_api_key: Optional user-provided Google API key
         anthropic_api_key: Optional user-provided Anthropic API key
         browser_use_api_key: Optional user-provided Browser-Use API key
+        openrouter_api_key: Optional user-provided OpenRouter API key
         file_path: Optional path to uploaded file to make available to the agent
 
     Returns:
@@ -118,6 +130,7 @@ async def run_browser_use(
         "google_api_key": google_api_key,
         "anthropic_api_key": anthropic_api_key,
         "browser_use_api_key": browser_use_api_key,
+        "openrouter_api_key": openrouter_api_key,
     }
     llm = get_llm(provider, model, user_api_keys)
     timings["llm_initialization"] = time.time() - llm_start
