@@ -7,7 +7,9 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@ai-sdk/provider": "^2.0.0",
     "@browserbasehq/stagehand": "^3.0.1",
+    "@openrouter/ai-sdk-provider": "^1.2.0",
     "ai": "^3.4.33",
     "convex": "^1.13.0",
     "dotenv": "^16.4.5",

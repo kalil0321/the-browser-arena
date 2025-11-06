@@ -2,9 +2,10 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { bearerAuth } from '../lib/auth.js'
 import { getConvexBackendClient } from '../lib/convex.js'
-import { Stagehand } from '@browserbasehq/stagehand'
+import { AISdkClient, Stagehand } from '@browserbasehq/stagehand'
 import { tool } from 'ai'
 import { randomUUID } from 'node:crypto'
+import { openrouter } from '../lib/llm.js'
 
 export const router = Router()
 
@@ -19,16 +20,31 @@ const bodySchema = z.object({
   userId: z.string().optional(),
   agentId: z.string().optional(),
   keys: z
-    .object({ openai: z.string().optional(), google: z.string().optional(), anthropic: z.string().optional() })
+    .object({ openai: z.string().optional(), google: z.string().optional(), anthropic: z.string().optional(), openrouter: z.string().optional() })
     .optional(),
   fileData: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
 })
 
-function determineKey(model: string | undefined, keys: { openai?: string; google?: string; anthropic?: string } = {}): string {
+function determineKey(model: string | undefined, keys: { openai?: string; google?: string; anthropic?: string; openrouter?: string } = {}): string {
   const m = (model || '').toLowerCase()
+  if (m.includes('openrouter')) return (keys.openrouter || process.env.OPENROUTER_API_KEY || '').trim()
   if (m.includes('google') || m.includes('gemini')) return (keys.google || process.env.GOOGLE_API_KEY || '').trim()
   if (m.includes('anthropic') || m.includes('claude')) return (keys.anthropic || process.env.ANTHROPIC_API_KEY || '').trim()
   return (keys.openai || process.env.OPENAI_API_KEY || '').trim()
+}
+
+function isCUA(model: string): boolean {
+  return model.includes('computer-use') || model.includes('claude')
+}
+
+function isOpenRouter(model: string): boolean {
+  return model.includes('openrouter')
+}
+
+function createORClient(model: string, apiKey?: string): AISdkClient {
+  return new AISdkClient({
+    model: openrouter(model, apiKey),
+  })
 }
 
 // LLM pricing per 1M tokens
@@ -52,6 +68,11 @@ const pricing: Record<string, { in: number; out: number; cached: number }> = {
     in: 1.0 / 1_000_000,
     out: 5.0 / 1_000_000,
     cached: 0.1 / 1_000_000,
+  },
+  'openrouter/moonshotai/kimi-k2-thinking': {
+    in: 0.6 / 1_000_000,
+    out: 2.5 / 1_000_000,
+    cached: 0.06 / 1_000_000,
   },
 }
 
@@ -133,7 +154,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 
     const modelString = model || 'google/gemini-2.5-flash'
     const apiKey = determineKey(modelString, keys || {})
-    if (!apiKey) {
+    if (!apiKey && !isOpenRouter(modelString)) {
       await convex.updateAgentStatusFailed(agentId, 'Missing model API key')
       console.error(`[${requestId}] ✖ apiKey for model ${modelString}`)
       res.status(500).json({ error: 'Server misconfigured: missing model API key', requestId, step: 'apiKey' })
@@ -142,12 +163,17 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 
     console.log(`[${requestId}] stagehand.init (cdpUrl) starting, verbose=${process.env.NODE_ENV === 'production' ? 0 : 1}, disablePino=${process.env.NODE_ENV === 'production'}`)
 
+    // For OpenRouter models, extract the model ID after "openrouter/" (e.g., "moonshotai/kimi-k2-thinking")
+    const openRouterModelId = isOpenRouter(modelString) ? modelString.split('/').slice(1).join('/') : undefined
+    const openRouterApiKey = isOpenRouter(modelString) ? apiKey : undefined
+
     const stagehand = new Stagehand({
       env: 'LOCAL',
+      llmClient: isOpenRouter(modelString) && openRouterModelId ? createORClient(openRouterModelId, openRouterApiKey) : undefined,
       verbose: process.env.NODE_ENV === 'production' ? 0 : 1,
       disablePino: process.env.NODE_ENV === 'production',
-      model: { modelName: modelString, apiKey },
-      localBrowserLaunchOptions: { cdpUrl },
+      model: { modelName: modelString, apiKey: isOpenRouter(modelString) ? undefined : apiKey },
+      localBrowserLaunchOptions: { cdpUrl, viewport: { width: 1288, height: 711 } },
     })
 
     // Initialize and run
@@ -166,6 +192,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 
     console.log(`[${requestId}] creating stagehand agent (plan=${planningModel}, exec=${execution})`)
     const agent = await stagehand.agent({
+      cua: isCUA(planningModel),
       model: planningModel,
       executionModel: execution,
       systemPrompt: fileData
@@ -177,6 +204,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     const execT = Date.now()
     const result = await agent.execute({
       instruction,
+      maxSteps: 30,
       highlightCursor: true,
     }).catch(async (e: any) => {
       console.error(`[${requestId}] ✖ agent.execute`, { error: e?.message, stack: e?.stack })
