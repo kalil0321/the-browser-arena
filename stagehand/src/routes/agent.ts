@@ -5,9 +5,14 @@ import { getConvexBackendClient } from '../lib/convex.js'
 import { AISdkClient, Stagehand } from '@browserbasehq/stagehand'
 import { tool } from 'ai'
 import { randomUUID } from 'node:crypto'
-import { openrouter } from '../lib/llm.js'
+import { openrouter, AISdkClientWithLanguageModel } from '../lib/llm.js'
 
 export const router = Router()
+
+function formatModelName(model: string): string {
+  // in case we ever add groq :)
+  return model.includes('openrouter') ? model.split('/').slice(1).join('/') : model
+}
 
 const bodySchema = z.object({
   sessionId: z.string().min(1),
@@ -42,7 +47,7 @@ function isOpenRouter(model: string): boolean {
 }
 
 function createORClient(model: string, apiKey?: string): AISdkClient {
-  return new AISdkClient({
+  return new AISdkClientWithLanguageModel({
     model: openrouter(model, apiKey),
   })
 }
@@ -163,16 +168,19 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 
     console.log(`[${requestId}] stagehand.init (cdpUrl) starting, verbose=${process.env.NODE_ENV === 'production' ? 0 : 1}, disablePino=${process.env.NODE_ENV === 'production'}`)
 
-    // For OpenRouter models, extract the model ID after "openrouter/" (e.g., "moonshotai/kimi-k2-thinking")
-    const openRouterModelId = isOpenRouter(modelString) ? modelString.split('/').slice(1).join('/') : undefined
-    const openRouterApiKey = isOpenRouter(modelString) ? apiKey : undefined
+    const planningModel = thinkingModel || modelString
+    const execution = executionModel || planningModel
+
+    // Check if any model (main, planning, or execution) is OpenRouter
+    const hasOpenRouterModel = isOpenRouter(modelString) || isOpenRouter(planningModel) || isOpenRouter(execution)
+    const openRouterApiKey = hasOpenRouterModel ? determineKey(modelString, keys || {}) : undefined
 
     const stagehand = new Stagehand({
       env: 'LOCAL',
-      llmClient: isOpenRouter(modelString) && openRouterModelId ? createORClient(openRouterModelId, openRouterApiKey) : undefined,
+      llmClient: isOpenRouter(modelString) ? createORClient(formatModelName(modelString), openRouterApiKey) : undefined,
       verbose: process.env.NODE_ENV === 'production' ? 0 : 1,
       disablePino: process.env.NODE_ENV === 'production',
-      model: { modelName: modelString, apiKey: isOpenRouter(modelString) ? undefined : apiKey },
+      model: isOpenRouter(modelString) ? undefined : { modelName: formatModelName(modelString), apiKey },
       localBrowserLaunchOptions: { cdpUrl, viewport: { width: 1288, height: 711 } },
     })
 
@@ -187,18 +195,22 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     })
     console.log(`[${requestId}] stagehand.init done in ${Date.now() - initT}ms`)
 
-    const planningModel = thinkingModel || modelString
-    const execution = executionModel || planningModel
-
     console.log(`[${requestId}] creating stagehand agent (plan=${planningModel}, exec=${execution})`)
-    const agent = await stagehand.agent({
-      cua: isCUA(planningModel),
-      model: planningModel,
-      executionModel: execution,
-      systemPrompt: fileData
-        ? `You are a helpful assistant. You also have the ability to upload files to the browser using the uploadFile tool.`
-        : undefined,
-    })
+
+    let agent;
+
+    if (isOpenRouter(planningModel) || isOpenRouter(execution)) {
+      agent = await stagehand.agent();
+    } else {
+      agent = await stagehand.agent({
+        cua: isCUA(planningModel),
+        model: formatModelName(planningModel),
+        executionModel: formatModelName(execution),
+        systemPrompt: fileData
+          ? `You are a helpful assistant. You also have the ability to upload files to the browser using the uploadFile tool.`
+          : undefined,
+      })
+    }
 
     console.log(`[${requestId}] agent.execute start (instructionLen=${instruction.length})`)
     const execT = Date.now()
