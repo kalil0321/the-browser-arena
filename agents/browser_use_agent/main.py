@@ -15,7 +15,8 @@ from .tools import tools
 
 def parse_provider_model(provider_model: str):
     if provider_model.startswith("openrouter/"):
-        return "openrouter", provider_model.split("/", 1).join("/")
+        # Extract everything after "openrouter/" (e.g., "moonshotai/kimi-k2-thinking")
+        return "openrouter", provider_model.split("/", 1)[1]
     if not provider_model:
         return "browser-use", "bu-1.0"
     provider, model = provider_model.split("/", 1)
@@ -67,14 +68,24 @@ def get_llm(provider: str, model: str, user_api_keys: Dict = None):
             raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
         return ChatAnthropic(model=model, api_key=api_key)
-    
+
     if provider_lower == "openrouter":
         api_key = user_api_keys.get("openrouter_api_key") or os.getenv(
             "OPENROUTER_API_KEY"
         )
+
+        add_schema_to_system_prompt = model.startswith("moonshotai/")
+        remove_min_items_from_schema = model.startswith("moonshotai/")
+        remove_defaults_from_schema = model.startswith("moonshotai/")
+
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY environment variable is required")
-        return ChatOpenAI(model=model, api_key=api_key, base_url="https://openrouter.ai/api/v1")
+        return ChatOpenAI(
+            model=model, api_key=api_key, base_url="https://openrouter.ai/api/v1",
+            add_schema_to_system_prompt=add_schema_to_system_prompt,
+            remove_min_items_from_schema=remove_min_items_from_schema,
+            remove_defaults_from_schema=remove_defaults_from_schema,
+        )
 
     # Default to browser-use
     api_key = user_api_keys.get("browser_use_api_key") or os.getenv(

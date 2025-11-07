@@ -798,6 +798,7 @@ async def run_browser_use_agent(
             google_api_key=request.googleApiKey,
             anthropic_api_key=request.anthropicApiKey,
             browser_use_api_key=request.browserUseApiKey,
+            openrouter_api_key=request.openrouterApiKey,
             file_path=request.filePath,
         )
 
