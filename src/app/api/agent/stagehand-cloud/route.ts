@@ -3,6 +3,7 @@ import { Stagehand } from "@browserbasehq/stagehand";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
+import { computeCost } from "@/lib/pricing";
 
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -22,7 +23,7 @@ const getBrowserbaseConfig = () => {
     return { apiKey, projectId };
 };
 
-const determineKey = (model: string | undefined, userKeys: { openai?: string; google?: string; anthropic?: string }) => {
+const determineKey = (model: string | undefined, userKeys: { openai?: string; google?: string; anthropic?: string; openrouter?: string }) => {
     if (!model) {
         // Default to Google if no model specified
         if (userKeys.google?.trim()) {
@@ -32,6 +33,16 @@ const determineKey = (model: string | undefined, userKeys: { openai?: string; go
         return process.env.GOOGLE_API_KEY;
     }
     const provider = model.split("/")[0];
+
+    // Handle OpenRouter models
+    if (provider === "openrouter") {
+        if (userKeys.openrouter?.trim()) {
+            console.log("✅ Using user-provided OpenRouter API key");
+            return userKeys.openrouter.trim();
+        }
+        return process.env.OPENROUTER_API_KEY || "";
+    }
+
     if (provider === "google") {
         if (userKeys.google?.trim()) {
             console.log("✅ Using user-provided Google API key");
@@ -62,54 +73,9 @@ const determineKey = (model: string | undefined, userKeys: { openai?: string; go
     return process.env.OPENAI_API_KEY;
 }
 
-// LLM pricing per 1M tokens
-const pricing: Record<string, { in: number; out: number; cached: number }> = {
-    "google/gemini-2.5-flash": {
-        in: 0.3 / 1_000_000,
-        out: 2.5 / 1_000_000,
-        cached: 0.03 / 1_000_000,
-    },
-    "google/gemini-2.5-pro": {
-        in: 1.25 / 1_000_000,
-        out: 10.0 / 1_000_000,
-        cached: 0.3125 / 1_000_000,
-    },
-    "openai/gpt-4.1": {
-        in: 2.0 / 1_000_000,
-        out: 8.0 / 1_000_000,
-        cached: 0.5 / 1_000_000,
-    },
-    "anthropic/claude-haiku-4.5": {
-        in: 1.0 / 1_000_000,
-        out: 5.0 / 1_000_000,
-        cached: 0.1 / 1_000_000,
-    },
-};
-
-function computeCost(model: string | undefined, usage: any): number {
-    if (!usage) return 0;
-
-    const modelKey = model ?? "google/gemini-2.5-flash";
-    const price = pricing[modelKey] || {
-        in: 0.5 / 1_000_000,
-        out: 3.0 / 1_000_000,
-        cached: 0.1 / 1_000_000,
-    };
-
-    const inputTokens = usage.input_tokens || 0;
-    const outputTokens = usage.output_tokens || 0;
-    const cachedTokens = usage.cached_tokens || usage.input_tokens_cached || 0;
-
-    return (
-        inputTokens * price.in +
-        outputTokens * price.out +
-        cachedTokens * price.cached
-    );
-}
-
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, openrouterApiKey } = await request.json();
 
         // Get user token for auth
         const token = await getToken();
@@ -132,7 +98,7 @@ export async function POST(request: NextRequest) {
             projectId: browserbaseConfig.projectId,
             model: {
                 modelName: modelString,
-                apiKey: determineKey(model, { openai: openaiApiKey, google: googleApiKey, anthropic: anthropicApiKey }),
+                apiKey: determineKey(model, { openai: openaiApiKey, google: googleApiKey, anthropic: anthropicApiKey, openrouter: openrouterApiKey }),
             },
         });
 
@@ -191,6 +157,7 @@ export async function POST(request: NextRequest) {
                     openai: openaiApiKey,
                     google: googleApiKey,
                     anthropic: anthropicApiKey,
+                    openrouter: openrouterApiKey,
                 };
                 const stagehand = new Stagehand({
                     env: "BROWSERBASE",

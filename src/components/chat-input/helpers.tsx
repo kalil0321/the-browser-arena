@@ -4,6 +4,7 @@ import { OpenAI } from "@/components/logos/openai";
 import { GeminiLogo } from "@/components/logos/gemini";
 import { ClaudeLogo } from "@/components/logos/claude";
 import { BrowserUseLogo } from "@/components/logos/bu";
+import { MoonshotLogo } from "@/components/logos/moonshot";
 import { cn } from "@/lib/utils";
 
 // Helper to detect provider from browser-use cloud model names
@@ -26,6 +27,12 @@ export const detectProviderFromModelName = (modelName: string): string => {
 // Helper to format model names
 export const formatModelName = (model: string) => {
     const parts = model.split("/");
+    // Handle openrouter/provider/model format - extract provider from middle segment
+    if (parts.length >= 3 && parts[0] === "openrouter") {
+        const provider = parts[1]; // The actual provider (e.g., "moonshotai")
+        const modelName = parts.slice(2).join("/"); // The model name (e.g., "kimi-k2-thinking")
+        return { provider, modelName };
+    }
     if (parts.length >= 2) {
         const provider = parts[0];
         const modelName = parts.slice(1).join("/");
@@ -42,7 +49,8 @@ export const getProviderName = (provider: string) => {
         "google": "Google",
         "openai": "OpenAI",
         "anthropic": "Anthropic",
-        "browser-use": "Browser-Use"
+        "browser-use": "Browser-Use",
+        "moonshotai": "Moonshot AI"
     };
     // Handle Browser Use Cloud models that don't have provider prefix
     if (provider === "" || !provider) {
@@ -62,6 +70,8 @@ export const ProviderLogo: React.FC<{ provider: string; className?: string }> = 
             return <ClaudeLogo className={cn("h-4 w-4", className)} />;
         case "browser-use":
             return <BrowserUseLogo className={cn("h-4 w-4", className)} />;
+        case "moonshotai":
+            return <MoonshotLogo className={cn("h-4 w-4", className)} />;
         default:
             return <Bot className={cn("h-4 w-4 text-muted-foreground", className)} />;
     }
@@ -115,6 +125,9 @@ export const getShortModelName = (model: string): string => {
     }
     if (modelName === "o3") {
         return "O3";
+    }
+    if (modelName.toLowerCase().includes("kimi-k2-thinking") || modelName.toLowerCase().includes("kimi")) {
+        return "Kimi K2";
     }
     // Fallback: return model name as-is, truncate if too long
     return modelName.length > 15 ? modelName.substring(0, 12) + "..." : modelName;

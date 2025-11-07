@@ -16,7 +16,7 @@ import { AgentConfigDialog } from "./agent-config-dialog";
 import { getClientFingerprint } from "@/lib/fingerprint";
 
 // Import types and helpers
-import { AgentConfig, ChatInputState, AGENT_LABELS } from "./chat-input/types";
+import { AgentConfig, ChatInputState, AGENT_LABELS, AgentType, ModelType, MODEL_OPTIONS } from "./chat-input/types";
 import { AgentSelectionDialog } from "./chat-input/agent-selection-dialog";
 import { AuthDialog } from "./chat-input/auth-dialog";
 import { FileUpload } from "./chat-input/file-upload";
@@ -26,6 +26,68 @@ import { Paperclip } from "lucide-react";
 // Lazy load the LoadingDino component for better initial load performance
 const LoadingDino = lazy(() => import("@/components/loading-dino").then(mod => ({ default: mod.LoadingDino })));
 import { authClient } from "@/lib/auth/client";
+
+// Helper function to validate cached agent configs
+const validateAgentConfigs = (configs: any): configs is AgentConfig[] => {
+    if (!Array.isArray(configs) || configs.length === 0) {
+        return false;
+    }
+
+    for (const config of configs) {
+        // Check required fields
+        if (!config.agent || !config.model) {
+            return false;
+        }
+
+        // Check if agent type is valid
+        const validAgentTypes: AgentType[] = ["stagehand", "smooth", "stagehand-bb-cloud", "browser-use", "browser-use-cloud"];
+        if (!validAgentTypes.includes(config.agent)) {
+            return false;
+        }
+
+        // Check if model is valid for the agent type
+        const validModels = MODEL_OPTIONS[config.agent as AgentType];
+        // Smooth agents don't have model options, so skip validation for them
+        if (validModels.length > 0 && !validModels.includes(config.model)) {
+            return false;
+        }
+
+        // Validate thinkingModel and executionModel if present
+        if (config.thinkingModel && !validModels.includes(config.thinkingModel)) {
+            return false;
+        }
+        if (config.executionModel && !validModels.includes(config.executionModel)) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
+// Helper function to load agent configs from localStorage
+const loadAgentConfigsFromCache = (): AgentConfig[] => {
+    if (typeof window === "undefined") {
+        return [{ id: `agent-${Date.now()}`, agent: "browser-use", model: "browser-use/bu-1.0" }];
+    }
+
+    try {
+        const cached = localStorage.getItem("agent_configs_cache");
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (validateAgentConfigs(parsed)) {
+                // Ensure each config has an id
+                return parsed.map((config: AgentConfig) => ({
+                    ...config,
+                    id: config.id || `agent-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+                }));
+            }
+        }
+    } catch (error) {
+        console.error("Failed to load agent configs from cache:", error);
+    }
+    // Return default config
+    return [{ id: `agent-${Date.now()}`, agent: "browser-use", model: "browser-use/bu-1.0" }];
+};
 
 interface ChatInputProps {
     onStateChange?: (state: ChatInputState) => void;
@@ -60,10 +122,10 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
 
-    // Agent configuration state
-    const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([
-        { id: `agent-${Date.now()}`, agent: "browser-use", model: "browser-use/bu-1.0" }
-    ]);
+    // Agent configuration state - initialize from cache if available
+    const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>(() => {
+        return loadAgentConfigsFromCache();
+    });
 
     // Privacy state
     const [isPrivate, setIsPrivate] = useState(false);
@@ -122,6 +184,20 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         generateFingerprint();
     }, []);
 
+    // Save agent configs to localStorage whenever they change
+    useEffect(() => {
+        if (typeof window !== "undefined" && agentConfigs.length > 0) {
+            try {
+                // Remove temporary IDs before saving (they'll be regenerated on load)
+                const configsToSave = agentConfigs.map(({ id, ...config }) => config);
+                localStorage.setItem("agent_configs_cache", JSON.stringify(configsToSave));
+                console.log("[ChatInput] Saved agent configs to cache:", configsToSave);
+            } catch (error) {
+                console.error("Failed to save agent configs to cache:", error);
+            }
+        }
+    }, [agentConfigs]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (input.trim() && !isLoading && agentConfigs.length > 0) {
@@ -164,6 +240,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 let googleApiKey: string | undefined = undefined;
                 let anthropicApiKey: string | undefined = undefined;
                 let browserUseApiKey: string | undefined = undefined;
+                let openrouterApiKey: string | undefined = undefined;
 
                 // Check if Smooth agent is selected
                 const hasSmoothAgent = agentConfigs.some(c => c.agent === "smooth");
@@ -234,6 +311,21 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             if (key4) {
                                 browserUseApiKey = key4;
                                 console.log("?? Found user's Browser-Use API key in localStorage");
+                            }
+                        }
+
+                        // Get OpenRouter API key if stagehand or browser-use agent with OpenRouter model is selected
+                        const hasOpenRouterModel = agentConfigs.some(c =>
+                            (c.agent === "stagehand" || c.agent === "browser-use") &&
+                            (c.model?.includes("openrouter") ||
+                                c.thinkingModel?.includes("openrouter") ||
+                                c.executionModel?.includes("openrouter"))
+                        );
+                        if (hasOpenRouterModel) {
+                            const key5 = await getApiKey("openrouter", user._id);
+                            if (key5) {
+                                openrouterApiKey = key5;
+                                console.log("?? Found user's OpenRouter API key in localStorage");
                             }
                         }
                     } catch (error) {
@@ -317,6 +409,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         googleApiKey: googleApiKey,
                         anthropicApiKey: anthropicApiKey,
                         browserUseApiKey: browserUseApiKey,
+                        openrouterApiKey: openrouterApiKey,
                         isPrivate: isPrivate,
                         smoothFileIds: smoothFileIds.length > 0 ? smoothFileIds : undefined,
                         browserUseFilePath: browserUseFilePath || undefined,

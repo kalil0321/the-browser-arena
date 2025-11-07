@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
             googleApiKey,
             anthropicApiKey,
             browserUseApiKey,
+            openrouterApiKey,
             isPrivate,
             smoothFileIds,
             browserUseFilePath,
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
             googleApiKey?: string;
             anthropicApiKey?: string;
             browserUseApiKey?: string;
+            openrouterApiKey?: string;
             isPrivate?: boolean;
             smoothFileIds?: string[];
             browserUseFilePath?: string;
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
         const usageStats = await convex.query(api.queries.getUserUsageStats, {});
         const currentSessionCount = usageStats?.totalSessions ?? 0;
         console.log("[api/agent/multi] Current session count:", currentSessionCount);
-        if (currentSessionCount >= MAX_SESSIONS) {
+        if (process.env.NODE_ENV === 'production' && currentSessionCount >= MAX_SESSIONS) {
             return NextResponse.json(
                 {
                     error: `Session limit reached. Maximum ${MAX_SESSIONS} sessions allowed.`,
@@ -170,6 +172,7 @@ export async function POST(request: NextRequest) {
                             openaiApiKey,
                             googleApiKey,
                             anthropicApiKey,
+                            openrouterApiKey,
                             ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
                             ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                         };
@@ -190,6 +193,7 @@ export async function POST(request: NextRequest) {
                             googleApiKey,
                             anthropicApiKey,
                             ...(browserUseApiKey ? { browserUseApiKey } : {}),
+                            ...(openrouterApiKey ? { openrouterApiKey } : {}),
                             userId: userId,
                             ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                             ...(browserSessionId && cdpUrl && liveViewUrl ? {
@@ -223,6 +227,7 @@ export async function POST(request: NextRequest) {
                             openaiApiKey,
                             googleApiKey,
                             anthropicApiKey,
+                            openrouterApiKey,
                             ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
                             ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
                             ...(stagehandFileData ? { fileData: stagehandFileData } : {}),

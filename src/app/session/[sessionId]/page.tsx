@@ -12,6 +12,7 @@ import Link from "next/link";
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
+import { Copy, Check } from "lucide-react";
 
 export default function SessionPage() {
     const params = useParams();
@@ -21,6 +22,9 @@ export default function SessionPage() {
 
     // View mode state: "grid" or "tabs"
     const [viewMode, setViewMode] = useState<"grid" | "tabs">("grid");
+
+    // Copy state
+    const [isCopied, setIsCopied] = useState(false);
 
     const session = useQuery(
         api.queries.getSession,
@@ -101,15 +105,36 @@ export default function SessionPage() {
     // Show view mode toggle only when there are multiple agents
     const showViewToggle = agents && agents.length > 1;
 
+    const handleCopyInstruction = () => {
+        if (session?.instruction) {
+            navigator.clipboard.writeText(session.instruction);
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        }
+    };
+
     return (
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-black">
             {/* Header */}
             <div className="border-b border-gray-200 dark:border-card/20 px-3 py-3 sm:px-4 sm:py-4 shrink-0">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-col gap-1 min-w-0 flex-1">
-                        <h1 className="text-base sm:text-lg font-default font-medium text-gray-900 dark:text-gray-100 break-words">
-                            {session.instruction}
-                        </h1>
+                        <div className="flex items-start gap-2 group">
+                            <h1 className="text-base sm:text-lg font-default font-medium text-gray-900 dark:text-gray-100 break-words flex-1">
+                                {session.instruction}
+                            </h1>
+                            <button
+                                onClick={handleCopyInstruction}
+                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                title={isCopied ? "Copied!" : "Copy instruction"}
+                            >
+                                {isCopied ? (
+                                    <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                ) : (
+                                    <Copy className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                                )}
+                            </button>
+                        </div>
                         <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
                             Created {new Date(session.createdAt).toLocaleDateString(undefined, {
                                 year: 'numeric',

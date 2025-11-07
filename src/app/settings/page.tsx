@@ -60,6 +60,11 @@ export default function SettingsPage() {
   const [browserUseKeyDisplay, setBrowserUseKeyDisplay] = useState<string | null>(null);
   const [browserUseKeyFull, setBrowserUseKeyFull] = useState<string | null>(null);
 
+  const [openrouterApiKey, setOpenrouterApiKey] = useState("");
+  const [openrouterKeyVisible, setOpenrouterKeyVisible] = useState(false);
+  const [openrouterKeyDisplay, setOpenrouterKeyDisplay] = useState<string | null>(null);
+  const [openrouterKeyFull, setOpenrouterKeyFull] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
 
@@ -156,6 +161,16 @@ export default function SettingsPage() {
           setBrowserUseKeyFull(key);
           setBrowserUseKeyDisplay(maskApiKey(key));
           console.log("🔑 Loaded user's Browser-Use API key from localStorage");
+        }
+      }
+
+      // Load OpenRouter key
+      if (hasApiKey("openrouter")) {
+        const key = await getApiKey("openrouter", user._id);
+        if (key) {
+          setOpenrouterKeyFull(key);
+          setOpenrouterKeyDisplay(maskApiKey(key));
+          console.log("🔑 Loaded user's OpenRouter API key from localStorage");
         }
       }
     } catch (error) {
@@ -491,6 +506,71 @@ export default function SettingsPage() {
     } else {
       setBrowserUseKeyDisplay(browserUseKeyFull);
       setBrowserUseKeyVisible(true);
+    }
+  };
+
+  // OpenRouter handlers
+  const handleSaveOpenrouterKey = async () => {
+    if (!user?._id) {
+      toast.error("Please sign in to save API keys", {
+        duration: 5000,
+      });
+      return;
+    }
+    if (!openrouterApiKey.trim()) {
+      toast.error("API key cannot be empty", {
+        duration: 5000,
+      });
+      return;
+    }
+    setIsSaving(true);
+    const isReplacing = !!openrouterKeyDisplay;
+    try {
+      await setApiKey("openrouter", openrouterApiKey, user._id);
+      setOpenrouterKeyFull(openrouterApiKey);
+      setOpenrouterKeyDisplay(maskApiKey(openrouterApiKey));
+      setOpenrouterApiKey("");
+      setOpenrouterKeyVisible(false);
+      toast.success(isReplacing ? "OpenRouter API key replaced successfully" : "OpenRouter API key saved successfully", {
+        duration: 3000,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to save API key";
+      toast.error("Failed to save API key", {
+        description: errorMsg,
+        duration: 5000,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveOpenrouterKey = async () => {
+    if (!user?._id) return;
+    try {
+      removeApiKey("openrouter");
+      setOpenrouterKeyDisplay(null);
+      setOpenrouterKeyFull(null);
+      setOpenrouterApiKey("");
+      setOpenrouterKeyVisible(false);
+      toast.success("OpenRouter API key removed", {
+        duration: 3000,
+      });
+    } catch (error) {
+      toast.error("Failed to remove API key", {
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleToggleOpenrouterKeyVisibility = async () => {
+    if (!user?._id || !openrouterKeyFull) return;
+    if (openrouterKeyVisible) {
+      setOpenrouterKeyDisplay(maskApiKey(openrouterKeyFull));
+      setOpenrouterKeyVisible(false);
+    } else {
+      setOpenrouterKeyDisplay(openrouterKeyFull);
+      setOpenrouterKeyVisible(true);
     }
   };
 
@@ -1001,6 +1081,85 @@ export default function SettingsPage() {
                       disabled={isSaving || !browserUseApiKey.trim() || !user?._id}
                     >
                       {isSaving ? "Saving..." : browserUseKeyDisplay ? "Update Key" : "Save Key"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* OpenRouter API Key Section */}
+                <div id="openrouter-api-section" className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">OpenRouter API Key</h3>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Your OpenRouter API key is used to authenticate requests to OpenRouter services (e.g., Moonshot AI models).
+                    If not provided, the default server key will be used.
+                  </p>
+
+                  {/* Current Key Display */}
+                  {isLoadingKey ? (
+                    <div className="text-sm text-muted-foreground">Loading...</div>
+                  ) : openrouterKeyDisplay ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <span className="text-muted-foreground">Key is set</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          value={openrouterKeyDisplay || ""}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleToggleOpenrouterKeyVisibility}
+                          title={openrouterKeyVisible ? "Hide key" : "Show key"}
+                        >
+                          {openrouterKeyVisible ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleRemoveOpenrouterKey}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm">
+                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">No key set</span>
+                    </div>
+                  )}
+
+                  {/* Save New/Update Key */}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="openrouter-api-key">
+                        {openrouterKeyDisplay ? "Update OpenRouter API Key" : "Add OpenRouter API Key"}
+                      </Label>
+                      <Input
+                        id="openrouter-api-key"
+                        type="password"
+                        placeholder="Enter your OpenRouter API key"
+                        value={openrouterApiKey}
+                        onChange={(e) => setOpenrouterApiKey(e.target.value)}
+                        className="font-mono"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveOpenrouterKey}
+                      disabled={isSaving || !openrouterApiKey.trim() || !user?._id}
+                    >
+                      {isSaving ? "Saving..." : openrouterKeyDisplay ? "Update Key" : "Save Key"}
                     </Button>
                   </div>
                 </div>

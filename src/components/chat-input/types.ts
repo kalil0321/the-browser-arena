@@ -12,12 +12,10 @@ export type ModelType =
     | "o3"
     | "claude-sonnet-4"
     | "openai/computer-use-preview"
-    | "openai/computer-use-preview-2025-03-11"
-    | "anthropic/claude-3-7-sonnet-latest"
     | "anthropic/claude-haiku-4-5-20251001"
-    | "anthropic/claude-sonnet-4-20250514"
     | "anthropic/claude-sonnet-4-5-20250929"
-    | "google/gemini-2.5-computer-use-preview-10-2025";
+    // | "google/gemini-2.5-computer-use-preview-10-2025"
+    | "openrouter/moonshotai/kimi-k2-thinking";
 
 export interface AgentConfig {
     id?: string; // Unique identifier for this agent instance
@@ -37,11 +35,11 @@ export const AGENT_LABELS: Record<AgentType, string> = {
 };
 
 export const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
-    "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5"],
+    "browser-use": ["browser-use/bu-1.0", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openrouter/moonshotai/kimi-k2-thinking"],
     "browser-use-cloud": ["browser-use-llm", "gemini-flash-latest", "gpt-4.1", "o3", "claude-sonnet-4"],
-    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openai/computer-use-preview-2025-03-11", "anthropic/claude-3-7-sonnet-latest", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-5-20250929", "google/gemini-2.5-computer-use-preview-10-2025"],
+    "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openrouter/moonshotai/kimi-k2-thinking"],
     "smooth": [], // Smooth uses its own models
-    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openai/computer-use-preview-2025-03-11", "anthropic/claude-3-7-sonnet-latest", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-5-20250929", "google/gemini-2.5-computer-use-preview-10-2025"] // Commented out in UI for now
+    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-5-20250929"] // Commented out in UI for now
 };
 
 export interface ChatInputState {

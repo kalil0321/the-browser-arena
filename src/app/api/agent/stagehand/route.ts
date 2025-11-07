@@ -6,7 +6,9 @@ import { getToken } from "@/lib/auth/server";
 import { missingKey, serverMisconfigured, unauthorized, badRequest } from "@/lib/http-errors";
 
 // Stagehand server URL - dev: localhost:3001, prod: stagehand.thebrowserarena.com
-const STAGEHAND_SERVER_URL = "https://stagehand.thebrowserarena.com"
+// const STAGEHAND_SERVER_URL = "https://stagehand.thebrowserarena.com"
+const STAGEHAND_SERVER_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "https://stagehand.thebrowserarena.com";
+
 
 // Initialize the client
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
@@ -26,7 +28,7 @@ const config = {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, thinkingModel, executionModel, fileData } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, openrouterApiKey, thinkingModel, executionModel, fileData } = await request.json();
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
@@ -151,6 +153,7 @@ export async function POST(request: NextRequest) {
                             openai: openaiApiKey,
                             google: googleApiKey,
                             anthropic: anthropicApiKey,
+                            openrouter: openrouterApiKey,
                         },
                         ...(fileData ? { fileData } : {}),
                     }),
