@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
-export interface MoonshotLogoProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+export interface MoonshotLogoProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src' | 'width' | 'height'> {
   className?: string;
 }
 
