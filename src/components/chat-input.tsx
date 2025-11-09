@@ -67,7 +67,10 @@ const validateAgentConfigs = (configs: any): configs is AgentConfig[] => {
 // Helper function to load agent configs from localStorage
 const loadAgentConfigsFromCache = (): AgentConfig[] => {
     if (typeof window === "undefined") {
-        return [{ id: `agent-${Date.now()}`, agent: "browser-use", model: "browser-use/bu-1.0" }];
+        return [
+            { id: `agent-${Date.now()}-1`, agent: "stagehand", model: "google/gemini-2.5-flash" },
+            { id: `agent-${Date.now()}-2`, agent: "browser-use", model: "browser-use/bu-1.0" }
+        ];
     }
 
     try {
@@ -86,7 +89,10 @@ const loadAgentConfigsFromCache = (): AgentConfig[] => {
         console.error("Failed to load agent configs from cache:", error);
     }
     // Return default config
-    return [{ id: `agent-${Date.now()}`, agent: "browser-use", model: "browser-use/bu-1.0" }];
+    return [
+        { id: `agent-${Date.now()}-1`, agent: "stagehand", model: "google/gemini-2.5-flash" },
+        { id: `agent-${Date.now()}-2`, agent: "browser-use", model: "browser-use/bu-1.0" }
+    ];
 };
 
 interface ChatInputProps {
