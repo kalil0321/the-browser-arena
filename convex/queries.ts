@@ -95,6 +95,37 @@ export const getSessionAgents = query({
 });
 
 /**
+ * Verify session ownership for authorization checks
+ * Returns the session if the authenticated user owns it, null otherwise
+ * This is used by API routes to verify authorization before allowing operations
+ */
+export const verifySessionOwnership = query({
+    args: {
+        sessionId: v.id("sessions"),
+    },
+    handler: async (ctx, args) => {
+        const user = await getUser(ctx);
+        
+        if (!user) {
+            return null; // User must be authenticated
+        }
+
+        const session = await ctx.db.get(args.sessionId);
+        
+        if (!session) {
+            return null; // Session doesn't exist
+        }
+
+        // Only return session if the user owns it
+        if (session.userId !== user._id) {
+            return null; // User doesn't own the session
+        }
+
+        return session;
+    },
+});
+
+/**
  * Arena queries - crowdsourced data view
  * Accessible to both authenticated and unauthenticated users (public sessions only)
  */

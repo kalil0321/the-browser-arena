@@ -101,6 +101,18 @@ export async function POST(request: NextRequest) {
         // If sessionId is provided, add agent to existing session
         // Otherwise, create a new session
         if (existingSessionId) {
+            // AUTHORIZATION CHECK: Verify session belongs to the authenticated user
+            const session = await convex.query(api.queries.verifySessionOwnership, {
+                sessionId: existingSessionId,
+            });
+
+            if (!session) {
+                return NextResponse.json(
+                    { error: "Unauthorized: You can only add agents to your own sessions" },
+                    { status: 403 }
+                );
+            }
+
             agentId = await convex.mutation(api.mutations.createAgent, {
                 sessionId: existingSessionId,
                 name: "stagehand",

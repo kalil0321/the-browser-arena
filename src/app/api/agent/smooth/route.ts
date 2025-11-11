@@ -175,12 +175,30 @@ export async function POST(request: NextRequest) {
         // live_url might be null initially, use it if available
         const liveViewUrl = live_url || "";
 
+        // Get current user for authorization checks
+        const user = await convex.query(api.auth.getCurrentUser, {});
+        if (!user) {
+            return unauthorized();
+        }
+
         let dbSessionId: string;
         let agentId: any; // Use any to avoid type conflicts with Convex ID types
 
         // If sessionId is provided, add agent to existing session
         // Otherwise, create a new session
         if (existingSessionId) {
+            // AUTHORIZATION CHECK: Verify session belongs to the authenticated user
+            const session = await convex.query(api.queries.verifySessionOwnership, {
+                sessionId: existingSessionId,
+            });
+            
+            if (!session) {
+                return NextResponse.json(
+                    { error: "Unauthorized: You can only add agents to your own sessions" },
+                    { status: 403 }
+                );
+            }
+
             agentId = await convex.mutation(api.mutations.createAgent, {
                 sessionId: existingSessionId,
                 name: "smooth",

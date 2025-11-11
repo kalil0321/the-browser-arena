@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { getUser } from "./auth";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Helper function to extract cost from agent result
@@ -963,7 +964,7 @@ export const createDemoSession = mutation({
             updatedAt: now,
         });
 
-        const agentIds: string[] = [];
+        const agentIds: Id<"agents">[] = [];
 
         // Create the first agent if browser data is provided
         if (args.browserData) {
@@ -1002,8 +1003,8 @@ export const createDemoSession = mutation({
         }
 
         // Return sessionId and all agentIds for backward compatibility
-        return { 
-            sessionId, 
+        return {
+            sessionId,
             agentId: agentIds.length > 0 ? agentIds[0] : undefined,
             agentIds: agentIds,
         };
