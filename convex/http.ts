@@ -99,7 +99,9 @@ http.route({
             }
 
             // Verify agent exists before allowing upload
-            const agent = await ctx.db.get(agentId as any);
+            const agent = await ctx.runQuery(api.queries.getAgentById, {
+                agentId: agentId as any,
+            });
             if (!agent) {
                 return new Response(
                     JSON.stringify({ error: "Agent not found" }),

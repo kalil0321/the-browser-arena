@@ -285,6 +285,19 @@ export const getUserCostBreakdown = query({
 });
 
 /**
+ * Get an agent by ID - used for backend verification
+ * This is an internal query used by the upload-recording endpoint
+ */
+export const getAgentById = query({
+    args: {
+        agentId: v.id("agents"),
+    },
+    handler: async (ctx, args) => {
+        return await ctx.db.get(args.agentId);
+    },
+});
+
+/**
  * Demo queries - for unauthenticated demo users
  */
 
