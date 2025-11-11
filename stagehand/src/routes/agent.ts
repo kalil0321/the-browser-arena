@@ -47,6 +47,102 @@ function isOpenRouter(model: string): boolean {
   return model.includes('openrouter')
 }
 
+// Security validation functions
+const ALLOWED_SECRET_KEYS = new Set([
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GOOGLE_API_KEY',
+  'OPENROUTER_API_KEY',
+  'BROWSER_USE_API_KEY',
+])
+
+const SUSPICIOUS_SECRET_KEYS = new Set([
+  'PATH',
+  'LD_PRELOAD',
+  'HOME',
+  'SHELL',
+  'LD_LIBRARY_PATH',
+])
+
+const MAX_SECRET_VALUE_LENGTH = 500
+const MAX_SECRET_KEY_LENGTH = 100
+
+function validateSecrets(secrets: Record<string, string> | undefined): { isValid: boolean; error?: string } {
+  if (!secrets) {
+    return { isValid: true }
+  }
+
+  if (typeof secrets !== 'object' || Array.isArray(secrets)) {
+    return {
+      isValid: false,
+      error: 'Secrets must be an object with string keys and values',
+    }
+  }
+
+  const secretKeys = Object.keys(secrets)
+
+  // Check for suspicious keys
+  for (const key of secretKeys) {
+    if (SUSPICIOUS_SECRET_KEYS.has(key)) {
+      return {
+        isValid: false,
+        error: `Suspicious secret key detected: ${key}. This may indicate an injection attempt.`,
+      }
+    }
+
+    // Check for environment variable injection patterns
+    if (key.startsWith('LD_') || key.includes('PRELOAD') || key.includes('PATH')) {
+      return {
+        isValid: false,
+        error: `Potentially dangerous secret key: ${key}. Environment variable injection detected.`,
+      }
+    }
+  }
+
+  // Validate against whitelist
+  for (const key of secretKeys) {
+    if (!ALLOWED_SECRET_KEYS.has(key)) {
+      return {
+        isValid: false,
+        error: `Invalid secret key: ${key}. Only allowed secret keys are permitted.`,
+      }
+    }
+  }
+
+  // Validate key and value lengths
+  for (const [key, value] of Object.entries(secrets)) {
+    if (typeof key !== 'string' || key.length === 0) {
+      return {
+        isValid: false,
+        error: 'Secret keys must be non-empty strings',
+      }
+    }
+
+    if (key.length > MAX_SECRET_KEY_LENGTH) {
+      return {
+        isValid: false,
+        error: `Secret key too long: ${key.length} characters (max: ${MAX_SECRET_KEY_LENGTH})`,
+      }
+    }
+
+    if (typeof value !== 'string') {
+      return {
+        isValid: false,
+        error: `Secret value for ${key} must be a string`,
+      }
+    }
+
+    if (value.length > MAX_SECRET_VALUE_LENGTH) {
+      return {
+        isValid: false,
+        error: `Secret value for ${key} too long: ${value.length} characters (max: ${MAX_SECRET_VALUE_LENGTH})`,
+      }
+    }
+  }
+
+  return { isValid: true }
+}
+
 function createORClient(model: string, apiKey?: string): AISdkClient {
   return new AISdkClientWithLanguageModel({
     model: openrouter(model, apiKey),
@@ -108,7 +204,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
       ...body,
       keys: body.keys ? Object.fromEntries(Object.entries(body.keys).map(([k, v]: any) => [k, v ? `${String(v).slice(0, 4)}…` : v])) : undefined,
       fileData: body.fileData ? { name: body.fileData.name, mimeType: body.fileData.mimeType, data: `<${body.fileData.data?.length || 0}b>` } : undefined,
-      secrets: body.secrets ? { keys: Object.keys(body.secrets), count: Object.keys(body.secrets).length } : undefined,
+      secrets: body.secrets ? { count: Object.keys(body.secrets).length } : undefined, // Don't log secret keys for security
     }
     console.log(`[${requestId}] → POST /agent/stagehand`, safe)
   } catch {
@@ -136,11 +232,18 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     secrets,
   } = parse.data
 
-  // Log secrets presence (if provided)
+  // Validate secrets (defense in depth - also validated in Next.js routes)
   if (secrets) {
+    const secretsValidation = validateSecrets(secrets)
+    if (!secretsValidation.isValid) {
+      console.warn(`[${requestId}] ✖ secrets validation failed: ${secretsValidation.error}`)
+      res.status(400).json({ error: `Invalid secrets: ${secretsValidation.error}`, requestId })
+      return
+    }
+
+    // Log secrets count without exposing key names for security
     console.log(`[${requestId}] 🔐 Secrets provided`, {
       count: Object.keys(secrets).length,
-      keys: Object.keys(secrets),
     })
   }
 
@@ -225,8 +328,8 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 
     console.log(`[${requestId}] agent.execute start (instructionLen=${instruction.length})`)
     if (secrets) {
+      // Log secrets count without exposing key names for security
       console.log(`[${requestId}] Forwarding secrets to agent.execute`, {
-        keys: Object.keys(secrets),
         count: Object.keys(secrets).length,
       })
     }
