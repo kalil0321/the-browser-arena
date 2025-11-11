@@ -177,7 +177,9 @@ export async function POST(request: NextRequest) {
             builtAgents.push({ kind: a.agent, model: modelForAgent, browserSessionId: sid, liveViewUrl: live, cdpUrl: cdp });
         }
 
-        // Create demo session with first agent bound
+        // Create demo session with all agents
+        // Since demo route is unauthenticated, we create agents directly in createDemoSession
+        // instead of using createAgentFromBackend (which is meant for authenticated users or backend services)
         const first = builtAgents[0];
         const createResult = await convex.mutation(api.mutations.createDemoSession, {
             instruction,
@@ -187,11 +189,20 @@ export async function POST(request: NextRequest) {
             },
             agentName: first.kind,
             model: first.model,
+            // Pass additional agents data to create them all at once
+            additionalAgents: builtAgents.slice(1).map(b => ({
+                name: b.kind,
+                model: b.model,
+                browser: {
+                    sessionId: b.browserSessionId,
+                    url: b.liveViewUrl,
+                },
+            })),
         });
 
-        const { sessionId: dbSessionId, agentId: firstAgentId } = createResult;
-        if (!firstAgentId) {
-            return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
+        const { sessionId: dbSessionId, agentIds } = createResult;
+        if (!agentIds || agentIds.length === 0) {
+            return NextResponse.json({ error: "Failed to create agents" }, { status: 500 });
         }
 
         // Associate the session with the demo usage record
@@ -200,23 +211,7 @@ export async function POST(request: NextRequest) {
             sessionId: dbSessionId,
         });
 
-        // Create remaining agents via backend mutation (no auth required)
-        const additionalAgentIds: string[] = [];
-        for (let i = 1; i < builtAgents.length; i++) {
-            const b = builtAgents[i];
-            const newAgentId = await convex.mutation(api.mutations.createAgentFromBackend, {
-                sessionId: dbSessionId,
-                name: b.kind,
-                model: b.model,
-                browser: {
-                    sessionId: b.browserSessionId,
-                    url: b.liveViewUrl,
-                },
-            });
-            additionalAgentIds.push(newAgentId as any);
-        }
-
-        const allAgentIds = [firstAgentId as any, ...additionalAgentIds];
+        const allAgentIds = agentIds;
 
         // Execute each agent in background
         after(async () => {

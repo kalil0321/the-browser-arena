@@ -404,7 +404,14 @@ export const cleanupOldSessions = mutation({
  */
 
 /**
- * Create agent from Python backend - no auth required
+ * Create agent from Python backend
+ * 
+ * Authorization:
+ * - If called by an authenticated user, verifies the user owns the session
+ * - If called without authentication (backend services), allows the call
+ *   (backend services receive sessionId from authenticated Next.js routes that already validated ownership)
+ * 
+ * TODO: Implement service authentication for backend services to improve security
  */
 export const createAgentFromBackend = mutation({
     args: {
@@ -417,11 +424,26 @@ export const createAgentFromBackend = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        // Get current user (if authenticated)
+        const user = await getUser(ctx);
+
         // Verify session exists
         const session = await ctx.db.get(args.sessionId);
         if (!session) {
             throw new Error("Session not found");
         }
+
+        // AUTHORIZATION CHECK: If user is authenticated, verify they own the session
+        // This prevents IDOR vulnerability where authenticated users could create agents
+        // in other users' sessions
+        if (user) {
+            if (session.userId !== user._id) {
+                throw new Error("Unauthorized: You can only create agents for your own sessions");
+            }
+        }
+        // If no user is authenticated, allow the call (backend service case)
+        // Backend services receive sessionId from authenticated Next.js routes that
+        // already validated the session belongs to the authenticated user
 
         const now = Date.now();
 
@@ -440,7 +462,12 @@ export const createAgentFromBackend = mutation({
 });
 
 /**
- * Update agent result from Python backend - no auth required
+ * Update agent result from Python backend
+ *
+ * Authorization:
+ * - If user is authenticated: Verifies the agent belongs to the user's session
+ * - If no user authenticated: Allows backend service calls (backend services receive
+ *   agentId from authenticated Next.js routes that already validated ownership)
  */
 export const updateAgentResultFromBackend = mutation({
     args: {
@@ -449,10 +476,29 @@ export const updateAgentResultFromBackend = mutation({
         status: v.optional(v.union(v.literal("completed"), v.literal("failed"))),
     },
     handler: async (ctx, args) => {
+        // Get current user (if authenticated)
+        const user = await getUser(ctx);
+
         const agent = await ctx.db.get(args.agentId);
         if (!agent) {
             throw new Error("Agent not found");
         }
+
+        // AUTHORIZATION CHECK: If user is authenticated, verify they own the session
+        // This prevents IDOR vulnerability where authenticated users could modify
+        // other users' agents' results
+        if (user) {
+            const session = await ctx.db.get(agent.sessionId);
+            if (!session) {
+                throw new Error("Session not found");
+            }
+            if (session.userId !== user._id) {
+                throw new Error("Unauthorized: You can only update your own agents");
+            }
+        }
+        // If no user is authenticated, allow the call (backend service case)
+        // Backend services receive agentId from authenticated Next.js routes that
+        // already validated the agent belongs to the authenticated user
 
         await ctx.db.patch(args.agentId, {
             status: args.status ?? "completed",
@@ -472,7 +518,12 @@ export const updateAgentResultFromBackend = mutation({
 });
 
 /**
- * Update agent status from Python backend - no auth required
+ * Update agent status from Python backend
+ *
+ * Authorization:
+ * - If user is authenticated: Verifies the agent belongs to the user's session
+ * - If no user authenticated: Allows backend service calls (backend services receive
+ *   agentId from authenticated Next.js routes that already validated ownership)
  */
 export const updateAgentStatusFromBackend = mutation({
     args: {
@@ -481,10 +532,29 @@ export const updateAgentStatusFromBackend = mutation({
         error: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        // Get current user (if authenticated)
+        const user = await getUser(ctx);
+
         const agent = await ctx.db.get(args.agentId);
         if (!agent) {
             throw new Error("Agent not found");
         }
+
+        // AUTHORIZATION CHECK: If user is authenticated, verify they own the session
+        // This prevents IDOR vulnerability where authenticated users could modify
+        // other users' agents' status
+        if (user) {
+            const session = await ctx.db.get(agent.sessionId);
+            if (!session) {
+                throw new Error("Session not found");
+            }
+            if (session.userId !== user._id) {
+                throw new Error("Unauthorized: You can only update your own agents");
+            }
+        }
+        // If no user is authenticated, allow the call (backend service case)
+        // Backend services receive agentId from authenticated Next.js routes that
+        // already validated the agent belongs to the authenticated user
 
         const updateData: any = {
             status: args.status,
@@ -500,7 +570,16 @@ export const updateAgentStatusFromBackend = mutation({
 });
 
 /**
- * Update agent recording URL from Python backend - no auth required
+ * Update agent recording URL from Python backend
+ * 
+ * Authorization:
+ * - If called by an authenticated user, verifies the user owns the session
+ * - If called without authentication (backend services), allows the call
+ *   (backend services receive agentId from authenticated Next.js routes that already validated ownership)
+ * 
+ * Security:
+ * - Validates URL to prevent malicious protocol injection (javascript:, data:, etc.)
+ * - Only allows HTTP(S) URLs
  */
 export const updateAgentRecordingUrlFromBackend = mutation({
     args: {
@@ -508,10 +587,59 @@ export const updateAgentRecordingUrlFromBackend = mutation({
         recordingUrl: v.string(),
     },
     handler: async (ctx, args) => {
+        // Get current user (if authenticated)
+        const user = await getUser(ctx);
+
         const agent = await ctx.db.get(args.agentId);
         if (!agent) {
             throw new Error("Agent not found");
         }
+
+        // AUTHORIZATION CHECK: If user is authenticated, verify they own the session
+        // This prevents IDOR vulnerability where authenticated users could inject malicious URLs
+        // into other users' agents
+        if (user) {
+            const session = await ctx.db.get(agent.sessionId);
+            if (!session) {
+                throw new Error("Session not found");
+            }
+            if (session.userId !== user._id) {
+                throw new Error("Unauthorized: You can only update your own agents");
+            }
+        }
+        // If no user is authenticated, allow the call (backend service case)
+        // Backend services receive agentId from authenticated Next.js routes that
+        // already validated the agent belongs to the authenticated user
+
+        // URL VALIDATION: Prevent XSS and malicious URLs
+        try {
+            const url = new URL(args.recordingUrl);
+
+            // Block dangerous protocols
+            const blockedProtocols = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
+            if (blockedProtocols.some(proto => args.recordingUrl.toLowerCase().startsWith(proto))) {
+                throw new Error(`Blocked protocol detected. Only HTTP(S) URLs allowed.`);
+            }
+
+            // Whitelist allowed protocols
+            const allowedProtocols = ['https:', 'http:'];
+            if (!allowedProtocols.includes(url.protocol)) {
+                throw new Error(`Invalid protocol: ${url.protocol}. Only HTTP(S) allowed.`);
+            }
+
+            // Additional validation: Check for encoded javascript:
+            const decodedUrl = decodeURIComponent(args.recordingUrl);
+            if (blockedProtocols.some(proto => decodedUrl.toLowerCase().includes(proto))) {
+                throw new Error(`Blocked protocol detected in encoded URL.`);
+            }
+
+        } catch (e) {
+            if (e instanceof TypeError) {
+                throw new Error(`Invalid URL format: ${args.recordingUrl}`);
+            }
+            throw e;
+        }
+
         await ctx.db.patch(args.agentId, {
             recordingUrl: args.recordingUrl,
             updatedAt: Date.now(),
@@ -520,7 +648,16 @@ export const updateAgentRecordingUrlFromBackend = mutation({
 });
 
 /**
- * Update agent browser URL from backend - no auth required
+ * Update agent browser URL from Python backend
+ * 
+ * Authorization:
+ * - If called by an authenticated user, verifies the user owns the session
+ * - If called without authentication (backend services), allows the call
+ *   (backend services receive agentId from authenticated Next.js routes that already validated ownership)
+ * 
+ * Security:
+ * - Validates URL to prevent malicious protocol injection (javascript:, data:, etc.)
+ * - Only allows HTTP(S) URLs
  */
 export const updateAgentBrowserUrlFromBackend = mutation({
     args: {
@@ -528,10 +665,59 @@ export const updateAgentBrowserUrlFromBackend = mutation({
         url: v.string(),
     },
     handler: async (ctx, args) => {
+        // Get current user (if authenticated)
+        const user = await getUser(ctx);
+
         const agent = await ctx.db.get(args.agentId);
         if (!agent) {
             throw new Error("Agent not found");
         }
+
+        // AUTHORIZATION CHECK: If user is authenticated, verify they own the session
+        // This prevents IDOR vulnerability where authenticated users could inject malicious URLs
+        // into other users' agents
+        if (user) {
+            const session = await ctx.db.get(agent.sessionId);
+            if (!session) {
+                throw new Error("Session not found");
+            }
+            if (session.userId !== user._id) {
+                throw new Error("Unauthorized: You can only update your own agents");
+            }
+        }
+        // If no user is authenticated, allow the call (backend service case)
+        // Backend services receive agentId from authenticated Next.js routes that
+        // already validated the agent belongs to the authenticated user
+
+        // URL VALIDATION: Prevent XSS and malicious URLs
+        try {
+            const url = new URL(args.url);
+
+            // Block dangerous protocols
+            const blockedProtocols = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
+            if (blockedProtocols.some(proto => args.url.toLowerCase().startsWith(proto))) {
+                throw new Error(`Blocked protocol detected. Only HTTP(S) URLs allowed.`);
+            }
+
+            // Whitelist allowed protocols
+            const allowedProtocols = ['https:', 'http:'];
+            if (!allowedProtocols.includes(url.protocol)) {
+                throw new Error(`Invalid protocol: ${url.protocol}. Only HTTP(S) allowed.`);
+            }
+
+            // Additional validation: Check for encoded javascript:
+            const decodedUrl = decodeURIComponent(args.url);
+            if (blockedProtocols.some(proto => decodedUrl.toLowerCase().includes(proto))) {
+                throw new Error(`Blocked protocol detected in encoded URL.`);
+            }
+
+        } catch (e) {
+            if (e instanceof TypeError) {
+                throw new Error(`Invalid URL format: ${args.url}`);
+            }
+            throw e;
+        }
+
         await ctx.db.patch(args.agentId, {
             browser: {
                 sessionId: agent.browser.sessionId,
@@ -754,6 +940,14 @@ export const createDemoSession = mutation({
         agentName: v.optional(v.string()),
         model: v.optional(v.string()),
         isPrivate: v.optional(v.boolean()),
+        additionalAgents: v.optional(v.array(v.object({
+            name: v.string(),
+            model: v.optional(v.string()),
+            browser: v.object({
+                sessionId: v.string(),
+                url: v.string(),
+            }),
+        }))),
     },
     handler: async (ctx, args) => {
         const now = Date.now();
@@ -769,10 +963,11 @@ export const createDemoSession = mutation({
             updatedAt: now,
         });
 
-        // If browser data is provided, create the agent at the same time
-        let agentId = undefined;
+        const agentIds: string[] = [];
+
+        // Create the first agent if browser data is provided
         if (args.browserData) {
-            agentId = await ctx.db.insert("agents", {
+            const agentId = await ctx.db.insert("agents", {
                 sessionId,
                 name: args.agentName ?? "stagehand",
                 model: args.model,
@@ -784,8 +979,33 @@ export const createDemoSession = mutation({
                 createdAt: now,
                 updatedAt: now,
             });
+            agentIds.push(agentId);
         }
 
-        return { sessionId, agentId };
+        // Create additional agents if provided
+        if (args.additionalAgents) {
+            for (const agentData of args.additionalAgents) {
+                const agentId = await ctx.db.insert("agents", {
+                    sessionId,
+                    name: agentData.name,
+                    model: agentData.model,
+                    status: "running",
+                    browser: {
+                        sessionId: agentData.browser.sessionId,
+                        url: agentData.browser.url,
+                    },
+                    createdAt: now,
+                    updatedAt: now,
+                });
+                agentIds.push(agentId);
+            }
+        }
+
+        // Return sessionId and all agentIds for backward compatibility
+        return { 
+            sessionId, 
+            agentId: agentIds.length > 0 ? agentIds[0] : undefined,
+            agentIds: agentIds,
+        };
     },
 });
