@@ -827,6 +827,89 @@ async def run_browser_use_agent(
         )
 
 
+# Allowed file types for uploads
+ALLOWED_MIME_TYPES = [
+    # PDFs
+    "application/pdf",
+    # Images
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+    # Documents
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    # Text files
+    "text/plain",
+    "text/csv",
+    "text/html",
+    "text/css",
+    "text/javascript",
+    "application/json",
+    "application/xml",
+    "text/xml",
+]
+
+ALLOWED_EXTENSIONS = [
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".txt",
+    ".csv",
+    ".html",
+    ".htm",
+    ".css",
+    ".js",
+    ".json",
+    ".xml",
+]
+
+
+def is_valid_file_type(filename: str, content_type: Optional[str]) -> bool:
+    """
+    Validates file type by checking both MIME type and file extension.
+    If MIME type is present, it must be valid. Extension must always be valid.
+    """
+    if not filename:
+        return False
+
+    # Check file extension (required)
+    filename_lower = filename.lower()
+    has_valid_extension = any(
+        filename_lower.endswith(ext.lower()) for ext in ALLOWED_EXTENSIONS
+    )
+
+    if not has_valid_extension:
+        return False
+
+    # If MIME type is provided, it must also be valid
+    if content_type:
+        content_type_lower = content_type.lower()
+        has_valid_mime_type = any(
+            content_type_lower == mime.lower() for mime in ALLOWED_MIME_TYPES
+        )
+        return has_valid_mime_type
+
+    # If no MIME type provided, extension validation is sufficient
+    return True
+
+
 @app.post("/upload-file")
 async def upload_file(
     file: UploadFile = File(...),
@@ -839,6 +922,18 @@ async def upload_file(
     The file will be cleaned up after the task completes (or can be cleaned up manually).
     """
     try:
+        # Validate file type
+        if not is_valid_file_type(file.filename or "", file.content_type):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid file type. File '{file.filename}' with type "
+                    f"'{file.content_type}' is not allowed. "
+                    "Allowed types: PDF, images, documents (Word, Excel, PowerPoint), "
+                    "text files, CSV, JSON, XML."
+                ),
+            )
+
         # Create temp directory if it doesn't exist
         temp_dir = os.path.join(tempfile.gettempdir(), "browser_arena_uploads")
         os.makedirs(temp_dir, exist_ok=True)
@@ -859,6 +954,9 @@ async def upload_file(
 
         return {"filePath": file_path, "filename": file.filename}
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         logger.error(f"Error uploading file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
