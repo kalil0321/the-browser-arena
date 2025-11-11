@@ -222,6 +222,56 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
                                     </p>
                                 </div>
                             </div>
+                            <div>
+                                <Label className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 block">
+                                    Secrets
+                                </Label>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                    Add secrets as key-value pairs for secure credential management. Secrets can be referenced in instructions using <code className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-xs">%secretKey%</code> syntax.
+                                </p>
+                                <div className="space-y-2">
+                                    {secrets.map((secret, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <Input
+                                                placeholder="Key"
+                                                value={secret.key}
+                                                onChange={(e) => handleSecretChange(index, "key", e.target.value)}
+                                                className="flex-1"
+                                            />
+                                            <Input
+                                                type="password"
+                                                placeholder="Value"
+                                                value={secret.value}
+                                                onChange={(e) => handleSecretChange(index, "value", e.target.value)}
+                                                className="flex-1"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleRemoveSecret(index)}
+                                                className="shrink-0"
+                                            >
+                                                <Trash2 className="h-4 w-4 text-red-500" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleAddSecret}
+                                        className="w-full"
+                                    >
+                                        + Add Secret
+                                    </Button>
+                                </div>
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-3">
+                                    <p className="text-xs text-blue-900 dark:text-blue-100">
+                                        <strong>Note:</strong> Secrets are passed to the agent at runtime via variables. They are not stored permanently and are securely injected into the agent execution context.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

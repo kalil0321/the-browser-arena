@@ -28,7 +28,7 @@ const config = {
 
 export async function POST(request: NextRequest) {
     try {
-        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, openrouterApiKey, thinkingModel, executionModel, fileData } = await request.json();
+        const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, openrouterApiKey, thinkingModel, executionModel, fileData, secrets } = await request.json();
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
@@ -133,6 +133,12 @@ export async function POST(request: NextRequest) {
         // Fire-and-forget: run Stagehand in background to avoid frontend timeout
         after(async () => {
             try {
+                if (secrets) {
+                    console.log("🔐 Forwarding secrets to Stagehand server", {
+                        keys: Object.keys(secrets),
+                        count: Object.keys(secrets).length,
+                    });
+                }
                 const resp = await fetch(`${STAGEHAND_SERVER_URL}/agent/stagehand`, {
                     method: "POST",
                     headers: {
@@ -156,6 +162,7 @@ export async function POST(request: NextRequest) {
                             openrouter: openrouterApiKey,
                         },
                         ...(fileData ? { fileData } : {}),
+                        ...(secrets ? { secrets } : {}),
                     }),
                 });
 

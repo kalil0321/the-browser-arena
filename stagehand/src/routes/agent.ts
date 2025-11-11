@@ -28,6 +28,7 @@ const bodySchema = z.object({
     .object({ openai: z.string().optional(), google: z.string().optional(), anthropic: z.string().optional(), openrouter: z.string().optional() })
     .optional(),
   fileData: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
+  secrets: z.record(z.string(), z.string()).optional(),
 })
 
 function determineKey(model: string | undefined, keys: { openai?: string; google?: string; anthropic?: string; openrouter?: string } = {}): string {
@@ -107,6 +108,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
       ...body,
       keys: body.keys ? Object.fromEntries(Object.entries(body.keys).map(([k, v]: any) => [k, v ? `${String(v).slice(0, 4)}…` : v])) : undefined,
       fileData: body.fileData ? { name: body.fileData.name, mimeType: body.fileData.mimeType, data: `<${body.fileData.data?.length || 0}b>` } : undefined,
+      secrets: body.secrets ? { keys: Object.keys(body.secrets), count: Object.keys(body.secrets).length } : undefined,
     }
     console.log(`[${requestId}] → POST /agent/stagehand`, safe)
   } catch {
@@ -131,7 +133,16 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     agentId: maybeAgentId,
     keys,
     fileData,
+    secrets,
   } = parse.data
+
+  // Log secrets presence (if provided)
+  if (secrets) {
+    console.log(`[${requestId}] 🔐 Secrets provided`, {
+      count: Object.keys(secrets).length,
+      keys: Object.keys(secrets),
+    })
+  }
 
   const convex = getConvexBackendClient()
   const startTime = Date.now()
@@ -213,11 +224,18 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     }
 
     console.log(`[${requestId}] agent.execute start (instructionLen=${instruction.length})`)
+    if (secrets) {
+      console.log(`[${requestId}] Forwarding secrets to agent.execute`, {
+        keys: Object.keys(secrets),
+        count: Object.keys(secrets).length,
+      })
+    }
     const execT = Date.now()
     const result = await agent.execute({
       instruction,
       maxSteps: 30,
       highlightCursor: true,
+      ...(secrets && { variables: secrets }),
     }).catch(async (e: any) => {
       console.error(`[${requestId}] ✖ agent.execute`, { error: e?.message, stack: e?.stack })
       await stagehand.close().catch(() => { })

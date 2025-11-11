@@ -78,7 +78,7 @@ export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentProper
                                     </h4>
                                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                                         <code className="text-sm text-gray-900 dark:text-gray-100">
-                                            {agent.model}
+                                            {agent.model.replace(/^openrouter\//, '')}
                                         </code>
                                     </div>
                                 </div>
@@ -102,7 +102,7 @@ export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentProper
                                         </label>
                                         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                                             <code className="text-sm text-gray-900 dark:text-gray-100">
-                                                {agent.model || "google/gemini-2.5-flash"}
+                                                {agent.model ? agent.model.replace(/^openrouter\//, '') : "google/gemini-2.5-flash"}
                                             </code>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                                 Used for reasoning and planning
@@ -115,7 +115,7 @@ export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentProper
                                         </label>
                                         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                                             <code className="text-sm text-gray-900 dark:text-gray-100">
-                                                {agent.model || "google/gemini-2.5-flash"}
+                                                {agent.model ? agent.model.replace(/^openrouter\//, '') : "google/gemini-2.5-flash"}
                                             </code>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                                 Used for executing actions
