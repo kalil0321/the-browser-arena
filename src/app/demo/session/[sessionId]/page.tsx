@@ -93,8 +93,10 @@ export default async function DemoSessionPage({
             {/* Header */}
             <div className="border-b border-gray-200 dark:border-card/20 px-4 py-4 shrink-0">
                 <div className="flex flex-col gap-1">
-                    <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100">
-                        {session.instruction}
+                    <h1 className="text-lg font-default font-medium text-gray-900 dark:text-gray-100" title={session.instruction}>
+                        {session.instruction && session.instruction.length > 100 
+                            ? session.instruction.substring(0, 100) + '...' 
+                            : session.instruction}
                     </h1>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                         Created {new Date(session.createdAt).toLocaleDateString(undefined, {

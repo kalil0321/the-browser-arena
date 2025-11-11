@@ -120,8 +120,10 @@ export default function SessionPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-col gap-1 min-w-0 flex-1">
                         <div className="flex items-start gap-2 group">
-                            <h1 className="text-base sm:text-lg font-default font-medium text-gray-900 dark:text-gray-100 break-words flex-1">
-                                {session.instruction}
+                            <h1 className="text-base sm:text-lg font-default font-medium text-gray-900 dark:text-gray-100 break-words flex-1" title={session.instruction}>
+                                {session.instruction && session.instruction.length > 100 
+                                    ? session.instruction.substring(0, 100) + '...' 
+                                    : session.instruction}
                             </h1>
                             <button
                                 onClick={handleCopyInstruction}
