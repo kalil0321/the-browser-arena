@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { SidebarInset } from "@/components/ui/sidebar";
-import { useQuery, useConvexAuth } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { AgentPanel } from "@/components/agent-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +18,6 @@ export default function SessionPage() {
     const params = useParams();
     const sessionId = params.sessionId as string;
     const sessionIdConvex = sessionId as any;
-    const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
 
     // View mode state: "grid" or "tabs"
     const [viewMode, setViewMode] = useState<"grid" | "tabs">("grid");
@@ -26,38 +25,12 @@ export default function SessionPage() {
     // Copy state
     const [isCopied, setIsCopied] = useState(false);
 
-    const session = useQuery(
-        api.queries.getSession,
-        isAuthenticated ? { sessionId: sessionIdConvex } : "skip"
-    );
-    const agents = useQuery(
-        api.queries.getSessionAgents,
-        isAuthenticated ? { sessionId: sessionIdConvex } : "skip"
-    );
+    // Query session and agents (works for both authenticated and unauthenticated users for public sessions)
+    const session = useQuery(api.queries.getSession, { sessionId: sessionIdConvex });
+    const agents = useQuery(api.queries.getSessionAgents, { sessionId: sessionIdConvex });
 
-    // Show proper error if not authenticated
-    if (!isAuthLoading && !isAuthenticated) {
-        return (
-            <SidebarInset className="flex items-center justify-center">
-                <div className="text-center max-w-md">
-                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                        Authentication Required
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        You must be logged in to view this session. Please sign in or check if this is a demo session.
-                    </p>
-                    <div className="flex gap-2 justify-center">
-                        <Button asChild>
-                            <Link href="/">Go to Home</Link>
-                        </Button>
-                    </div>
-                </div>
-            </SidebarInset>
-        );
-    }
-
-    // Loading state while auth is loading or queries are loading
-    if (isAuthLoading || (isAuthenticated && (session === undefined || agents === undefined))) {
+    // Loading state while queries are loading
+    if (session === undefined || agents === undefined) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">
@@ -68,8 +41,8 @@ export default function SessionPage() {
         );
     }
 
-    // Session not found or not accessible
-    if (isAuthenticated && session === null) {
+    // Session not found or not accessible (private session or doesn't exist)
+    if (session === null) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center max-w-md">

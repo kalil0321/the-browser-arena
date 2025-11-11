@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery, useConvexAuth } from "convex/react";
+import { useQuery } from "convex/react";
 import { SidebarInset } from "@/components/ui/sidebar";
 import {
     Table,
@@ -42,12 +42,10 @@ type SessionRow = {
 };
 
 export default function ArenaPage() {
-    const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
-
-    // Only query if authenticated
-    const sessions = useQuery(api.queries.getAllSessions, isAuthenticated ? {} : "skip");
-    const agents = useQuery(api.queries.getAllAgents, isAuthenticated ? {} : "skip");
-    const stats = useQuery(api.queries.getArenaStats, isAuthenticated ? {} : "skip");
+    // Query public sessions and agents (works for both authenticated and unauthenticated users)
+    const sessions = useQuery(api.queries.getAllSessions);
+    const agents = useQuery(api.queries.getAllAgents);
+    const stats = useQuery(api.queries.getArenaStats);
 
     const [filterAgent, setFilterAgent] = useState<string>("all");
     const [filterModel, setFilterModel] = useState<string>("all");
@@ -105,29 +103,8 @@ export default function ArenaPage() {
         return new Date(timestamp).toLocaleString();
     };
 
-    // Show sign in prompt if not authenticated
-    if (!isAuthLoading && !isAuthenticated) {
-        return (
-            <SidebarInset className="flex items-center justify-center">
-                <div className="text-center max-w-md">
-                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                        Sign In Required
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        Please sign in to view the arena and see all crowdsourced sessions, models, and agents.
-                    </p>
-                    <div className="flex gap-2 justify-center">
-                        <Button asChild>
-                            <Link href="/">Go to Home</Link>
-                        </Button>
-                    </div>
-                </div>
-            </SidebarInset>
-        );
-    }
-
-    // Loading state while auth is being determined
-    if (isAuthLoading) {
+    // Loading state while queries are loading
+    if (sessions === undefined || agents === undefined || stats === undefined) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">

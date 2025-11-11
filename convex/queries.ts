@@ -26,6 +26,7 @@ export const getUserSessions = query({
 /**
  * Get a single session by ID
  * Returns session if it's public or if the user is the owner
+ * Works for both authenticated and unauthenticated users (for public sessions)
  */
 export const getSession = query({
     args: {
@@ -34,22 +35,23 @@ export const getSession = query({
     handler: async (ctx, args) => {
         const user = await getUser(ctx);
 
-        if (!user) {
-            return null;
-        }
-
         const session = await ctx.db.get(args.sessionId);
 
         if (!session) {
             return null;
         }
 
-        // Allow access if session is public OR user is the owner
+        // Check if session is private
         const isPrivate = session.isPrivate ?? false;
-        if (isPrivate && session.userId !== user._id) {
-            return null; // Private session, only owner can access
+        
+        // If session is private, only the owner can access it (requires authentication)
+        if (isPrivate) {
+            if (!user || session.userId !== user._id) {
+                return null; // Private session, only owner can access
+            }
         }
 
+        // Public sessions are accessible to everyone (authenticated or not)
         return session;
     },
 });
@@ -57,6 +59,7 @@ export const getSession = query({
 /**
  * Get all agents for a session
  * Returns agents if session is public OR user is the owner
+ * Works for both authenticated and unauthenticated users (for public sessions)
  */
 export const getSessionAgents = query({
     args: {
@@ -65,22 +68,23 @@ export const getSessionAgents = query({
     handler: async (ctx, args) => {
         const user = await getUser(ctx);
 
-        if (!user) {
-            return [];
-        }
-
         // Verify session exists and check privacy
         const session = await ctx.db.get(args.sessionId);
         if (!session) {
             return [];
         }
 
-        // Allow access if session is public OR user is the owner
+        // Check if session is private
         const isPrivate = session.isPrivate ?? false;
-        if (isPrivate && session.userId !== user._id) {
-            return []; // Private session, only owner can see agents
+        
+        // If session is private, only the owner can see agents (requires authentication)
+        if (isPrivate) {
+            if (!user || session.userId !== user._id) {
+                return []; // Private session, only owner can see agents
+            }
         }
 
+        // Public sessions are accessible to everyone (authenticated or not)
         const agents = await ctx.db
             .query("agents")
             .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
@@ -91,28 +95,25 @@ export const getSessionAgents = query({
 });
 
 /**
- * Arena queries - crowdsourced data view (requires authentication)
+ * Arena queries - crowdsourced data view
+ * Accessible to both authenticated and unauthenticated users (public sessions only)
  */
 
 /**
  * Get all sessions from all users (for arena view)
  * Only returns public sessions (private sessions are excluded)
+ * Works for both authenticated and unauthenticated users
  */
 export const getAllSessions = query({
     handler: async (ctx) => {
-        const user = await getUser(ctx);
-
-        if (!user) {
-            return [];
-        }
-
         const allSessions = await ctx.db
             .query("sessions")
             .order("desc")
             .collect();
 
         // Filter out private sessions - only show public sessions
-        const publicSessions = allSessions.filter(session => !session.isPrivate);
+        // A session is public if isPrivate is false or undefined
+        const publicSessions = allSessions.filter(session => !(session.isPrivate ?? false));
 
         return publicSessions;
     },
@@ -121,25 +122,21 @@ export const getAllSessions = query({
 /**
  * Get all agents from all sessions (for arena view)
  * Only returns agents from public sessions
+ * Works for both authenticated and unauthenticated users
  */
 export const getAllAgents = query({
     handler: async (ctx) => {
-        const user = await getUser(ctx);
-
-        if (!user) {
-            return [];
-        }
-
         const allAgents = await ctx.db
             .query("agents")
             .order("desc")
             .collect();
 
         // Filter out agents from private sessions
+        // A session is public if isPrivate is false or undefined
         const publicAgents = [];
         for (const agent of allAgents) {
             const session = await ctx.db.get(agent.sessionId);
-            if (session && !session.isPrivate) {
+            if (session && !(session.isPrivate ?? false)) {
                 publicAgents.push(agent);
             }
         }
@@ -150,50 +147,50 @@ export const getAllAgents = query({
 
 /**
  * Get arena statistics - models and agents usage
+ * Only counts public sessions and agents from public sessions
+ * Works for both authenticated and unauthenticated users
  */
 export const getArenaStats = query({
     handler: async (ctx) => {
-        const user = await getUser(ctx);
-
-        if (!user) {
-            return {
-                totalSessions: 0,
-                totalAgents: 0,
-                models: {},
-                agents: {},
-                statusCounts: {},
-            };
-        }
-
         const allSessions = await ctx.db.query("sessions").collect();
-        const agents = await ctx.db.query("agents").collect();
+        const allAgents = await ctx.db.query("agents").collect();
 
         // Filter out private sessions for stats
-        const sessions = allSessions.filter(session => !session.isPrivate);
+        // A session is public if isPrivate is false or undefined
+        const publicSessions = allSessions.filter(session => !(session.isPrivate ?? false));
 
-        // Count models
+        // Filter agents to only include those from public sessions
+        const publicAgents = [];
+        for (const agent of allAgents) {
+            const session = await ctx.db.get(agent.sessionId);
+            if (session && !(session.isPrivate ?? false)) {
+                publicAgents.push(agent);
+            }
+        }
+
+        // Count models (only from public agents)
         const models: Record<string, number> = {};
-        agents.forEach((agent) => {
+        publicAgents.forEach((agent) => {
             if (agent.model) {
                 models[agent.model] = (models[agent.model] || 0) + 1;
             }
         });
 
-        // Count agents by name
+        // Count agents by name (only from public sessions)
         const agentCounts: Record<string, number> = {};
-        agents.forEach((agent) => {
+        publicAgents.forEach((agent) => {
             agentCounts[agent.name] = (agentCounts[agent.name] || 0) + 1;
         });
 
-        // Count by status
+        // Count by status (only from public sessions)
         const statusCounts: Record<string, number> = {};
-        agents.forEach((agent) => {
+        publicAgents.forEach((agent) => {
             statusCounts[agent.status] = (statusCounts[agent.status] || 0) + 1;
         });
 
         return {
-            totalSessions: sessions.length,
-            totalAgents: agents.length,
+            totalSessions: publicSessions.length,
+            totalAgents: publicAgents.length,
             models,
             agents: agentCounts,
             statusCounts,
