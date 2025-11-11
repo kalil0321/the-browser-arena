@@ -42,7 +42,8 @@ RUN uv pip install --system \
     "uvicorn[standard]>=0.32.0" \
     "convex>=0.5.0" \
     "python-dotenv>=1.0.0" \
-    "pydantic>=2.10.0"
+    "pydantic>=2.10.0" \
+    "filetype>=1.2.0"
 
 # Create directory for temporary file uploads
 RUN mkdir -p /tmp/browser_arena_uploads
