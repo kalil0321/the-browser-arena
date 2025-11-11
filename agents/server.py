@@ -4,11 +4,14 @@ import tempfile
 import time
 import uuid
 import logging
+import shutil
+import json
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
 import aiohttp
 
 import uvicorn
+import filetype
 from anchorbrowser import Anchorbrowser
 from convex import ConvexClient
 from dotenv import load_dotenv
@@ -66,8 +69,33 @@ AGENT_SERVER_API_KEY = os.getenv("AGENT_SERVER_API_KEY")
 if not AGENT_SERVER_API_KEY:
     raise ValueError("AGENT_SERVER_API_KEY environment variable is required")
 
+# Initialize backend API key for Convex recording uploads
+BACKEND_API_KEY = os.getenv("BACKEND_API_KEY")
+if not BACKEND_API_KEY:
+    logger.warning("BACKEND_API_KEY not set - recording uploads to Convex will fail")
+
 # Security scheme for API key authentication
 security = HTTPBearer()
+
+# File upload security constants
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".txt",
+    ".csv",
+    ".json",
+}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+CHUNK_SIZE = 8192  # 8KB chunks for streaming
+MIN_DISK_SPACE = 100 * 1024 * 1024  # Require at least 100MB free disk space
+
+# File identifier to path mapping
+# Maps fileId (UUID string) -> filePath (server path)
+file_id_to_path: Dict[str, str] = {}
 
 
 async def verify_api_key(
@@ -83,6 +111,98 @@ async def verify_api_key(
         raise HTTPException(
             status_code=401,
             detail="Invalid or missing API key. Provide a valid API key in the Authorization header as 'Bearer <key>'",
+        )
+
+
+def validate_file_extension(filename: str) -> str:
+    """
+    Validate file extension against whitelist.
+    Returns the extension if valid, raises HTTPException if invalid.
+    """
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
+    file_extension = os.path.splitext(filename)[1].lower()
+    if file_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Allowed types: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+    return file_extension
+
+
+def validate_file_content(content: bytes, expected_extension: str) -> None:
+    """
+    Validate file content using magic byte verification.
+    Raises HTTPException if content doesn't match expected file type.
+    """
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="File is empty")
+
+    expected_extension_lower = expected_extension.lower()
+
+    # Text-based files need special handling since filetype may not detect them
+    text_extensions = [".txt", ".csv", ".json"]
+    if expected_extension_lower in text_extensions:
+        # For text files, verify it's valid UTF-8
+        try:
+            decoded = content.decode("utf-8")
+            # For JSON files, also validate JSON syntax
+            if expected_extension_lower == ".json":
+                json.loads(decoded)
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail="File content does not match claimed type (invalid text encoding)",
+            )
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail="File content is not valid JSON",
+            )
+        # Text files are valid if they decode successfully
+        return
+
+    # For binary files, use filetype library to detect actual file type
+    kind = filetype.guess(content)
+    if not kind:
+        # filetype couldn't detect the type - this is suspicious for binary files
+        raise HTTPException(
+            status_code=400,
+            detail="File content type could not be determined. The file may be corrupted or not match the claimed type.",
+        )
+
+    # Map detected MIME type to expected extension
+    detected_mime = kind.mime
+    extension_mime_map = {
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+    }
+
+    expected_mime = extension_mime_map.get(expected_extension_lower)
+    if expected_mime and detected_mime != expected_mime:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File content does not match claimed type. Detected: {detected_mime}, expected: {expected_mime}",
+        )
+
+
+def check_disk_space(directory: str, required_space: int) -> None:
+    """
+    Check if there's sufficient disk space available.
+    Raises HTTPException if insufficient disk space.
+    """
+    stat = shutil.disk_usage(directory)
+    free_space = stat.free
+
+    if free_space < required_space:
+        raise HTTPException(
+            status_code=507,  # Insufficient Storage
+            detail=f"Insufficient disk space. Required: {required_space / (1024 * 1024):.1f}MB, Available: {free_space / (1024 * 1024):.1f}MB",
         )
 
 
@@ -106,7 +226,7 @@ class AgentRequest(BaseModel):
     browserUseApiKey: Optional[str] = None
     openrouterApiKey: Optional[str] = None
     secrets: Optional[Dict[str, str]] = None
-    filePath: Optional[str] = None
+    fileId: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -299,8 +419,19 @@ async def upload_recording_to_convex(
             content_type="video/mp4",
         )
 
+        # Add API key authentication header
+        headers = {}
+        if BACKEND_API_KEY:
+            headers["X-API-Key"] = BACKEND_API_KEY
+        else:
+            logger.warning(
+                "BACKEND_API_KEY not configured - recording upload may fail authentication"
+            )
+
         async with aiohttp.ClientSession() as session:
-            async with session.post(convex_http_url, data=form_data) as response:
+            async with session.post(
+                convex_http_url, data=form_data, headers=headers
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     recording_url = result.get("recordingUrl")
@@ -768,6 +899,16 @@ async def run_browser_use_agent(
             if not cdp_url:
                 raise ValueError("Failed to create browser session - no cdp_url")
 
+        file_path = None
+        if request.fileId:
+            if request.fileId in file_id_to_path:
+                file_path = file_id_to_path[request.fileId]
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="File not found. The file may have been cleaned up or the fileId is invalid.",
+                )
+
         # Create agent in Convex (unless agentId is provided, e.g., for demo sessions)
         agent_id = request.agentId
         if not agent_id:
@@ -799,7 +940,7 @@ async def run_browser_use_agent(
             anthropic_api_key=request.anthropicApiKey,
             browser_use_api_key=request.browserUseApiKey,
             openrouter_api_key=request.openrouterApiKey,
-            file_path=request.filePath,
+            file_path=file_path,
         )
 
         logger.info(
@@ -835,33 +976,116 @@ async def upload_file(
     """
     Upload a file to be used by browser-use agent tasks.
 
-    Saves the file to a temporary directory and returns the file path.
+    Validates file type, size, and content before saving.
+    Returns an opaque file identifier (fileId) instead of server path for security.
     The file will be cleaned up after the task completes (or can be cleaned up manually).
     """
     try:
+        # Validate filename and extension
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Filename is required")
+
+        file_extension = validate_file_extension(file.filename)
+
+        # Check Content-Length header if available
+        content_length = None
+        if hasattr(file, "size") and file.size:
+            content_length = file.size
+        elif hasattr(file, "headers"):
+            content_length_header = file.headers.get("content-length")
+            if content_length_header:
+                try:
+                    content_length = int(content_length_header)
+                except ValueError:
+                    pass
+
+        if content_length and content_length > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size: {MAX_FILE_SIZE / (1024 * 1024):.1f}MB",
+            )
+
         # Create temp directory if it doesn't exist
         temp_dir = os.path.join(tempfile.gettempdir(), "browser_arena_uploads")
         os.makedirs(temp_dir, exist_ok=True)
 
-        # Generate unique filename to avoid conflicts
-        file_extension = os.path.splitext(file.filename)[1] if file.filename else ""
+        # Check disk space before proceeding
+        check_disk_space(temp_dir, MAX_FILE_SIZE + MIN_DISK_SPACE)
+
+        # Generate unique filename and file identifier
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = os.path.join(temp_dir, unique_filename)
+        file_id = str(uuid.uuid4())
 
-        # Save file
+        # Stream file content in chunks, writing directly to disk and collecting for validation
+        total_size = 0
+        content_buffer = b""  # Buffer for magic byte verification
+        MAGIC_BYTE_BUFFER_SIZE = 8192  # Read first 8KB for magic byte verification
+
         with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
+            async for chunk in file.stream():
+                total_size += len(chunk)
+
+                # Check size during streaming to fail fast
+                if total_size > MAX_FILE_SIZE:
+                    # Clean up partial file
+                    try:
+                        os.remove(file_path)
+                    except Exception:
+                        pass
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large. Maximum size: {MAX_FILE_SIZE / (1024 * 1024):.1f}MB",
+                    )
+
+                # Write chunk to disk immediately
+                f.write(chunk)
+
+                # Collect first bytes for magic byte verification
+                if len(content_buffer) < MAGIC_BYTE_BUFFER_SIZE:
+                    content_buffer += chunk
+                    if len(content_buffer) > MAGIC_BYTE_BUFFER_SIZE:
+                        content_buffer = content_buffer[:MAGIC_BYTE_BUFFER_SIZE]
+
+        # For small files, read entire file for validation
+        # For larger files, validate based on first bytes (less secure but more memory efficient)
+        if total_size <= MAGIC_BYTE_BUFFER_SIZE:
+            # Small file - read entire content for full validation
+            with open(file_path, "rb") as f:
+                content = f.read()
+            validate_file_content(content, file_extension)
+        else:
+            # Large file - validate based on first bytes
+            # This is a trade-off: we validate the file type but not the entire content
+            # For text files, we need to read more to validate encoding
+            if file_extension.lower() in [".txt", ".csv", ".json"]:
+                # For text files, read entire file to validate encoding and JSON syntax
+                with open(file_path, "rb") as f:
+                    content = f.read()
+                validate_file_content(content, file_extension)
+            else:
+                # For binary files, validate based on first bytes
+                validate_file_content(content_buffer, file_extension)
+
+        file_id_to_path[file_id] = file_path
 
         logger.info(
-            f"File uploaded: {file.filename} -> {file_path} ({len(content)} bytes)"
+            f"File uploaded: {file.filename} (fileId: {file_id[:8]}...) -> {file_path} ({total_size} bytes)"
         )
 
-        return {"filePath": file_path, "filename": file.filename}
+        return {
+            "fileId": file_id,
+            "filename": file.filename,
+            "size": total_size,
+        }
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         logger.error(f"Error uploading file: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
+        # Don't expose internal error details to client
+        raise HTTPException(status_code=500, detail="Failed to upload file")
 
 
 if __name__ == "__main__":

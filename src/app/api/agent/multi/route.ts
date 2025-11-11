@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
             openrouterApiKey,
             isPrivate,
             smoothFileIds,
-            browserUseFilePath,
+            browserUseFileId,
             stagehandFileData
         } = await request.json() as {
             instruction: string;
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
             openrouterApiKey?: string;
             isPrivate?: boolean;
             smoothFileIds?: string[];
-            browserUseFilePath?: string;
+            browserUseFileId?: string;
             stagehandFileData?: { name: string; data: string };
         };
 
@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
         // Create Convex client per request for better isolation
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
-        
+
         // Check if user has BYOK (Bring Your Own Key) for all agents
         const byokCheck = hasAllRequiredKeys(agents, {
             smoothApiKey,
@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
                                 cdpUrl,
                                 liveViewUrl,
                             } : {}),
-                            ...(browserUseFilePath ? { filePath: browserUseFilePath } : {}),
+                            ...(browserUseFileId ? { fileId: browserUseFileId } : {}),
                         };
                         break;
                     case "browser-use-cloud":

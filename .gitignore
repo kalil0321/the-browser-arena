@@ -64,3 +64,9 @@ agents/skyvern_agent/__pycache__/
 agents/browser_use_agent/__pycache__/main.cpython-312.pyc
 agents/__pycache__/server.cpython-312.pyc
 agents/skyvern_agent/__pycache__/main.cpython-312.pyc
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+*.egg

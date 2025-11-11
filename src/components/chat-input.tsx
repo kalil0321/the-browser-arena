@@ -143,7 +143,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     // File upload state (single file only)
     const [file, setFile] = useState<File | null>(null);
     const [uploadedFileIds, setUploadedFileIds] = useState<Record<string, string>>({}); // Map file name to Smooth file ID
-    const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null); // For browser-use: server file path
+    const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null); // For browser-use: fileId (opaque identifier)
     const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
     // Check if user has API keys for privacy warnings (use hasApiKey for synchronous check)
@@ -351,7 +351,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     : [];
 
                 // For browser-use and stagehand: upload file if selected
-                let browserUseFilePath: string | null = null;
+                let browserUseFileId: string | null = null;
                 let stagehandFileData: { name: string; data: string } | null = null;
 
                 if (file && (hasBrowserUseAgent || hasStagehandAgent)) {
@@ -373,9 +373,13 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             }
 
                             const uploadData = await uploadResponse.json();
-                            browserUseFilePath = uploadData.filePath;
-                            setUploadedFilePath(browserUseFilePath);
-                            console.log("✅ File uploaded to browser-use server:", browserUseFilePath);
+
+                            if (!uploadData.fileId) {
+                                throw new Error("Server did not return fileId");
+                            }
+                            browserUseFileId = uploadData.fileId;
+                            setUploadedFilePath(browserUseFileId);
+                            console.log("✅ File uploaded to browser-use server, fileId:", browserUseFileId);
                         }
 
                         if (hasStagehandAgent) {
@@ -418,7 +422,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         openrouterApiKey: openrouterApiKey,
                         isPrivate: isPrivate,
                         smoothFileIds: smoothFileIds.length > 0 ? smoothFileIds : undefined,
-                        browserUseFilePath: browserUseFilePath || undefined,
+                        browserUseFileId: browserUseFileId || undefined,
                         stagehandFileData: stagehandFileData || undefined,
                     }),
                 });
@@ -452,7 +456,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     setInput(""); // Clear input only on successful navigation
                     setFile(null); // Clear file after successful submission
                     setUploadedFileIds({}); // Clear uploaded file IDs
-                    setUploadedFilePath(null); // Clear browser-use file path
+                    setUploadedFilePath(null); // Clear browser-use fileId
                     router.push(`/session/${sessionIdString}`);
                 });
             } catch (error) {
