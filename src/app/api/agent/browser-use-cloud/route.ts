@@ -3,6 +3,9 @@ import { BrowserUseClient } from "browser-use-sdk";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { badRequest } from "@/lib/http-errors";
+import { validateSecrets, validateApiKeyFormat, validateModelName, detectSuspiciousSecrets, logSecurityViolation } from "@/lib/security/validation";
 
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -29,6 +32,18 @@ export async function POST(request: NextRequest) {
     try {
         const { instruction, model, sessionId: existingSessionId, browserUseApiKey, secrets } = await request.json();
 
+        // Validate instruction
+        if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
+            return badRequest("Field 'instruction' is required");
+        }
+
+        // Validate instruction for prompt injection attempts
+        const validationResult = validateInstruction(instruction);
+        if (!validationResult.isValid) {
+            logValidationFailure(instruction, validationResult, undefined, "browser-use-cloud-route");
+            return badRequest(validationResult.error || "Invalid instruction");
+        }
+
         // Get user token for auth
         const token = await getToken();
 
@@ -40,20 +55,55 @@ export async function POST(request: NextRequest) {
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
-        // Initialize Browser Use Cloud client with user's API key if provided
-        const client = getBrowserUseClient(browserUseApiKey);
-        console.log(browserUseApiKey ? "🔑 Using user's Browser-Use API key" : "ℹ️ Using server Browser-Use API key (fallback)");
+        // Get current user for security logging
+        const user = await convex.query(api.auth.getCurrentUser, {});
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const userId = user._id;
+
+        // Validate API key format if provided
+        if (browserUseApiKey) {
+            const keyValidation = validateApiKeyFormat(browserUseApiKey, 'browseruse');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'browseruse' }, userId, 'browser-use-cloud-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
 
         // Map model name to API-expected format
         const apiModel = (model ? mapModelToApiModel(model) : "browser-use-llm") as any;
 
-        // Create task in Browser Use Cloud
+        // Validate model name
+        const modelValidation = validateModelName(apiModel);
+        if (!modelValidation.isValid) {
+            logSecurityViolation('invalid_model_name', { model: apiModel }, userId, 'browser-use-cloud-route');
+            return NextResponse.json({ error: `Invalid model: ${modelValidation.error}` }, { status: 400 });
+        }
+
+        // Validate secrets
         if (secrets) {
+            const secretsValidation = validateSecrets(secrets);
+            if (!secretsValidation.isValid) {
+                logSecurityViolation('invalid_secrets', { error: secretsValidation.error }, userId, 'browser-use-cloud-route');
+                return NextResponse.json({ error: `Invalid secrets: ${secretsValidation.error}` }, { status: 400 });
+            }
+
+            // Check for suspicious secrets (potential attack)
+            if (detectSuspiciousSecrets(secrets)) {
+                logSecurityViolation('suspicious_secrets', {}, userId, 'browser-use-cloud-route');
+                return NextResponse.json({ error: 'Suspicious secrets detected. This may indicate an injection attempt.' }, { status: 403 });
+            }
+
+            // Log secrets count without exposing key names for security
             console.log("🔐 Forwarding secrets to Browser-Use Cloud", {
-                keys: Object.keys(secrets),
                 count: Object.keys(secrets).length,
             });
         }
+
+        // Initialize Browser Use Cloud client with user's API key if provided
+        const client = getBrowserUseClient(browserUseApiKey);
+        console.log(browserUseApiKey ? "🔑 Using user's Browser-Use API key" : "ℹ️ Using server Browser-Use API key (fallback)");
 
         const task = await client.tasks.createTask({
             task: instruction,
@@ -67,12 +117,6 @@ export async function POST(request: NextRequest) {
         // Live URL may not be available immediately, will be updated via streaming
         // We'll need to fetch session info or get it from streaming updates
         const liveViewUrl = "";
-
-        // Get current user for authorization checks
-        const user = await convex.query(api.auth.getCurrentUser, {});
-        if (!user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
 
         let dbSessionId: string;
         let agentId: any;

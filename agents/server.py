@@ -26,10 +26,11 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 # Import agent functions
 from browser_use_agent import run_browser_use
+from instruction_validation import validate_instruction_field
 
 
 # Configure logging
@@ -209,7 +210,12 @@ def check_disk_space(directory: str, required_space: int) -> None:
 # Pydantic models
 class AgentRequest(BaseModel):
     sessionId: str  # Convex session ID
-    instruction: str
+    instruction: str = Field(
+        ...,
+        description="User instruction for the agent",
+        min_length=1,
+        max_length=5000,
+    )
     providerModel: Optional[str] = ""
     # Optional browser session info (if provided, skip browser session creation)
     browserSessionId: Optional[str] = None
@@ -227,6 +233,12 @@ class AgentRequest(BaseModel):
     openrouterApiKey: Optional[str] = None
     secrets: Optional[Dict[str, str]] = None
     fileId: Optional[str] = None
+
+    @field_validator("instruction")
+    @classmethod
+    def validate_instruction(cls, v: str) -> str:
+        """Validate instruction for prompt injection attempts"""
+        return validate_instruction_field(v)
 
 
 class AgentResponse(BaseModel):
@@ -534,9 +546,9 @@ async def run_browser_use_task(
             f"[Agent {agent_id[:8]}] Starting execution - Instruction: {instruction[:100]}..."
         )
         if secrets:
+            # Log secrets count without exposing key names for security
             logger.info(
-                f"[Agent {agent_id[:8]}] Passing {len(secrets)} secrets to Browser-Use agent "
-                f"(keys: {', '.join(list(secrets.keys())[:3])}{'...' if len(secrets) > 3 else ''})"
+                f"[Agent {agent_id[:8]}] Passing {len(secrets)} secrets to Browser-Use agent"
             )
         if file_path:
             logger.info(f"[Agent {agent_id[:8]}] File provided: {file_path}")

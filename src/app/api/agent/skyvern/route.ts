@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { badRequest } from "@/lib/http-errors";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
@@ -9,6 +11,18 @@ const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080"
 export async function POST(request: NextRequest) {
     try {
         const { instruction, model } = await request.json();
+
+        // Validate instruction
+        if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
+            return badRequest("Field 'instruction' is required");
+        }
+
+        // Validate instruction for prompt injection attempts
+        const validationResult = validateInstruction(instruction);
+        if (!validationResult.isValid) {
+            logValidationFailure(instruction, validationResult, undefined, "skyvern-route");
+            return badRequest(validationResult.error || "Invalid instruction");
+        }
 
         // Get user token for auth
         const token = await getToken();

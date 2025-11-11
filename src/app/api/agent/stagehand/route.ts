@@ -4,6 +4,8 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { missingKey, serverMisconfigured, unauthorized, badRequest } from "@/lib/http-errors";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { validateSecrets, validateApiKeyFormat, validateModelName, detectSuspiciousSecrets, logSecurityViolation } from "@/lib/security/validation";
 
 // Stagehand server URL - dev: localhost:3001, prod: stagehand.thebrowserarena.com
 // const STAGEHAND_SERVER_URL = "https://stagehand.thebrowserarena.com"
@@ -33,6 +35,13 @@ export async function POST(request: NextRequest) {
             return badRequest("Field 'instruction' is required");
         }
 
+        // Validate instruction for prompt injection attempts
+        const validationResult = validateInstruction(instruction);
+        if (!validationResult.isValid) {
+            logValidationFailure(instruction, validationResult, undefined, "stagehand-route");
+            return badRequest(validationResult.error || "Invalid instruction");
+        }
+
         // Get user token for auth
         const token = await getToken();
 
@@ -54,13 +63,81 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "AGENT_SERVER_API_KEY is not configured" }, { status: 500 });
         }
 
-        // Get current user to create browser profile
+        // Get current user for security logging and browser profile
         const user = await convex.query(api.auth.getCurrentUser, {});
         if (!user) {
             return unauthorized();
         }
-        // getCurrentUser returns user with _id field (Convex document ID)
         const userId = user._id;
+
+        // Validate model names
+        const defaultModel = model ?? "google/gemini-2.5-flash";
+        const modelValidation = validateModelName(defaultModel);
+        if (!modelValidation.isValid) {
+            logSecurityViolation('invalid_model_name', { model: defaultModel }, userId, 'stagehand-route');
+            return NextResponse.json({ error: `Invalid model: ${modelValidation.error}` }, { status: 400 });
+        }
+
+        if (thinkingModel) {
+            const thinkingModelValidation = validateModelName(thinkingModel);
+            if (!thinkingModelValidation.isValid) {
+                logSecurityViolation('invalid_model_name', { model: thinkingModel, type: 'thinking' }, userId, 'stagehand-route');
+                return NextResponse.json({ error: `Invalid thinking model: ${thinkingModelValidation.error}` }, { status: 400 });
+            }
+        }
+
+        if (executionModel) {
+            const executionModelValidation = validateModelName(executionModel);
+            if (!executionModelValidation.isValid) {
+                logSecurityViolation('invalid_model_name', { model: executionModel, type: 'execution' }, userId, 'stagehand-route');
+                return NextResponse.json({ error: `Invalid execution model: ${executionModelValidation.error}` }, { status: 400 });
+            }
+        }
+
+        // Validate API key formats
+        if (openaiApiKey) {
+            const keyValidation = validateApiKeyFormat(openaiApiKey, 'openai');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'openai' }, userId, 'stagehand-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (anthropicApiKey) {
+            const keyValidation = validateApiKeyFormat(anthropicApiKey, 'anthropic');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'anthropic' }, userId, 'stagehand-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (googleApiKey) {
+            const keyValidation = validateApiKeyFormat(googleApiKey, 'google');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'google' }, userId, 'stagehand-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (openrouterApiKey) {
+            const keyValidation = validateApiKeyFormat(openrouterApiKey, 'openrouter');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'openrouter' }, userId, 'stagehand-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+
+        // Validate secrets
+        if (secrets) {
+            const secretsValidation = validateSecrets(secrets);
+            if (!secretsValidation.isValid) {
+                logSecurityViolation('invalid_secrets', { error: secretsValidation.error }, userId, 'stagehand-route');
+                return NextResponse.json({ error: `Invalid secrets: ${secretsValidation.error}` }, { status: 400 });
+            }
+
+            // Check for suspicious secrets (potential attack)
+            if (detectSuspiciousSecrets(secrets)) {
+                logSecurityViolation('suspicious_secrets', {}, userId, 'stagehand-route');
+                return NextResponse.json({ error: 'Suspicious secrets detected. This may indicate an injection attempt.' }, { status: 403 });
+            }
+        }
 
         // Create browser profile configuration using user_id
         const browserProfileConfig = {
@@ -116,7 +193,7 @@ export async function POST(request: NextRequest) {
             agentId = await convex.mutation(api.mutations.createAgent, {
                 sessionId: existingSessionId,
                 name: "stagehand",
-                model: model ?? "google/gemini-2.5-flash",
+                model: defaultModel,
                 browser: {
                     sessionId: browserSessionId,
                     url: liveViewUrl,
@@ -132,7 +209,7 @@ export async function POST(request: NextRequest) {
                     url: liveViewUrl,
                 },
                 agentName: "stagehand",
-                model: model ?? "google/gemini-2.5-flash",
+                model: defaultModel,
             });
             dbSessionId = result.sessionId;
             agentId = result.agentId!;
@@ -146,8 +223,8 @@ export async function POST(request: NextRequest) {
         after(async () => {
             try {
                 if (secrets) {
+                    // Log secrets count without exposing key names for security
                     console.log("🔐 Forwarding secrets to Stagehand server", {
-                        keys: Object.keys(secrets),
                         count: Object.keys(secrets).length,
                     });
                 }
@@ -160,7 +237,7 @@ export async function POST(request: NextRequest) {
                     body: JSON.stringify({
                         sessionId: dbSessionId,
                         instruction,
-                        model: model ?? "google/gemini-2.5-flash",
+                        model: defaultModel,
                         thinkingModel,
                         executionModel,
                         cdpUrl,

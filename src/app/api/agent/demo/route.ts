@@ -9,6 +9,7 @@ import { getOrCreateSignedFingerprint } from "@/lib/fingerprint";
 import { computeCost } from "@/lib/pricing";
 import { z } from "zod";
 import { tool } from "ai";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
@@ -69,6 +70,13 @@ export async function POST(request: NextRequest) {
 
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
+        }
+
+        // Validate instruction for prompt injection attempts
+        const validationResult = validateInstruction(instruction);
+        if (!validationResult.isValid) {
+            logValidationFailure(instruction, validationResult, undefined, "demo-route");
+            return badRequest(validationResult.error || "Invalid instruction");
         }
 
         // If multi-agent payload provided, validate cap and supported agents

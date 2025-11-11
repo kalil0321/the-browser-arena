@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, mapProviderError, missingKey, providerUnavailable, unauthorized } from "@/lib/http-errors";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 
 const smoothUrl = 'https://api.smooth.sh/api/v1/task';
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
@@ -123,6 +124,13 @@ export async function POST(request: NextRequest) {
         const { task, sessionId: existingSessionId, apiKey: userApiKey, fileIds } = await request.json();
         if (!task || typeof task !== 'string' || !task.trim()) {
             return badRequest("Field 'task' is required");
+        }
+
+        // Validate task (instruction) for prompt injection attempts
+        const validationResult = validateInstruction(task);
+        if (!validationResult.isValid) {
+            logValidationFailure(task, validationResult, undefined, "smooth-route");
+            return badRequest(validationResult.error || "Invalid task");
         }
 
         // Validate fileIds if provided

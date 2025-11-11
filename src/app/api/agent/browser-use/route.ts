@@ -4,6 +4,8 @@ import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, mapProviderError, serverMisconfigured, unauthorized, providerUnavailable } from "@/lib/http-errors";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { validateSecrets, validateApiKeyFormat, validateModelName, detectSuspiciousSecrets, logSecurityViolation } from "@/lib/security/validation";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
@@ -27,6 +29,13 @@ export async function POST(request: NextRequest) {
             return badRequest("Field 'instruction' is required");
         }
 
+        // Validate instruction for prompt injection attempts
+        const validationResult = validateInstruction(instruction);
+        if (!validationResult.isValid) {
+            logValidationFailure(instruction, validationResult, undefined, "browser-use-route");
+            return badRequest(validationResult.error || "Invalid instruction");
+        }
+
         // Get user token for auth
         const token = await getToken();
 
@@ -38,19 +47,71 @@ export async function POST(request: NextRequest) {
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
 
-        // Prepare Python server request data
-        const providerModel = model || "browser-use/bu-1.0";
-
-        if (!process.env.ANCHOR_API_KEY) {
-            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-        }
-        // Get current user to create browser profile
+        // Get current user for security logging and browser profile
         const user = await convex.query(api.auth.getCurrentUser, {});
         if (!user) {
             return unauthorized();
         }
-        // getCurrentUser returns user with _id field (Convex document ID)
         const userId = user._id;
+
+        // Prepare Python server request data
+        const providerModel = model || "browser-use/bu-1.0";
+
+        // Validate model name
+        const modelValidation = validateModelName(providerModel);
+        if (!modelValidation.isValid) {
+            logSecurityViolation('invalid_model_name', { model: providerModel }, userId, 'browser-use-route');
+            return NextResponse.json({ error: `Invalid model: ${modelValidation.error}` }, { status: 400 });
+        }
+
+        // Validate API key formats
+        if (openaiApiKey) {
+            const keyValidation = validateApiKeyFormat(openaiApiKey, 'openai');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'openai' }, userId, 'browser-use-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (anthropicApiKey) {
+            const keyValidation = validateApiKeyFormat(anthropicApiKey, 'anthropic');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'anthropic' }, userId, 'browser-use-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (googleApiKey) {
+            const keyValidation = validateApiKeyFormat(googleApiKey, 'google');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'google' }, userId, 'browser-use-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (browserUseApiKey) {
+            const keyValidation = validateApiKeyFormat(browserUseApiKey, 'browseruse');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'browseruse' }, userId, 'browser-use-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+
+        // Validate secrets
+        if (secrets) {
+            const secretsValidation = validateSecrets(secrets);
+            if (!secretsValidation.isValid) {
+                logSecurityViolation('invalid_secrets', { error: secretsValidation.error }, userId, 'browser-use-route');
+                return NextResponse.json({ error: `Invalid secrets: ${secretsValidation.error}` }, { status: 400 });
+            }
+
+            // Check for suspicious secrets (potential attack)
+            if (detectSuspiciousSecrets(secrets)) {
+                logSecurityViolation('suspicious_secrets', {}, userId, 'browser-use-route');
+                return NextResponse.json({ error: 'Suspicious secrets detected. This may indicate an injection attempt.' }, { status: 403 });
+            }
+        }
+
+        if (!process.env.ANCHOR_API_KEY) {
+            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
+        }
 
         // Create browser profile configuration using user_id
         const browserConfig = {

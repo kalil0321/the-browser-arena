@@ -4,6 +4,8 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { computeCost } from "@/lib/pricing";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { badRequest } from "@/lib/http-errors";
 
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -76,6 +78,18 @@ const determineKey = (model: string | undefined, userKeys: { openai?: string; go
 export async function POST(request: NextRequest) {
     try {
         const { instruction, model, sessionId: existingSessionId, openaiApiKey, googleApiKey, anthropicApiKey, openrouterApiKey } = await request.json();
+
+        // Validate instruction
+        if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
+            return badRequest("Field 'instruction' is required");
+        }
+
+        // Validate instruction for prompt injection attempts
+        const validationResult = validateInstruction(instruction);
+        if (!validationResult.isValid) {
+            logValidationFailure(instruction, validationResult, undefined, "stagehand-cloud-route");
+            return badRequest(validationResult.error || "Invalid instruction");
+        }
 
         // Get user token for auth
         const token = await getToken();

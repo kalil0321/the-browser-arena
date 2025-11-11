@@ -4,6 +4,8 @@ import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, providerUnavailable, serverMisconfigured, unauthorized, mapProviderError } from "@/lib/http-errors";
+import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { validateSecrets, validateApiKeyFormat, validateModelName, detectSuspiciousSecrets, logSecurityViolation } from "@/lib/security/validation";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
@@ -214,6 +216,13 @@ export async function POST(request: NextRequest) {
             return badRequest("At least one agent must be selected");
         }
 
+        // Validate instruction for prompt injection attempts
+        const validationResult = validateInstruction(instruction);
+        if (!validationResult.isValid) {
+            logValidationFailure(instruction, validationResult, undefined, "multi-route");
+            return badRequest(validationResult.error || "Invalid instruction");
+        }
+
         if (agents.length > 4) {
             return NextResponse.json({ error: "Maximum 4 agents allowed" }, { status: 400 });
         }
@@ -229,6 +238,102 @@ export async function POST(request: NextRequest) {
         // Create Convex client per request for better isolation
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
         convex.setAuth(token);
+
+        // Get current user for security logging and browser profile
+        const user = await convex.query(api.auth.getCurrentUser, {});
+        if (!user) {
+            return unauthorized();
+        }
+        const userId = user._id;
+
+        // Validate API key formats
+        if (openaiApiKey) {
+            const keyValidation = validateApiKeyFormat(openaiApiKey, 'openai');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'openai' }, userId, 'multi-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (anthropicApiKey) {
+            const keyValidation = validateApiKeyFormat(anthropicApiKey, 'anthropic');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'anthropic' }, userId, 'multi-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (googleApiKey) {
+            const keyValidation = validateApiKeyFormat(googleApiKey, 'google');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'google' }, userId, 'multi-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (openrouterApiKey) {
+            const keyValidation = validateApiKeyFormat(openrouterApiKey, 'openrouter');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'openrouter' }, userId, 'multi-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (browserUseApiKey) {
+            const keyValidation = validateApiKeyFormat(browserUseApiKey, 'browseruse');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'browseruse' }, userId, 'multi-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+        if (smoothApiKey) {
+            const keyValidation = validateApiKeyFormat(smoothApiKey, 'smooth');
+            if (!keyValidation.isValid) {
+                logSecurityViolation('invalid_api_key_format', { provider: 'smooth' }, userId, 'multi-route');
+                return NextResponse.json({ error: keyValidation.error }, { status: 400 });
+            }
+        }
+
+        // Validate model names and secrets for each agent
+        for (const agentConfig of agents) {
+            // Validate model name
+            if (agentConfig.model) {
+                const modelValidation = validateModelName(agentConfig.model);
+                if (!modelValidation.isValid) {
+                    logSecurityViolation('invalid_model_name', { model: agentConfig.model, agent: agentConfig.agent }, userId, 'multi-route');
+                    return NextResponse.json({ error: `Invalid model for ${agentConfig.agent}: ${modelValidation.error}` }, { status: 400 });
+                }
+            }
+
+            // Validate thinking model if present
+            if (agentConfig.thinkingModel) {
+                const modelValidation = validateModelName(agentConfig.thinkingModel);
+                if (!modelValidation.isValid) {
+                    logSecurityViolation('invalid_model_name', { model: agentConfig.thinkingModel, agent: agentConfig.agent, type: 'thinking' }, userId, 'multi-route');
+                    return NextResponse.json({ error: `Invalid thinking model for ${agentConfig.agent}: ${modelValidation.error}` }, { status: 400 });
+                }
+            }
+
+            // Validate execution model if present
+            if (agentConfig.executionModel) {
+                const modelValidation = validateModelName(agentConfig.executionModel);
+                if (!modelValidation.isValid) {
+                    logSecurityViolation('invalid_model_name', { model: agentConfig.executionModel, agent: agentConfig.agent, type: 'execution' }, userId, 'multi-route');
+                    return NextResponse.json({ error: `Invalid execution model for ${agentConfig.agent}: ${modelValidation.error}` }, { status: 400 });
+                }
+            }
+
+            // Validate secrets
+            if (agentConfig.secrets) {
+                const secretsValidation = validateSecrets(agentConfig.secrets);
+                if (!secretsValidation.isValid) {
+                    logSecurityViolation('invalid_secrets', { agent: agentConfig.agent, error: secretsValidation.error }, userId, 'multi-route');
+                    return NextResponse.json({ error: `Invalid secrets for ${agentConfig.agent}: ${secretsValidation.error}` }, { status: 400 });
+                }
+
+                // Check for suspicious secrets (potential attack)
+                if (detectSuspiciousSecrets(agentConfig.secrets)) {
+                    logSecurityViolation('suspicious_secrets', { agent: agentConfig.agent }, userId, 'multi-route');
+                    return NextResponse.json({ error: 'Suspicious secrets detected. This may indicate an injection attempt.' }, { status: 403 });
+                }
+            }
+        }
 
         // Check if user has BYOK (Bring Your Own Key) for all agents
         const byokCheck = hasAllRequiredKeys(agents, {
@@ -277,13 +382,6 @@ export async function POST(request: NextRequest) {
             console.log("[api/agent/multi] All agents have BYOK - bypassing session limit");
         }
 
-        // Get current user to create browser profile
-        const user = await convex.query(api.auth.getCurrentUser, {});
-        if (!user) {
-            return unauthorized();
-        }
-        // getCurrentUser returns user with _id field (Convex document ID)
-        const userId = user._id;
         console.log("[api/agent/multi] User ID:", userId);
 
         // Check if we need browser sessions for browser-use agents (not browser-use-cloud)
