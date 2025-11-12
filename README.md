@@ -24,6 +24,7 @@ npm run dev
 2) Start the agent server (Python)
 ```bash
 cd agents
+source .venv/bin/activate
 uv sync        # or: pip install -r requirements.txt
 python server.py
 ```
@@ -38,6 +39,7 @@ CONVEX_DEPLOYMENT=your-deployment
 OPENAI_API_KEY=...
 GOOGLE_API_KEY=...
 ANTHROPIC_API_KEY=...
+BROWSER_USE_API_KEY=...
 
 # Optional services
 SMOOTH_API_KEY=...
@@ -46,27 +48,13 @@ BROWSERBASE_PROJECT_ID=...
 
 # Agent server
 AGENT_SERVER_URL=http://localhost:8080
+STAGEHAND_SERVER_URL=http://localhost:3001
 ```
 
 4) Convex (first time)
 ```bash
 npx convex auth
-npx convex deploy
+npx convex dev
 ```
 
 Open http://localhost:3000
-
-```
-
-## Scripts
-
-```bash
-npm run dev         # Next.js dev (3000)
-npm run build       # Production build
-npm run start       # Start production
-npm run lint        # ESLint
-npx convex dev      # Convex local
-```
-
-
-
