@@ -294,31 +294,20 @@ export function BUPanel({ agent }: BUPanelProps) {
                                 <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration</h4>
                             </div>
                             {(() => {
-                                const ourSeconds = (agent.updatedAt - agent.createdAt) / 1000;
                                 // Handle both old format (agentResult.duration) and Browser Use Cloud format (metadata.duration)
                                 const agentDuration = agentResult.duration ?? agentResult.metadata?.duration;
-                                const agentSeconds = typeof agentDuration === 'number' ? agentDuration : undefined;
-                                const displaySeconds = agentSeconds !== undefined ? (ourSeconds - agentSeconds) : ourSeconds;
+                                const agentSeconds = typeof agentDuration === 'number' ? agentDuration : 0;
 
-                                // For browser-use-cloud, only show cloud time
-                                if (agent.name === "browser-use-cloud" && agentSeconds !== undefined) {
+                                if (agentSeconds > 0) {
                                     return (
                                         <p className="text-sm font-default text-gray-900 dark:text-gray-100">
                                             {agentSeconds.toFixed(1)}s
                                         </p>
                                     );
-                                }
-
-                                if (agentSeconds !== undefined) {
-                                    return (
-                                        <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                            {displaySeconds.toFixed(1)}s + {agentSeconds.toFixed(1)}s = {ourSeconds.toFixed(1)}s
-                                        </p>
-                                    );
                                 } else {
                                     return (
                                         <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                            {ourSeconds.toFixed(1)}s
+                                            We could not calculate the duration.
                                         </p>
                                     );
                                 }
