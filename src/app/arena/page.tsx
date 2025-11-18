@@ -15,11 +15,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
-import type { Doc, Id } from "../../../convex/_generated/dataModel";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Select,
     SelectContent,
@@ -33,46 +33,61 @@ import {
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp } from "lucide-react";
-
-type SessionRow = {
-    _id: Id<"sessions">;
-    instruction: string;
-    createdAt: number;
-    userId: string;
-};
-
-type ArenaStats = {
-    totalSessions: number;
-    totalAgents: number;
-    models: Record<string, number>;
-    agents: Record<string, number>;
-    statusCounts: Record<string, number>;
-};
+import type {
+    AgentDoc,
+    AgentsBySessionMap,
+    ArenaDataPayload,
+    ArenaStats,
+    SessionDoc as SessionRow,
+} from "../../../types/arena";
 
 export default function ArenaPage() {
-    // Query public sessions and agents (works for both authenticated and unauthenticated users)
-    const sessions = useQuery(api.queries.getAllSessions);
-    const agents = useQuery(api.queries.getAllAgents);
-    const stats = useQuery(api.queries.getArenaStats) as ArenaStats | undefined;
+    // Toggle via NEXT_PUBLIC_ARENA_BENCHMARK to capture baseline query timings before refactors.
+    const benchmarkEnabled = process.env.NEXT_PUBLIC_ARENA_BENCHMARK === "true";
+    const benchmarkRef = useRef<{
+        mount: number | null;
+        queryEnd: number | null;
+    }>({
+        mount: typeof performance !== "undefined" ? performance.now() : null,
+        queryEnd: null,
+    });
+
+    // Aggregated data usage in Arena view (getArenaData payload):
+    // - sessions -> table rows + instruction metadata
+    // - agentsBySession -> per-session badges, model lists, status filter availability
+    // - stats -> high-level cards + unique agent/model options
+    const arenaData = useQuery(api.queries.getArenaData) as ArenaDataPayload | undefined;
+    const stats = arenaData?.stats;
+
+    useEffect(() => {
+        if (!benchmarkEnabled || typeof performance === "undefined") return;
+        if (!arenaData || benchmarkRef.current.queryEnd !== null) return;
+        const end = performance.now();
+        benchmarkRef.current.queryEnd = end;
+        if (benchmarkRef.current.mount !== null) {
+            const duration = end - benchmarkRef.current.mount;
+            console.log(
+                `[arena-benchmark] getArenaData resolved in ${duration.toFixed(2)}ms`
+            );
+        }
+    }, [arenaData, benchmarkEnabled]);
+
+    const agentsBySession = useMemo<AgentsBySessionMap>(() => {
+        if (!arenaData?.agentsBySession) return new Map<Id<"sessions">, AgentDoc[]>();
+        return new Map<Id<"sessions">, AgentDoc[]>(
+            Object.entries(arenaData.agentsBySession).map(([sessionId, agents]) => [
+                sessionId as Id<"sessions">,
+                agents,
+            ])
+        );
+    }, [arenaData?.agentsBySession]);
+
+    const sessions = arenaData?.sessions;
 
     const [filterAgent, setFilterAgent] = useState<string>("all");
     const [filterModel, setFilterModel] = useState<string>("all");
     const [filterStatus, setFilterStatus] = useState<string>("all");
     const [isStatsOpen, setIsStatsOpen] = useState<boolean>(false);
-
-    // Create a map of sessionId -> agents for quick lookup
-    type AgentDoc = Doc<"agents">;
-    type AgentsBySessionMap = Map<Id<"sessions">, AgentDoc[]>;
-
-    const agentsBySession = useMemo<AgentsBySessionMap>(() => {
-        if (!agents) return new Map<Id<"sessions">, AgentDoc[]>();
-        const map = new Map<Id<"sessions">, AgentDoc[]>();
-        agents.forEach((agent: AgentDoc) => {
-            const existing = map.get(agent.sessionId) ?? [];
-            map.set(agent.sessionId, [...existing, agent]);
-        });
-        return map;
-    }, [agents]);
 
     // Filter sessions based on selected filters
     const filteredSessions = useMemo(() => {
@@ -115,7 +130,7 @@ export default function ArenaPage() {
     };
 
     // Loading state while queries are loading
-    if (sessions === undefined || agents === undefined || stats === undefined) {
+    if (arenaData === undefined || stats === undefined) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">
@@ -316,16 +331,6 @@ export default function ArenaPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {!sessions && (
-                                <TableRow>
-                                    <TableCell colSpan={5}>
-                                        <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-                                            Loading sessions…
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            )}
-
                             {sessions && filteredSessions.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={5}>

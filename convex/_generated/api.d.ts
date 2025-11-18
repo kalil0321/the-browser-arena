@@ -15,6 +15,7 @@ import type * as betterAuth__generated_server from "../betterAuth/_generated/ser
 import type * as betterAuth_adapter from "../betterAuth/adapter.js";
 import type * as betterAuth_auth from "../betterAuth/auth.js";
 import type * as http from "../http.js";
+import type * as lib_arena from "../lib/arena.js";
 import type * as mutations from "../mutations.js";
 import type * as queries from "../queries.js";
 
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   "betterAuth/adapter": typeof betterAuth_adapter;
   "betterAuth/auth": typeof betterAuth_auth;
   http: typeof http;
+  "lib/arena": typeof lib_arena;
   mutations: typeof mutations;
   queries: typeof queries;
 }>;

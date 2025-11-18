@@ -2,6 +2,12 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { getUser } from "./auth";
 import { Doc } from "./_generated/dataModel";
+import {
+    buildAgentsBySessionRecord,
+    buildArenaStats,
+    filterPublicAgents,
+    filterPublicSessions,
+} from "./lib/arena";
 
 /**
  * Get all sessions for the current user
@@ -143,11 +149,7 @@ export const getAllSessions = query({
             .order("desc")
             .collect();
 
-        // Filter out private sessions - only show public sessions
-        // A session is public if isPrivate is false or undefined
-        const publicSessions = allSessions.filter(session => !(session.isPrivate ?? false));
-
-        return publicSessions;
+        return filterPublicSessions(allSessions);
     },
 });
 
@@ -158,22 +160,16 @@ export const getAllSessions = query({
  */
 export const getAllAgents = query({
     handler: async (ctx) => {
+        const allSessions = await ctx.db.query("sessions").collect();
+        const publicSessions = filterPublicSessions(allSessions);
+        const publicSessionIds = new Set(publicSessions.map((session) => session._id));
+
         const allAgents = await ctx.db
             .query("agents")
             .order("desc")
             .collect();
 
-        // Filter out agents from private sessions
-        // A session is public if isPrivate is false or undefined
-        const publicAgents: Doc<"agents">[] = [];
-        for (const agent of allAgents) {
-            const session = await ctx.db.get(agent.sessionId);
-            if (session && !(session.isPrivate ?? false)) {
-                publicAgents.push(agent);
-            }
-        }
-
-        return publicAgents;
+        return filterPublicAgents(allAgents, publicSessionIds);
     },
 });
 
@@ -185,47 +181,38 @@ export const getAllAgents = query({
 export const getArenaStats = query({
     handler: async (ctx) => {
         const allSessions = await ctx.db.query("sessions").collect();
+        const publicSessions = filterPublicSessions(allSessions);
+        const publicSessionIds = new Set(publicSessions.map((session) => session._id));
+
         const allAgents = await ctx.db.query("agents").collect();
+        const publicAgents = filterPublicAgents(allAgents, publicSessionIds);
 
-        // Filter out private sessions for stats
-        // A session is public if isPrivate is false or undefined
-        const publicSessions = allSessions.filter(session => !(session.isPrivate ?? false));
+        return buildArenaStats(publicSessions, publicAgents);
+    },
+});
 
-        // Filter agents to only include those from public sessions
-        const publicAgents: Doc<"agents">[] = [];
-        for (const agent of allAgents) {
-            const session = await ctx.db.get(agent.sessionId);
-            if (session && !(session.isPrivate ?? false)) {
-                publicAgents.push(agent);
-            }
-        }
+/**
+ * Aggregate arena payload to minimize client round-trips.
+ */
+export const getArenaData = query({
+    handler: async (ctx) => {
+        const allSessions = await ctx.db
+            .query("sessions")
+            .order("desc")
+            .collect();
+        const publicSessions = filterPublicSessions(allSessions);
+        const publicSessionIds = new Set(publicSessions.map((session) => session._id));
 
-        // Count models (only from public agents)
-        const models: Record<string, number> = {};
-        publicAgents.forEach((agent) => {
-            if (agent.model) {
-                models[agent.model] = (models[agent.model] || 0) + 1;
-            }
-        });
-
-        // Count agents by name (only from public sessions)
-        const agentCounts: Record<string, number> = {};
-        publicAgents.forEach((agent) => {
-            agentCounts[agent.name] = (agentCounts[agent.name] || 0) + 1;
-        });
-
-        // Count by status (only from public sessions)
-        const statusCounts: Record<string, number> = {};
-        publicAgents.forEach((agent) => {
-            statusCounts[agent.status] = (statusCounts[agent.status] || 0) + 1;
-        });
+        const allAgents = await ctx.db
+            .query("agents")
+            .order("desc")
+            .collect();
+        const publicAgents = filterPublicAgents(allAgents, publicSessionIds);
 
         return {
-            totalSessions: publicSessions.length,
-            totalAgents: publicAgents.length,
-            models,
-            agents: agentCounts,
-            statusCounts,
+            sessions: publicSessions,
+            agentsBySession: buildAgentsBySessionRecord(publicAgents),
+            stats: buildArenaStats(publicSessions, publicAgents),
         };
     },
 });
