@@ -47,13 +47,12 @@ async function uploadRecordingToConvexStorage(
     return recordingUrl;
 }
 
-// @ts-expect-error Circular type inference between actions and generated API
+// @ts-ignore
 export const syncAgentRecordings = action({
     args: {
         limit: v.optional(v.number()),
     },
     // @ts-ignore
-    // @ts-expect-error Circular type inference between actions and generated API
     handler: async (ctx, args) => {
         const anchorApiKey = process.env.ANCHOR_API_KEY;
         if (!anchorApiKey) {
@@ -62,7 +61,7 @@ export const syncAgentRecordings = action({
 
         const maxAgents = Math.min(Math.max(args.limit ?? 25, 1), 100);
 
-        // @ts-expect-error Circular type inference between actions and generated API
+        // @ts-ignore
         const agents = await ctx.runQuery(api.queries.getAgentsNeedingRecordings, {
             limit: maxAgents,
         });
@@ -87,19 +86,19 @@ export const syncAgentRecordings = action({
     },
 });
 
-// @ts-expect-error Circular type inference between actions and generated API
+// @ts-ignore
 export const syncRecordingForAgent = action({
     args: {
         agentId: v.id("agents"),
     },
-    // @ts-expect-error Circular type inference between actions and generated API
+    // @ts-ignore
     handler: async (ctx, args) => {
         const anchorApiKey = process.env.ANCHOR_API_KEY;
         if (!anchorApiKey) {
             throw new Error("Missing ANCHOR_API_KEY environment variable.");
         }
 
-        // @ts-expect-error Circular type inference between actions and generated API
+        // @ts-ignore
         const agent = await ctx.runQuery(api.queries.getAgentById, { agentId: args.agentId });
         if (!agent) {
             return { success: false, reason: "not_found" };

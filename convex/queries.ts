@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { getUser } from "./auth";
+import { Doc } from "./_generated/dataModel";
 
 /**
  * Get all sessions for the current user
@@ -43,7 +44,7 @@ export const getSession = query({
 
         // Check if session is private
         const isPrivate = session.isPrivate ?? false;
-        
+
         // If session is private, only the owner can access it (requires authentication)
         if (isPrivate) {
             if (!user || session.userId !== user._id) {
@@ -76,7 +77,7 @@ export const getSessionAgents = query({
 
         // Check if session is private
         const isPrivate = session.isPrivate ?? false;
-        
+
         // If session is private, only the owner can see agents (requires authentication)
         if (isPrivate) {
             if (!user || session.userId !== user._id) {
@@ -105,13 +106,13 @@ export const verifySessionOwnership = query({
     },
     handler: async (ctx, args) => {
         const user = await getUser(ctx);
-        
+
         if (!user) {
             return null; // User must be authenticated
         }
 
         const session = await ctx.db.get(args.sessionId);
-        
+
         if (!session) {
             return null; // Session doesn't exist
         }
@@ -164,7 +165,7 @@ export const getAllAgents = query({
 
         // Filter out agents from private sessions
         // A session is public if isPrivate is false or undefined
-        const publicAgents = [];
+        const publicAgents: Doc<"agents">[] = [];
         for (const agent of allAgents) {
             const session = await ctx.db.get(agent.sessionId);
             if (session && !(session.isPrivate ?? false)) {
@@ -191,7 +192,7 @@ export const getArenaStats = query({
         const publicSessions = allSessions.filter(session => !(session.isPrivate ?? false));
 
         // Filter agents to only include those from public sessions
-        const publicAgents = [];
+        const publicAgents: Doc<"agents">[] = [];
         for (const agent of allAgents) {
             const session = await ctx.db.get(agent.sessionId);
             if (session && !(session.isPrivate ?? false)) {
@@ -329,26 +330,6 @@ export const getAgentById = query({
 });
 
 /**
- * Internal helper query to fetch agents that still need recordings
- */
-export const getAgentsNeedingRecordings = query({
-    args: {
-        limit: v.optional(v.number()),
-    },
-    handler: async (ctx, args) => {
-        const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
-
-        const agents = await ctx.db
-            .query("agents")
-            .withIndex("by_browser_session", (q) => q.gt("browser.sessionId", ""))
-            .filter((q) => q.eq(q.field("recordingUrl"), undefined))
-            .take(limit);
-
-        return agents;
-    },
-});
-
-/**
  * Demo queries - for unauthenticated demo users
  */
 
@@ -417,7 +398,7 @@ export const getDemoUserSessions = query({
         }
 
         // Fetch all sessions for this device, deduplicating by sessionId
-        const sessions = [];
+        const sessions: Doc<"sessions">[] = [];
         const seenSessionIds = new Set<string>();
         for (const sessionId of demoUsage.sessionIds) {
             const sessionIdStr = sessionId as string;

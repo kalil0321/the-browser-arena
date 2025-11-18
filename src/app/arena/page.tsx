@@ -15,11 +15,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Select,
     SelectContent,
@@ -41,11 +41,19 @@ type SessionRow = {
     userId: string;
 };
 
+type ArenaStats = {
+    totalSessions: number;
+    totalAgents: number;
+    models: Record<string, number>;
+    agents: Record<string, number>;
+    statusCounts: Record<string, number>;
+};
+
 export default function ArenaPage() {
     // Query public sessions and agents (works for both authenticated and unauthenticated users)
     const sessions = useQuery(api.queries.getAllSessions);
     const agents = useQuery(api.queries.getAllAgents);
-    const stats = useQuery(api.queries.getArenaStats);
+    const stats = useQuery(api.queries.getArenaStats) as ArenaStats | undefined;
 
     const [filterAgent, setFilterAgent] = useState<string>("all");
     const [filterModel, setFilterModel] = useState<string>("all");
@@ -53,11 +61,14 @@ export default function ArenaPage() {
     const [isStatsOpen, setIsStatsOpen] = useState<boolean>(false);
 
     // Create a map of sessionId -> agents for quick lookup
-    const agentsBySession = useMemo(() => {
-        if (!agents) return new Map();
-        const map = new Map<Id<"sessions">, typeof agents>();
-        agents.forEach((agent) => {
-            const existing = map.get(agent.sessionId) || [];
+    type AgentDoc = Doc<"agents">;
+    type AgentsBySessionMap = Map<Id<"sessions">, AgentDoc[]>;
+
+    const agentsBySession = useMemo<AgentsBySessionMap>(() => {
+        if (!agents) return new Map<Id<"sessions">, AgentDoc[]>();
+        const map = new Map<Id<"sessions">, AgentDoc[]>();
+        agents.forEach((agent: AgentDoc) => {
+            const existing = map.get(agent.sessionId) ?? [];
             map.set(agent.sessionId, [...existing, agent]);
         });
         return map;
@@ -70,15 +81,15 @@ export default function ArenaPage() {
         return sessions.filter((session) => {
             const sessionAgents = agentsBySession.get(session._id) || [];
 
-            if (filterAgent !== "all" && !sessionAgents.some((a: any) => a.name === filterAgent)) {
+            if (filterAgent !== "all" && !sessionAgents.some((a: AgentDoc) => a.name === filterAgent)) {
                 return false;
             }
 
-            if (filterModel !== "all" && !sessionAgents.some((a: any) => a.model === filterModel)) {
+            if (filterModel !== "all" && !sessionAgents.some((a: AgentDoc) => a.model === filterModel)) {
                 return false;
             }
 
-            if (filterStatus !== "all" && !sessionAgents.some((a: any) => a.status === filterStatus)) {
+            if (filterStatus !== "all" && !sessionAgents.some((a: AgentDoc) => a.status === filterStatus)) {
                 return false;
             }
 
@@ -180,7 +191,7 @@ export default function ArenaPage() {
                                 <div className="rounded-lg border bg-card p-4">
                                     <div className="text-sm font-semibold mb-3">Models Used</div>
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                                        {Object.entries(stats.models)
+                                        {(Object.entries(stats.models) as Array<[string, number]>)
                                             .sort(([, a], [, b]) => b - a)
                                             .map(([model, count]) => (
                                                 <div key={model} className="flex items-center justify-between">
@@ -200,7 +211,7 @@ export default function ArenaPage() {
                                 <div className="rounded-lg border bg-card p-4">
                                     <div className="text-sm font-semibold mb-3">Agents Used</div>
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                                        {Object.entries(stats.agents)
+                                        {(Object.entries(stats.agents) as Array<[string, number]>)
                                             .sort(([, a], [, b]) => b - a)
                                             .map(([agent, count]) => (
                                                 <div key={agent} className="flex items-center justify-between">
@@ -343,7 +354,11 @@ export default function ArenaPage() {
                                 filteredSessions.map((session: SessionRow) => {
                                     const sessionAgents = agentsBySession.get(session._id) || [];
                                     const modelsUsed: string[] = Array.from(
-                                        new Set(sessionAgents.map((a: any) => a.model).filter(Boolean))
+                                        new Set(
+                                            sessionAgents
+                                                .map((agent: AgentDoc) => agent.model)
+                                                .filter((model): model is string => Boolean(model))
+                                        )
                                     );
 
                                     return (

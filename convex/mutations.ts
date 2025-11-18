@@ -137,7 +137,7 @@ export const createSession = mutation({
         }
 
         // If browser data is provided, create the agent at the same time
-        let agentId = undefined;
+        let agentId: Id<"agents"> | undefined = undefined;
         if (args.browserData) {
             agentId = await ctx.db.insert("agents", {
                 sessionId,
