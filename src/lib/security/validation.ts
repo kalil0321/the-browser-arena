@@ -73,6 +73,7 @@ export const ALLOWED_MODELS = new Set([
     'gemini-1.5-pro',
     'gemini-2.5-flash',
     'gemini-2.5-pro',
+    'gemini-3-pro-preview',
     // Browser-Use models
     'browser-use/bu-1.0',
     'browser-use-llm',
