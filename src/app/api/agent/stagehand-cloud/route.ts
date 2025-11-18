@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
             env: "BROWSERBASE",
             apiKey: browserbaseConfig.apiKey,
             projectId: browserbaseConfig.projectId,
+            disablePino: true,
             model: {
                 modelName: modelString,
                 apiKey: determineKey(model, { openai: openaiApiKey, google: googleApiKey, anthropic: anthropicApiKey, openrouter: openrouterApiKey }),
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
             const session = await convex.query(api.queries.verifySessionOwnership, {
                 sessionId: existingSessionId,
             });
-            
+
             if (!session) {
                 return NextResponse.json(
                     { error: "Unauthorized: You can only add agents to your own sessions" },
@@ -195,6 +196,7 @@ export async function POST(request: NextRequest) {
                     env: "BROWSERBASE",
                     apiKey: browserbaseConfig.apiKey,
                     projectId: browserbaseConfig.projectId,
+                    disablePino: true,
                     model: {
                         modelName: modelString,
                         apiKey: determineKey(model, userKeys),

@@ -231,6 +231,8 @@ export async function POST(request: NextRequest) {
                         const modelString = b.model;
                         const stagehand = new Stagehand({
                             env: "LOCAL",
+                            verbose: 0,
+                            disablePino: true,
                             model: {
                                 modelName: modelString,
                                 apiKey: determineKey(modelString),
