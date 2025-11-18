@@ -329,6 +329,26 @@ export const getAgentById = query({
 });
 
 /**
+ * Internal helper query to fetch agents that still need recordings
+ */
+export const getAgentsNeedingRecordings = query({
+    args: {
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
+
+        const agents = await ctx.db
+            .query("agents")
+            .withIndex("by_browser_session", (q) => q.gt("browser.sessionId", ""))
+            .filter((q) => q.eq(q.field("recordingUrl"), undefined))
+            .take(limit);
+
+        return agents;
+    },
+});
+
+/**
  * Demo queries - for unauthenticated demo users
  */
 

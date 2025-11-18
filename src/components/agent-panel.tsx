@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SmoothPanel } from "./panels/smooth-panel";
 import { BUPanel } from "./panels/bu-panel";
 import { StagehandPanel } from "./panels/stagehand-panel";
@@ -8,6 +8,11 @@ import { BrowserUseLogo } from "./logos/bu";
 import { SmoothLogo } from "./logos/smooth";
 import { StagehandLogo } from "./logos/stagehand";
 import { XCircle, AlertTriangle } from "lucide-react";
+
+const truncateText = (text: string, maxLength: number = 100): string => {
+    if (typeof text !== 'string') return text;
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+};
 
 interface AgentPanelProps {
     agent: {
@@ -27,7 +32,27 @@ interface AgentPanelProps {
 }
 
 export function AgentPanel({ agent }: AgentPanelProps) {
-    const [showFullResult, setShowFullResult] = useState(false);
+    const [videoError, setVideoError] = useState(false);
+    const [playbackRate, setPlaybackRate] = useState<1 | 4>(1);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+
+    useEffect(() => {
+        setVideoError(false);
+        setPlaybackRate(1);
+    }, [agent?.recordingUrl]);
+
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = playbackRate;
+        }
+    }, [playbackRate]);
+
+    useEffect(() => {
+        if (!videoRef.current) return;
+        if (!videoError) {
+            videoRef.current.play().catch(() => undefined);
+        }
+    }, [videoError]);
 
     if (!agent) {
         return (
@@ -94,7 +119,7 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                     </h3>
                     {agent.model && (
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 max-w-[120px] truncate" title={agent.model}>
-                            {agent.model}
+                            {agent.model.replace(/^openrouter\//, '')}
                         </span>
                     )}
                 </div>
@@ -144,10 +169,10 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                                         <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
                                         <div className="flex-1 min-w-0">
                                             <h4 className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">Error Details</h4>
-                                            <p className="text-sm text-red-900 dark:text-red-100 break-words">
-                                                {typeof agentResult.error === 'string'
+                                            <p className="text-sm text-red-900 dark:text-red-100 wrap-break-word">
+                                                {truncateText(typeof agentResult.error === 'string'
                                                     ? agentResult.error
-                                                    : JSON.stringify(agentResult.error, null, 2)}
+                                                    : JSON.stringify(agentResult.error, null, 2))}
                                             </p>
                                         </div>
                                     </div>
@@ -156,7 +181,7 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                             {agentResult?.message && !agentResult?.error && (
                                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mt-4 text-left">
                                     <p className="text-sm text-red-900 dark:text-red-100">
-                                        {agentResult.message}
+                                        {truncateText(agentResult.message)}
                                     </p>
                                 </div>
                             )}
@@ -171,16 +196,66 @@ export function AgentPanel({ agent }: AgentPanelProps) {
 
                 {isCompleted && (
                     <div className="h-full overflow-auto">
-                        {/* {hasRecording && agent.recordingUrl ? (
-                            <video
-                                src={agent.recordingUrl}
-                                controls
-                                className="w-full h-auto"
-                                autoPlay
-                            />
-                        ) :  */}
+                        {hasRecording && agent.recordingUrl && (
+                            <div className="border-b border-border bg-card">
+                                <div className="relative bg-black">
+                                    <div className="aspect-video w-full bg-black">
+                                        {!videoError ? (
+                                            <video
+                                                key={agent.recordingUrl}
+                                                src={agent.recordingUrl}
+                                                controls
+                                                playsInline
+                                                className="h-full w-full object-contain bg-black"
+                                                ref={videoRef}
+                                                onError={() => setVideoError(true)}
+                                            />
+                                        ) : (
+                                            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
+                                                <p>Recording preview unavailable.</p>
+                                                <a
+                                                    href={agent.recordingUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-xs font-medium text-blue-600 hover:underline"
+                                                >
+                                                    Open recording in new tab
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {!videoError && (
+                                        <a
+                                            href={agent.recordingUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="absolute right-3 top-3 rounded-md bg-black/70 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-white hover:bg-black/80"
+                                        >
+                                            Open Externally
+                                        </a>
+                                    )}
+                                    {!videoError && (
+                                        <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+                                            <div className="flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-white">
+                                                <span>Speed</span>
+                                                {[1, 4].map((value) => (
+                                                    <button
+                                                        key={value}
+                                                        type="button"
+                                                        onClick={() => setPlaybackRate(value as 1 | 4)}
+                                                        className={`rounded px-1.5 py-0.5 text-[10px] ${playbackRate === value ? "bg-white/90 text-black" : "bg-white/10 text-white hover:bg-white/20"}`}
+                                                    >
+                                                        {value}x
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
-                        {displayUrl && !agentResult && (
+                        {!hasRecording && displayUrl && !agentResult && (
                             <iframe
                                 src={displayUrl}
                                 className="w-full h-full border-0"
@@ -188,22 +263,18 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                             />
                         )}
 
-                        {/* : null} */}
-
-                        {/* Results Section - Route to specific panel based on agent name */}
                         {agentResult && (
                             <div className="p-4">
                                 {agent.name === "smooth" && <SmoothPanel agent={agent} />}
                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && <BUPanel agent={agent} />}
                                 {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && <StagehandPanel agent={agent} />}
 
-                                {/* Fallback for unknown agents */}
-                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "stagehand-bb-cloud", "stagehand-cloud"].includes(agent.name) && (
+                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "stagehand-bb-cloud", "stagehand-cloud", "notte"].includes(agent.name) && (
                                     <div className="space-y-3">
                                         <div className="bg-card rounded-lg p-4">
                                             <h4 className="text-xs font-medium mb-2 uppercase tracking-wide">Result</h4>
                                             <pre className="text-xs whitespace-pre-wrap">
-                                                {JSON.stringify(agentResult, null, 2)}
+                                                {truncateText(JSON.stringify(agentResult, null, 2))}
                                             </pre>
                                         </div>
                                     </div>

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { getUser } from "./auth";
 import { Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
 
 /**
  * Helper function to extract cost from agent result
@@ -57,6 +58,25 @@ async function updateUserCostTracking(
             lastSessionAt: now,
             createdAt: now,
             updatedAt: now,
+        });
+    }
+}
+
+const FINAL_AGENT_STATUSES = new Set(["completed", "failed"]);
+
+async function scheduleRecordingSync(ctx: any, agentId: Id<"agents">, status?: string) {
+    if (status && !FINAL_AGENT_STATUSES.has(status)) {
+        return;
+    }
+
+    try {
+        await ctx.scheduler.runAfter(0, api.actions.syncRecordingForAgent, {
+            agentId,
+        });
+    } catch (error) {
+        console.error("Failed to schedule recording sync", {
+            agentId,
+            error,
         });
     }
 }
@@ -214,6 +234,8 @@ export const updateAgentResult = mutation({
             updatedAt: Date.now(),
         });
 
+        await scheduleRecordingSync(ctx, args.agentId, "completed");
+
         // Track cost for this agent
         const cost = extractCost(args.result);
         if (cost > 0) {
@@ -252,6 +274,8 @@ export const updateAgentStatus = mutation({
             status: args.status,
             updatedAt: Date.now(),
         });
+
+        await scheduleRecordingSync(ctx, args.agentId, args.status);
     },
 });
 
@@ -501,15 +525,19 @@ export const updateAgentResultFromBackend = mutation({
         // Backend services receive agentId from authenticated Next.js routes that
         // already validated the agent belongs to the authenticated user
 
+        const finalStatus = args.status ?? "completed";
+
         await ctx.db.patch(args.agentId, {
-            status: args.status ?? "completed",
+            status: finalStatus,
             result: args.result,
             updatedAt: Date.now(),
         });
 
+        await scheduleRecordingSync(ctx, args.agentId, finalStatus);
+
         // Track cost for this agent (get session to find user)
         const session = await ctx.db.get(agent.sessionId);
-        if (session && args.status !== "failed") {
+        if (session && finalStatus !== "failed") {
             const cost = extractCost(args.result);
             if (cost > 0) {
                 await updateUserCostTracking(ctx, session.userId, cost, false);
@@ -567,6 +595,8 @@ export const updateAgentStatusFromBackend = mutation({
         }
 
         await ctx.db.patch(args.agentId, updateData);
+
+        await scheduleRecordingSync(ctx, args.agentId, args.status);
     },
 });
 

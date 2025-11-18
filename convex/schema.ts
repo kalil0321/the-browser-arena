@@ -29,7 +29,8 @@ export default defineSchema({
     })
         .index("by_session", ["sessionId"])
         .index("by_session_status", ["sessionId", "status"])
-        .index("by_session_name", ["sessionId", "name"]),
+        .index("by_session_name", ["sessionId", "name"])
+        .index("by_browser_session", ["browser.sessionId"]),
 
     // User usage stats table - tracks costs and usage metrics per user
     userUsageStats: defineTable({
