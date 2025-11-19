@@ -50,6 +50,7 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
     const isBrowserUse = agentConfig.agent === "browser-use" || agentConfig.agent === "browser-use-cloud";
     const isStagehand = agentConfig.agent === "stagehand" || agentConfig.agent === "stagehand-bb-cloud";
     const isSmooth = agentConfig.agent === "smooth";
+    const isNotte = agentConfig.agent === "notte";
 
     // Don't show dialog for smooth
     if (isSmooth) {

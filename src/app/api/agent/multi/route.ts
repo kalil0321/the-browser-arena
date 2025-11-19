@@ -14,7 +14,7 @@ const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080"
 const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 
 interface AgentConfig {
-    agent: "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
+    agent: "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud" | "notte";
     model: string;
     secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
     thinkingModel?: string; // For stagehand: model used for thinking/planning
@@ -42,6 +42,9 @@ function getRequiredKeysForAgent(agentConfig: AgentConfig): RequiredKeys {
             break;
         case "browser-use-cloud":
             required.browserUseApiKey = true;
+            break;
+        case "notte":
+            // Uses server-side credentials
             break;
         case "stagehand":
         case "stagehand-bb-cloud":
@@ -498,6 +501,13 @@ export async function POST(request: NextRequest) {
                             sessionId: dbSessionId, // Pass the shared session ID
                             browserUseApiKey,
                             ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
+                        };
+                        break;
+                    case "notte":
+                        endpoint = `${AGENT_SERVER_URL}/agent/notte`;
+                        payload = {
+                            sessionId: dbSessionId,
+                            instruction,
                         };
                         break;
                     case "stagehand":

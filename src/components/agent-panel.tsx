@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { SmoothPanel } from "./panels/smooth-panel";
 import { BUPanel } from "./panels/bu-panel";
 import { StagehandPanel } from "./panels/stagehand-panel";
+import { NottePanel } from "./panels/notte-panel";
 import { BrowserUseLogo } from "./logos/bu";
 import { SmoothLogo } from "./logos/smooth";
 import { StagehandLogo } from "./logos/stagehand";
+import { NotteLogo } from "./logos/notte";
 import { XCircle, AlertTriangle } from "lucide-react";
 
 const truncateText = (text: string, maxLength: number = 100): string => {
@@ -114,6 +116,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                     {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
                         <StagehandLogo className="h-4 w-4 shrink-0" />
                     )}
+                    {agent.name === "notte" && (
+                        <NotteLogo className="h-4 w-4 shrink-0" />
+                    )}
                     <h3 className="text-sm font-medium capitalize truncate min-w-0" title={agent.name}>
                         {getDisplayName(agent.name)}
                     </h3>
@@ -141,6 +146,15 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                         <div className="text-center p-6">
                             <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-foreground mx-auto mb-3"></div>
                             <p className="text-sm text-muted-foreground">Initializing...</p>
+                        </div>
+                    </div>
+                )}
+
+                {agent.status === "running" && !displayUrl && (
+                    <div className="h-full flex items-center justify-center">
+                        <div className="text-center p-6">
+                            <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-foreground mx-auto mb-3"></div>
+                            <p className="text-sm text-muted-foreground">Creating session...</p>
                         </div>
                     </div>
                 )}
@@ -255,12 +269,20 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                             </div>
                         )}
 
-                        {!hasRecording && displayUrl && !agentResult && (
-                            <iframe
-                                src={displayUrl}
-                                className="w-full h-full border-0"
-                                allow="camera; microphone"
-                            />
+                        {!hasRecording && !agentResult && (
+                            <div className="h-full flex items-center justify-center p-8">
+                                <div className="text-center max-w-md">
+                                    <div className="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mb-4">
+                                        <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-lg font-semibold text-foreground mb-2">Task Completed</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        The agent has finished executing the task.
+                                    </p>
+                                </div>
+                            </div>
                         )}
 
                         {agentResult && (
@@ -268,6 +290,7 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                                 {agent.name === "smooth" && <SmoothPanel agent={agent} />}
                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && <BUPanel agent={agent} />}
                                 {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && <StagehandPanel agent={agent} />}
+                                {agent.name === "notte" && <NottePanel agent={agent} />}
 
                                 {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "stagehand-bb-cloud", "stagehand-cloud", "notte"].includes(agent.name) && (
                                     <div className="space-y-3">

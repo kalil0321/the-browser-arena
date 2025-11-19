@@ -6,6 +6,7 @@ Python FastAPI server for running browser automation agents (Skyvern and Browser
 
 - **Skyvern Agent**: AI-powered web automation using computer vision
 - **Browser-Use Agent**: Multi-step browser automation with LLM reasoning
+- **Notte Agent**: Cloud browser sessions powered by the Notte Python SDK
 - **Background Execution**: Tasks run asynchronously, returning immediately with session info
 - **Convex Integration**: Persistent storage and real-time updates
 - **Live Browser URLs**: Watch agents work in real-time via live browser preview
@@ -31,6 +32,7 @@ Edit `../.env.local` with your API keys:
 
 - `CONVEX_URL`: Your Convex deployment URL
 - `ANCHOR_API_KEY`: Your Anchor Browser API key
+- `NOTTE_API_KEY`: Your Notte API key (required to enable the Notte agent)
 - `BROWSER_USE_API_KEY`: Your Browser-Use API key (optional)
 
 3. **Run the Server**
@@ -54,6 +56,31 @@ GET /
 ```
 
 Returns server status and available agents.
+
+### Run Notte Agent
+
+```bash
+POST /agent/notte
+Content-Type: application/json
+
+{
+  "sessionId": "convex_session_id",
+  "instruction": "Summarize today's top tech stories",
+  "providerModel": "google/gemini-2.5-flash",
+  "maxSteps": 20
+}
+```
+
+**Response:**
+
+```json
+{
+  "sessionId": "convex_session_id",
+  "agentId": "agent_id_from_convex",
+  "browserSessionId": "notte_session_id",
+  "liveUrl": "https://viewer.notte.cc/session/..."
+}
+```
 
 ### Run Skyvern Agent
 
@@ -154,6 +181,16 @@ python main.py
 ```bash
 # Test health check
 curl http://localhost:8080/
+
+# Test Notte endpoint
+curl -X POST http://localhost:8080/agent/notte \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AGENT_SERVER_API_KEY" \
+  -d '{
+    "sessionId": "your_convex_session_id",
+    "instruction": "Summarize the latest AI breakthroughs",
+    "providerModel": "google/gemini-2.5-flash"
+  }'
 
 # Test Skyvern endpoint
 curl -X POST http://localhost:8080/agent/skyvern \

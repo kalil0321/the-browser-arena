@@ -30,7 +30,9 @@ from pydantic import BaseModel, Field, field_validator
 
 # Import agent functions
 from browser_use_agent import run_browser_use
+from notte_agent import run_notte
 from instruction_validation import validate_instruction_field
+from notte_sdk import NotteClient
 
 
 # Configure logging
@@ -64,6 +66,15 @@ if not ANCHOR_API_KEY:
     raise ValueError("ANCHOR_API_KEY environment variable is required")
 
 anchor_browser = Anchorbrowser(api_key=ANCHOR_API_KEY)
+
+# Initialize Notte client (optional)
+NOTTE_API_KEY = os.getenv("NOTTE_API_KEY")
+if NOTTE_API_KEY:
+    notte_client = NotteClient(api_key=NOTTE_API_KEY)
+    logger.info("✅ Notte client initialized")
+else:
+    notte_client = None
+    logger.warning("NOTTE_API_KEY not set - Notte agent endpoint disabled")
 
 # Initialize API key for server authentication
 AGENT_SERVER_API_KEY = os.getenv("AGENT_SERVER_API_KEY")
@@ -246,6 +257,22 @@ class AgentResponse(BaseModel):
     agentId: str
     browserSessionId: str
     liveUrl: str
+
+
+class NotteAgentRequest(BaseModel):
+    sessionId: str
+    instruction: str = Field(
+        ...,
+        description="User instruction for the Notte agent",
+        min_length=1,
+        max_length=5000,
+    )
+    agentId: Optional[str] = None
+
+    @field_validator("instruction")
+    @classmethod
+    def validate_instruction(cls, v: str) -> str:
+        return validate_instruction_field(v)
 
 
 # Lifespan context manager
@@ -831,15 +858,153 @@ async def run_browser_use_task(
             )
 
 
+async def run_notte_task(
+    agent_id: str,
+    session_id: str,
+    instruction: str,
+    notte_session_id: str,
+):
+    """Run Notte agent in background and update Convex"""
+    task_start_time = time.time()
+    logger.info(
+        f"[Agent {agent_id[:8]}] Starting Notte task for session {session_id[:8]}"
+    )
+
+    if notte_client is None:
+        logger.error("Notte client is not configured. Cannot run Notte agent.")
+        try:
+            convex_client.mutation(
+                "mutations:updateAgentStatusFromBackend",
+                {
+                    "agentId": agent_id,
+                    "status": "failed",
+                    "error": "Notte client is not configured",
+                },
+            )
+        except Exception as convex_error:
+            logger.error(
+                f"[Agent {agent_id[:8]}] Failed to update error status in Convex: {convex_error}",
+                exc_info=True,
+            )
+        return
+
+    try:
+        # Update status to running
+        logger.info(f"[Agent {agent_id[:8]}] Updating status to 'running'")
+        try:
+            convex_client.mutation(
+                "mutations:updateAgentStatusFromBackend",
+                {"agentId": agent_id, "status": "running"},
+            )
+        except Exception as convex_error:
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Could not update status to running: {convex_error}",
+                exc_info=True,
+            )
+
+        result_payload, usage_dict, timings, browser_url = await run_notte(
+            prompt=instruction,
+            notte_client=notte_client,
+            session_id=session_id,
+            notte_session_id=notte_session_id,
+            agent_id=agent_id,
+            convex_client=convex_client,
+        )
+
+        # Update browser URL in Convex if available
+        if browser_url:
+            try:
+                convex_client.mutation(
+                    "mutations:updateAgentBrowserUrlFromBackend",
+                    {
+                        "agentId": agent_id,
+                        "url": browser_url,
+                    },
+                )
+                logger.info(f"[Agent {agent_id[:8]}] Updated browser URL in Convex")
+            except Exception as url_update_error:
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Failed to update browser URL in Convex: {url_update_error}",
+                    exc_info=True,
+                )
+
+        # Only update Convex with result if answer is not null/empty
+        answer = result_payload.get("answer")
+        if answer:
+            try:
+                convex_client.mutation(
+                    "mutations:updateAgentResultFromBackend",
+                    {
+                        "agentId": agent_id,
+                        "result": result_payload,
+                        "status": "completed",
+                    },
+                )
+                logger.info(
+                    f"[Agent {agent_id[:8]}] Updated Convex with result (answer present)"
+                )
+            except Exception as result_error:
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Failed to update result in Convex: {result_error}",
+                    exc_info=True,
+                )
+        else:
+            logger.warning(
+                f"[Agent {agent_id[:8]}] Skipping Convex update - answer is null/empty"
+            )
+            # Still update status to completed even if answer is missing
+            try:
+                convex_client.mutation(
+                    "mutations:updateAgentStatusFromBackend",
+                    {
+                        "agentId": agent_id,
+                        "status": "completed",
+                    },
+                )
+            except Exception as status_error:
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Failed to update status in Convex: {status_error}",
+                    exc_info=True,
+                )
+
+        task_duration = time.time() - task_start_time
+        logger.info(
+            f"[Agent {agent_id[:8]}] ✅ Notte agent completed in {task_duration:.2f}s"
+        )
+    except Exception as e:
+        task_duration = time.time() - task_start_time
+        logger.error(
+            f"[Agent {agent_id[:8]}] ❌ Notte agent failed after {task_duration:.2f}s: {e}",
+            exc_info=True,
+        )
+        try:
+            convex_client.mutation(
+                "mutations:updateAgentStatusFromBackend",
+                {
+                    "agentId": agent_id,
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        except Exception as convex_error:
+            logger.error(
+                f"[Agent {agent_id[:8]}] Failed to update Notte agent status in Convex: {convex_error}",
+                exc_info=True,
+            )
+
+
 # API Endpoints
 @app.get("/")
 async def root():
     """Health check endpoint"""
+    available_agents = ["browser-use"]
+    if notte_client:
+        available_agents.append("notte")
     return {
         "status": "healthy",
         "service": "agent-server",
         "version": "0.1.0",
-        "agents": ["browser-use"],
+        "agents": available_agents,
     }
 
 
@@ -982,6 +1147,74 @@ async def run_browser_use_agent(
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to start Browser-Use agent: {str(e)}"
+        )
+
+
+@app.post("/agent/notte", response_model=AgentResponse)
+async def run_notte_agent(
+    request: NotteAgentRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(verify_api_key),
+):
+    """
+    Start a Notte agent task in the background
+    """
+    if notte_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Notte agent is not configured on this server",
+        )
+
+    request_id = uuid.uuid4().hex[:8]
+    logger.info(
+        f"[Request {request_id}] Notte agent request - Session: {request.sessionId[:8]}"
+    )
+
+    try:
+        # Create agent in Convex with placeholder browser URL (will be updated after agent runs)
+        agent_id = request.agentId
+        if not agent_id:
+            agent_id = convex_client.mutation(
+                "mutations:createAgentFromBackend",
+                {
+                    "sessionId": request.sessionId,
+                    "name": "notte",
+                    "model": "",
+                    "browser": {
+                        "sessionId": "",
+                        "url": "",
+                    },
+                },
+            )
+
+        # Pass notte_session_id=None so Notte handles session creation internally
+        background_tasks.add_task(
+            run_notte_task,
+            agent_id=agent_id,
+            session_id=request.sessionId,
+            instruction=request.instruction,
+            notte_session_id=None,
+        )
+
+        logger.info(
+            f"[Request {request_id}] Notte agent started - Agent ID: {agent_id[:8]}"
+        )
+
+        return AgentResponse(
+            sessionId=request.sessionId,
+            agentId=agent_id,
+            browserSessionId="",
+            liveUrl="",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"[Request {request_id}] Failed to start Notte agent: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to start Notte agent: {str(e)}"
         )
 
 
