@@ -250,7 +250,7 @@ async def run_notte(
                         f"[Session {session_id[:8]}] Could not get browser URL for existing session"
                     )
             else:
-                session = notte_client_ref.Session(open_viewer=False)
+                session = notte_client_ref.Session()
                 session.start()
                 notte_session_id_actual = session.session_id
                 # Get browser URL for new session with polling
