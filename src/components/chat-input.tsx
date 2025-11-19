@@ -35,21 +35,28 @@ const validateAgentConfigs = (configs: any): configs is AgentConfig[] => {
 
     for (const config of configs) {
         // Check required fields
-        if (!config.agent || !config.model) {
+        if (!config.agent) {
             return false;
         }
 
         // Check if agent type is valid
-        const validAgentTypes: AgentType[] = ["stagehand", "smooth", "stagehand-bb-cloud", "browser-use", "browser-use-cloud"];
+        const validAgentTypes: AgentType[] = ["stagehand", "smooth", "stagehand-bb-cloud", "browser-use", "browser-use-cloud", "notte"];
         if (!validAgentTypes.includes(config.agent)) {
             return false;
         }
 
-        // Check if model is valid for the agent type
+        // Smooth and Notte (for now) agents don't require a model
         const validModels = MODEL_OPTIONS[config.agent as AgentType];
-        // Smooth agents don't have model options, so skip validation for them
-        if (validModels.length > 0 && !validModels.includes(config.model)) {
-            return false;
+        const isAgentWithoutModel = validModels.length === 0;
+
+        // For agents that require models, check that model is provided and valid
+        if (!isAgentWithoutModel) {
+            if (!config.model) {
+                return false;
+            }
+            if (!validModels.includes(config.model)) {
+                return false;
+            }
         }
 
         // Validate thinkingModel and executionModel if present
@@ -475,6 +482,15 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const handleDemoSubmit = async () => {
         setIsLoading(true);
         try {
+            const demoAgentsSupported = agentConfigs.every(c => c.agent === "stagehand" || c.agent === "browser-use");
+            if (!demoAgentsSupported) {
+                toast.error("Demo mode currently supports Stagehand and Browser-Use agents only.", {
+                    duration: 4000,
+                });
+                setIsLoading(false);
+                return;
+            }
+
             // Build allowed agents for demo (stagehand, browser-use) and cap to 4
 
 

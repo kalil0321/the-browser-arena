@@ -1,4 +1,4 @@
-export type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud";
+export type AgentType = "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud" | "notte";
 
 export type ModelType =
     | "google/gemini-2.5-flash"
@@ -32,7 +32,8 @@ export const AGENT_LABELS: Record<AgentType, string> = {
     "smooth": "Smooth",
     "stagehand-bb-cloud": "Stagehand Cloud", // Commented out in UI for now
     "browser-use": "BU",
-    "browser-use-cloud": "BU Cloud"
+    "browser-use-cloud": "BU Cloud",
+    "notte": "Notte",
 };
 
 export const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
@@ -40,7 +41,8 @@ export const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
     "browser-use-cloud": ["browser-use-llm", "gemini-flash-latest", "gpt-4.1", "o3", "claude-sonnet-4"],
     "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "google/gemini-3-pro-preview", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "openrouter/moonshotai/kimi-k2-thinking"],
     "smooth": [], // Smooth uses its own models
-    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "google/gemini-3-pro-preview", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-5-20250929"] // Commented out in UI for now
+    "stagehand-bb-cloud": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "google/gemini-3-pro-preview", "openai/gpt-4.1", "anthropic/claude-haiku-4.5", "openai/computer-use-preview", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-5-20250929"], // Commented out in UI for now
+    "notte": [], // Notte uses its own models (for now)
 };
 
 export interface ChatInputState {

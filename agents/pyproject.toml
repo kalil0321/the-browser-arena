@@ -11,6 +11,7 @@ dependencies = [
     "aiohttp>=3.9.0",
     "anchorbrowser>=0.1.0",
     "browser-use @ git+https://github.com/browser-use/browser-use.git",
+    "notte-sdk>=1.7.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "convex>=0.5.0",
@@ -20,7 +21,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["browser_use_agent", "skyvern_agent"]
+packages = ["browser_use_agent", "skyvern_agent", "notte_agent"]
 
 [tool.setuptools.package-data]
 "*" = ["*.py"]

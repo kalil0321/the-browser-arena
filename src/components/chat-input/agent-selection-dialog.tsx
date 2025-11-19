@@ -50,9 +50,12 @@ export function AgentSelectionDialog({
         if (tempAgentConfigs.length >= 4) {
             return; // Max limit reached
         }
-        const defaultModel = MODEL_OPTIONS[agent][0] || "google/gemini-2.5-flash";
+        // For agents without model options (smooth, notte), use empty string
+        const defaultModel = MODEL_OPTIONS[agent].length > 0
+            ? MODEL_OPTIONS[agent][0]
+            : "";
         const newId = `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        setTempAgentConfigs([...tempAgentConfigs, { id: newId, agent, model: defaultModel }]);
+        setTempAgentConfigs([...tempAgentConfigs, { id: newId, agent, model: defaultModel as ModelType }]);
     };
 
     const removeAgentInstance = (index: number) => {
@@ -207,7 +210,7 @@ export function AgentSelectionDialog({
                                                                         </div>
                                                                     ) : (
                                                                         <span className="text-xs text-muted-foreground">
-                                                                            {AGENT_LABELS[agentType]} (no model selection)
+                                                                            {AGENT_LABELS[agentType]}
                                                                         </span>
                                                                     )}
                                                                 </div>

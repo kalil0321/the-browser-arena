@@ -39,38 +39,11 @@ import type {
     ArenaDataPayload,
     ArenaStats,
     SessionDoc as SessionRow,
-} from "../../../types/arena";
+} from "@/types/arena";
 
 export default function ArenaPage() {
-    // Toggle via NEXT_PUBLIC_ARENA_BENCHMARK to capture baseline query timings before refactors.
-    const benchmarkEnabled = process.env.NEXT_PUBLIC_ARENA_BENCHMARK === "true";
-    const benchmarkRef = useRef<{
-        mount: number | null;
-        queryEnd: number | null;
-    }>({
-        mount: typeof performance !== "undefined" ? performance.now() : null,
-        queryEnd: null,
-    });
-
-    // Aggregated data usage in Arena view (getArenaData payload):
-    // - sessions -> table rows + instruction metadata
-    // - agentsBySession -> per-session badges, model lists, status filter availability
-    // - stats -> high-level cards + unique agent/model options
     const arenaData = useQuery(api.queries.getArenaData) as ArenaDataPayload | undefined;
     const stats = arenaData?.stats;
-
-    useEffect(() => {
-        if (!benchmarkEnabled || typeof performance === "undefined") return;
-        if (!arenaData || benchmarkRef.current.queryEnd !== null) return;
-        const end = performance.now();
-        benchmarkRef.current.queryEnd = end;
-        if (benchmarkRef.current.mount !== null) {
-            const duration = end - benchmarkRef.current.mount;
-            console.log(
-                `[arena-benchmark] getArenaData resolved in ${duration.toFixed(2)}ms`
-            );
-        }
-    }, [arenaData, benchmarkEnabled]);
 
     const agentsBySession = useMemo<AgentsBySessionMap>(() => {
         if (!arenaData?.agentsBySession) return new Map<Id<"sessions">, AgentDoc[]>();
