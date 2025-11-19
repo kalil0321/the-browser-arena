@@ -1,4 +1,4 @@
-import type { Doc, Id } from "../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 
 export type SessionDoc = Doc<"sessions">;
 export type AgentDoc = Doc<"agents">;

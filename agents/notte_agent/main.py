@@ -510,6 +510,13 @@ async def run_notte(
             except Exception:
                 duration = 0.0
 
+        # If duration is still 0, use actual execution time from timings as fallback
+        if duration == 0.0 and timings:
+            # Prefer agent_execution time, fallback to total time
+            duration = timings.get("agent_execution", 0.0)
+            if duration == 0.0:
+                duration = timings.get("total", 0.0)
+
         # Extract usage information
         if response is not None:
             credit_usage = getattr(response, "credit_usage", None) or 0.0

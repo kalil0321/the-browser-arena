@@ -3,7 +3,7 @@ import type {
     AgentsBySessionRecord,
     ArenaStats,
     SessionDoc,
-} from "../../types/arena";
+} from "../../src/types/arena";
 
 export const filterPublicSessions = (sessions: SessionDoc[]): SessionDoc[] =>
     sessions.filter((session) => !(session.isPrivate ?? false));
