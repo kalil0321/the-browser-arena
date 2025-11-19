@@ -1,8 +1,13 @@
 import asyncio
 import logging
 import time
-from typing import Dict
-from notte_sdk import NotteClient
+from typing import Dict, Any
+
+try:
+    from notte_sdk import NotteClient
+except ImportError:
+    # Notte SDK not installed - NotteClient will be Any type
+    NotteClient = Any  # type: ignore
 
 logger = logging.getLogger("notte-agent")
 

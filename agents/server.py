@@ -30,9 +30,23 @@ from pydantic import BaseModel, Field, field_validator
 
 # Import agent functions
 from browser_use_agent import run_browser_use
-from notte_agent import run_notte
 from instruction_validation import validate_instruction_field
-from notte_sdk import NotteClient
+
+try:
+    from notte_agent import run_notte
+    from notte_sdk import NotteClient
+
+    NOTTE_AVAILABLE = True
+except ImportError as e:
+    # Logging not configured yet, use print or basic logging
+    import warnings
+
+    warnings.warn(
+        f"Notte SDK not available: {e}. Notte agent will be disabled.", ImportWarning
+    )
+    run_notte = None  # type: ignore
+    NotteClient = None  # type: ignore
+    NOTTE_AVAILABLE = False
 
 
 # Configure logging
@@ -68,12 +82,24 @@ if not ANCHOR_API_KEY:
 anchor_browser = Anchorbrowser(api_key=ANCHOR_API_KEY)
 
 # Initialize Notte client (optional)
+notte_client = None
 NOTTE_API_KEY = os.getenv("NOTTE_API_KEY")
-if NOTTE_API_KEY:
-    notte_client = NotteClient(api_key=NOTTE_API_KEY)
-    logger.info("✅ Notte client initialized")
+if NOTTE_API_KEY and NOTTE_AVAILABLE and NotteClient is not None:
+    try:
+        notte_client = NotteClient(api_key=NOTTE_API_KEY)
+        logger.info("✅ Notte client initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Notte client: {e}")
+        notte_client = None
+elif NOTTE_API_KEY and not NOTTE_AVAILABLE:
+    logger.warning(
+        "NOTTE_API_KEY set but Notte SDK not available - Notte agent disabled"
+    )
+elif NOTTE_API_KEY:
+    logger.warning(
+        "NOTTE_API_KEY set but NotteClient not available - Notte agent disabled"
+    )
 else:
-    notte_client = None
     logger.warning("NOTTE_API_KEY not set - Notte agent endpoint disabled")
 
 # Initialize API key for server authentication
@@ -870,15 +896,20 @@ async def run_notte_task(
         f"[Agent {agent_id[:8]}] Starting Notte task for session {session_id[:8]}"
     )
 
-    if notte_client is None:
-        logger.error("Notte client is not configured. Cannot run Notte agent.")
+    if notte_client is None or run_notte is None:
+        error_msg = (
+            "Notte client is not configured"
+            if notte_client is None
+            else "Notte SDK is not available"
+        )
+        logger.error(f"{error_msg}. Cannot run Notte agent.")
         try:
             convex_client.mutation(
                 "mutations:updateAgentStatusFromBackend",
                 {
                     "agentId": agent_id,
                     "status": "failed",
-                    "error": "Notte client is not configured",
+                    "error": error_msg,
                 },
             )
         except Exception as convex_error:
@@ -1159,10 +1190,15 @@ async def run_notte_agent(
     """
     Start a Notte agent task in the background
     """
-    if notte_client is None:
+    if notte_client is None or run_notte is None:
+        error_detail = "Notte agent is not configured on this server"
+        if run_notte is None:
+            error_detail = (
+                "Notte SDK is not available. Please ensure notte-sdk is installed."
+            )
         raise HTTPException(
             status_code=503,
-            detail="Notte agent is not configured on this server",
+            detail=error_detail,
         )
 
     request_id = uuid.uuid4().hex[:8]

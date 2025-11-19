@@ -31,20 +31,10 @@ COPY pyproject.toml uv.lock ./
 # Copy the rest of the application
 COPY . .
 
-# Install Python dependencies using uv
+# Install Python dependencies using uv from lock file
 # Using --system installs packages system-wide (no virtual environment in Docker)
-# Install dependencies directly from pyproject.toml (without installing the package itself)
-RUN uv pip install --system \
-    "aiohttp>=3.9.0" \
-    "anchorbrowser>=0.1.0" \
-    "browser-use>=0.9.0" \
-    "notte-sdk>=1.7.0" \
-    "fastapi>=0.115.0" \
-    "uvicorn[standard]>=0.32.0" \
-    "convex>=0.5.0" \
-    "python-dotenv>=1.0.0" \
-    "pydantic>=2.10.0" \
-    "filetype>=1.2.0"
+# uv pip sync installs exact versions from uv.lock file for reproducible builds
+RUN uv pip sync --system uv.lock
 
 # Create directory for temporary file uploads
 RUN mkdir -p /tmp/browser_arena_uploads
