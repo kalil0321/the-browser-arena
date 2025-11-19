@@ -17,9 +17,10 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (git required for browser-use from git)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager
@@ -28,13 +29,21 @@ RUN pip install uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Copy the rest of the application
+# Copy the rest of the application first (but we'll regenerate requirements.txt)
 COPY . .
 
-# Install Python dependencies using uv from lock file
+# Export dependencies from lock file to requirements.txt format
+# This overwrites any local requirements.txt with a clean one from the lock file
+# Filter out editable install (-e .) and status messages
+RUN uv export --format requirements-txt --no-hashes 2>/dev/null | \
+    grep -v "^-e" | \
+    grep -v "^Resolved" | \
+    grep -v "^$" > requirements.txt
+
+# Install Python dependencies using uv from exported requirements file
 # Using --system installs packages system-wide (no virtual environment in Docker)
-# uv pip sync installs exact versions from uv.lock file for reproducible builds
-RUN uv pip sync --system uv.lock
+# uv pip sync installs exact versions for reproducible builds
+RUN uv pip sync --system requirements.txt
 
 # Create directory for temporary file uploads
 RUN mkdir -p /tmp/browser_arena_uploads
