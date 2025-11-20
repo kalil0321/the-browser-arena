@@ -12,6 +12,7 @@ import { AgentType, ModelType, AgentConfig, AGENT_LABELS, MODEL_OPTIONS } from "
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
+import { NotteLogo } from "@/components/logos/notte";
 import { formatModelName, getProviderName, ProviderLogo } from "./helpers";
 
 interface AgentSelectionDialogProps {
@@ -124,6 +125,9 @@ export function AgentSelectionDialog({
                                                 )}
                                                 {agentType === "stagehand" && (
                                                     <StagehandLogo className="h-4 w-4" />
+                                                )}
+                                                {agentType === "notte" && (
+                                                    <NotteLogo className="h-4 w-4" />
                                                 )}
                                                 <Label className="text-sm font-semibold font-default">
                                                     {AGENT_LABELS[agentType]}
