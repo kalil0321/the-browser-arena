@@ -461,20 +461,6 @@ export function NottePanel({ agent }: NottePanelProps) {
                     </div>
                 </div>
             )}
-
-            {/* Raw Output (Collapsible) */}
-            <details className="bg-card rounded-lg border">
-                <summary className="p-4 cursor-pointer hover:bg-muted/30 transition-colors">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground inline">
-                        Raw Output
-                    </h4>
-                </summary>
-                <div className="p-4 pt-0">
-                    <pre className="text-xs bg-muted/60 p-3 rounded max-h-[400px] overflow-y-auto whitespace-pre-wrap font-mono">
-                        {JSON.stringify(result, null, 2)}
-                    </pre>
-                </div>
-            </details>
         </div>
     );
 }
