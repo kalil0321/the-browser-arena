@@ -4,42 +4,44 @@ import { useEffect, useState, useCallback, useRef } from "react";
 
 interface Obstacle {
     position: number;
-    height: number;
-    type: 'cactus' | 'bird';
+    lane: number; // 0, 1, or 2 (left, center, right)
+    type: 'popup' | 'ad' | 'cookie' | 'bot';
     scored?: boolean;
 }
 
-interface Cloud {
+interface Collectible {
     position: number;
-    yPosition: number;
-    speed: number;
+    lane: number;
+    type: 'coin' | 'powerup';
 }
 
 export function LoadingDino() {
+    const [currentLane, setCurrentLane] = useState(1); // 0 = left, 1 = center, 2 = right
     const [isJumping, setIsJumping] = useState(false);
-    const [isDucking, setIsDucking] = useState(false);
     const [obstacles, setObstacles] = useState<Obstacle[]>([]);
-    const [clouds, setClouds] = useState<Cloud[]>([
-        { position: 20, yPosition: 20, speed: 0.3 },
-        { position: 60, yPosition: 35, speed: 0.2 },
-        { position: 90, yPosition: 15, speed: 0.25 }
-    ]);
+    const [collectibles, setCollectibles] = useState<Collectible[]>([]);
     const [score, setScore] = useState(0);
     const [bestScore, setBestScore] = useState(0);
     const [groundOffset, setGroundOffset] = useState(0);
-    const [legFrame, setLegFrame] = useState(0);
     const [gameOver, setGameOver] = useState(false);
     const [obstacleSpeed, setObstacleSpeed] = useState(1.5);
     const gameContainerRef = useRef<HTMLDivElement>(null);
     const scoreRef = useRef(0);
     const obstacleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const collectibleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Load best score from localStorage on mount
     useEffect(() => {
-        const saved = localStorage.getItem('dino-best-score');
+        const saved = localStorage.getItem('browser-runner-best-score');
         if (saved) {
             setBestScore(parseInt(saved, 10));
         }
+    }, []);
+
+    // Get lane X position (percentage)
+    const getLaneX = useCallback((lane: number) => {
+        const lanePositions = [20, 50, 80]; // Left, Center, Right lanes
+        return lanePositions[lane];
     }, []);
 
     // Collision detection function
@@ -49,67 +51,79 @@ export function LoadingDino() {
         const containerWidth = gameContainerRef.current.offsetWidth;
         const containerHeight = 256; // h-64 = 256px
 
-        // Hitbox padding for fairer gameplay (reduce visual size by this amount)
-        const hitboxPadding = 5;
+        // Hitbox padding for fairer gameplay
+        const hitboxPadding = 8;
 
-        // Dino horizontal position - left-16 means left: 64px (16 * 4 = 64px based on Tailwind spacing)
-        const dinoLeftPx = 64 + hitboxPadding;
-        const dinoWidth = 50 - (hitboxPadding * 2);
-        const dinoRightPx = dinoLeftPx + dinoWidth;
+        // Cursor horizontal position based on lane
+        const cursorLaneX = getLaneX(currentLane);
+        const cursorLeftPx = (cursorLaneX / 100) * containerWidth - 15 + hitboxPadding;
+        const cursorWidth = 30 - (hitboxPadding * 2);
+        const cursorRightPx = cursorLeftPx + cursorWidth;
 
-        // Dino vertical position
-        const dinoBottomFromBottom = isJumping ? 120 : 64;
-        const dinoHeight = isDucking ? 35 : 55;
-        const dinoTopPx = containerHeight - dinoBottomFromBottom - dinoHeight + hitboxPadding;
-        const dinoBottomPx = containerHeight - dinoBottomFromBottom;
+        // Cursor vertical position
+        const cursorBottomFromBottom = isJumping ? 120 : 64;
+        const cursorHeight = 30;
+        const cursorTopPx = containerHeight - cursorBottomFromBottom - cursorHeight + hitboxPadding;
+        const cursorBottomPx = containerHeight - cursorBottomFromBottom;
 
         for (const obstacle of obstacles) {
-            // Obstacle uses left percentage (left: X%)
-            // position: 100 means at right edge, position: 0 means at left edge
-            const obstacleLeftPercent = obstacle.position;
-            const obstacleWidth = obstacle.type === 'cactus' ? 30 : 40;
-            const obstacleLeftPx = (obstacleLeftPercent / 100) * containerWidth + hitboxPadding;
+            // Only check collision if obstacle is in the same lane
+            if (obstacle.lane !== currentLane) continue;
+
+            // Obstacle horizontal position: combine position (0-100%) with lane offset (matching rendering logic)
+            const laneOffset = getLaneX(obstacle.lane) - 50; // Offset from center
+            const obstacleBaseLeftPx = (obstacle.position / 100) * containerWidth;
+            const obstacleLaneOffsetPx = (laneOffset / 100) * containerWidth;
+            const obstacleCenterPx = obstacleBaseLeftPx + obstacleLaneOffsetPx;
+            const obstacleWidth = obstacle.type === 'popup' ? 40 : obstacle.type === 'bot' ? 35 : 30;
+            const obstacleLeftPx = obstacleCenterPx - obstacleWidth / 2 + hitboxPadding;
             const obstacleRightPx = obstacleLeftPx + obstacleWidth - (hitboxPadding * 2);
 
-            // Obstacle vertical position
-            // Cactus: bottom: 64px, Bird: bottom: 100px
-            const obstacleBottomFromBottom = obstacle.type === 'bird' ? 100 : 64;
-            const obstacleHeight = obstacle.type === 'cactus' ? 48 : 25;
+            // Obstacle vertical position - all obstacles are on the ground
+            const obstacleBottomFromBottom = 64;
+            const obstacleHeight = obstacle.type === 'popup' ? 50 : obstacle.type === 'bot' ? 40 : 35;
             const obstacleTopPx = containerHeight - obstacleBottomFromBottom - obstacleHeight + hitboxPadding;
             const obstacleBottomPx = containerHeight - obstacleBottomFromBottom;
 
-            // AABB collision detection: check if bounding boxes overlap
-            const horizontalOverlap = dinoRightPx > obstacleLeftPx && dinoLeftPx < obstacleRightPx;
-            const verticalOverlap = dinoBottomPx > obstacleTopPx && dinoTopPx < obstacleBottomPx;
+            // AABB collision detection
+            const horizontalOverlap = cursorRightPx > obstacleLeftPx && cursorLeftPx < obstacleRightPx;
+            const verticalOverlap = cursorBottomPx > obstacleTopPx && cursorTopPx < obstacleBottomPx;
 
             if (horizontalOverlap && verticalOverlap) {
                 return true;
             }
         }
         return false;
-    }, [obstacles, isJumping, isDucking]);
+    }, [obstacles, currentLane, isJumping, getLaneX]);
 
     const handleJump = useCallback(() => {
-        if (!isJumping && !isDucking && !gameOver) {
+        if (!isJumping && !gameOver) {
             setIsJumping(true);
             setTimeout(() => setIsJumping(false), 600);
         }
-    }, [isJumping, isDucking, gameOver]);
-
-    const handleDuck = useCallback((duck: boolean) => {
-        if (!isJumping && !gameOver) {
-            setIsDucking(duck);
-        }
     }, [isJumping, gameOver]);
+
+    const handleMoveLeft = useCallback(() => {
+        if (!gameOver && currentLane > 0) {
+            setCurrentLane(currentLane - 1);
+        }
+    }, [currentLane, gameOver]);
+
+    const handleMoveRight = useCallback(() => {
+        if (!gameOver && currentLane < 2) {
+            setCurrentLane(currentLane + 1);
+        }
+    }, [currentLane, gameOver]);
 
     const resetGame = useCallback(() => {
         setGameOver(false);
         setScore(0);
         scoreRef.current = 0;
         setObstacles([]);
+        setCollectibles([]);
         setObstacleSpeed(1.5);
         setIsJumping(false);
-        setIsDucking(false);
+        setCurrentLane(1);
     }, []);
 
     // Handle animation loop
@@ -125,13 +139,12 @@ export function LoadingDino() {
                         position: obs.position - obstacleSpeed,
                     };
 
-                    // Add score when obstacle passes the dino (dino is at left: 64px, which is about 10-15% of screen)
-                    // Score when obstacle passes position 15 and hasn't been scored yet
-                    if (newObs.position < 15 && !newObs.scored) {
+                    // Add score when obstacle passes the cursor
+                    if (newObs.position < 40 && !newObs.scored) {
                         newObs.scored = true;
                         scoreRef.current += 1;
                         setScore(scoreRef.current);
-                        // Increase speed every 5 points, more gradually
+                        // Increase speed every 5 points
                         if (scoreRef.current % 5 === 0) {
                             setObstacleSpeed((speed) => Math.min(speed + 0.15, 4));
                         }
@@ -143,21 +156,24 @@ export function LoadingDino() {
                 return updated;
             });
 
-            // Animate clouds
-            setClouds((prev) =>
-                prev.map((cloud) => ({
-                    ...cloud,
-                    position: cloud.position - cloud.speed,
-                })).map((cloud) =>
-                    cloud.position < -10 ? { ...cloud, position: 110 } : cloud
-                )
-            );
+            // Animate collectibles
+            setCollectibles((prev) => {
+                return prev.map((col) => ({
+                    ...col,
+                    position: col.position - obstacleSpeed,
+                })).filter((col) => {
+                    // Check if cursor collected this collectible (collectibles are floating, so can be collected when jumping)
+                    if (col.lane === currentLane && col.position < 50 && col.position > 30) {
+                        scoreRef.current += col.type === 'coin' ? 5 : 10;
+                        setScore(scoreRef.current);
+                        return false;
+                    }
+                    return col.position > -10;
+                });
+            });
 
-            // Animate ground
+            // Animate ground (browser tabs)
             setGroundOffset((prev) => (prev + obstacleSpeed * 0.8) % 20);
-
-            // Animate legs
-            setLegFrame((prev) => (prev + 1) % 4);
 
             // Check for collisions
             if (checkCollision()) {
@@ -165,7 +181,7 @@ export function LoadingDino() {
                 // Update best score if current score is higher
                 if (scoreRef.current > bestScore) {
                     setBestScore(scoreRef.current);
-                    localStorage.setItem('dino-best-score', scoreRef.current.toString());
+                    localStorage.setItem('browser-runner-best-score', scoreRef.current.toString());
                 }
             }
         }, 50);
@@ -179,28 +195,22 @@ export function LoadingDino() {
                 } else {
                     handleJump();
                 }
-            } else if (e.code === "ArrowDown") {
+            } else if (e.code === "ArrowLeft") {
                 e.preventDefault();
-                handleDuck(true);
-            }
-        };
-
-        const handleKeyUp = (e: KeyboardEvent) => {
-            if (e.code === "ArrowDown") {
+                handleMoveLeft();
+            } else if (e.code === "ArrowRight") {
                 e.preventDefault();
-                handleDuck(false);
+                handleMoveRight();
             }
         };
 
         window.addEventListener("keydown", handleKeyDown);
-        window.addEventListener("keyup", handleKeyUp);
 
         return () => {
             clearInterval(interval);
             window.removeEventListener("keydown", handleKeyDown);
-            window.removeEventListener("keyup", handleKeyUp);
         };
-    }, [handleJump, handleDuck, checkCollision, obstacleSpeed, gameOver, resetGame, bestScore]);
+    }, [handleJump, handleMoveLeft, handleMoveRight, checkCollision, obstacleSpeed, gameOver, resetGame, bestScore, currentLane, isJumping]);
 
     // Handle obstacle spawning separately
     useEffect(() => {
@@ -214,12 +224,13 @@ export function LoadingDino() {
 
         const addObstacle = () => {
             const random = Math.random();
-            const obstacleType: 'cactus' | 'bird' = random > 0.7 ? 'bird' : 'cactus';
-            const height = obstacleType === 'bird' ? (random > 0.8 ? 20 : 14) : 12;
+            const lane = Math.floor(Math.random() * 3); // Random lane 0, 1, or 2
+            const obstacleTypes: Array<'popup' | 'ad' | 'cookie' | 'bot'> = ['popup', 'ad', 'cookie', 'bot'];
+            const obstacleType = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
 
             setObstacles((prev) => [
                 ...prev,
-                { position: 100, height, type: obstacleType, scored: false }
+                { position: 100, lane, type: obstacleType, scored: false }
             ]);
         };
 
@@ -236,6 +247,38 @@ export function LoadingDino() {
         return () => {
             if (obstacleTimeoutRef.current) {
                 clearTimeout(obstacleTimeoutRef.current);
+            }
+        };
+    }, [gameOver]);
+
+    // Handle collectible spawning
+    useEffect(() => {
+        if (gameOver) return;
+
+        const addCollectible = () => {
+            const random = Math.random();
+            if (random > 0.7) { // 30% chance to spawn collectible
+                const lane = Math.floor(Math.random() * 3);
+                const type: 'coin' | 'powerup' = random > 0.85 ? 'powerup' : 'coin';
+                setCollectibles((prev) => [
+                    ...prev,
+                    { position: 100, lane, type }
+                ]);
+            }
+        };
+
+        const scheduleNextCollectible = () => {
+            collectibleTimeoutRef.current = setTimeout(() => {
+                addCollectible();
+                scheduleNextCollectible();
+            }, 1500);
+        };
+
+        scheduleNextCollectible();
+
+        return () => {
+            if (collectibleTimeoutRef.current) {
+                clearTimeout(collectibleTimeoutRef.current);
             }
         };
     }, [gameOver]);
@@ -273,145 +316,176 @@ export function LoadingDino() {
                     {/* Game Container */}
                     <div
                         ref={gameContainerRef}
-                        className="relative h-64 bg-muted rounded-xl overflow-hidden border-2 border-border shadow-inner"
+                        className="relative h-64 bg-gradient-to-b from-blue-50/50 to-blue-100/30 dark:from-blue-950/30 dark:to-blue-900/20 rounded-xl overflow-hidden border-2 border-border shadow-inner"
                     >
-                        {/* Clouds */}
-                        {clouds.map((cloud, index) => (
-                            <div
-                                key={index}
-                                className="absolute"
-                                style={{
-                                    left: `${cloud.position}%`,
-                                    top: `${cloud.yPosition}%`,
-                                    willChange: 'left',
-                                }}
-                            >
-                                <svg width="50" height="20" viewBox="0 0 50 20" className="opacity-40">
-                                    <ellipse cx="12" cy="12" rx="8" ry="6" fill="currentColor" className="text-muted-foreground" />
-                                    <ellipse cx="22" cy="10" rx="10" ry="8" fill="currentColor" className="text-muted-foreground" />
-                                    <ellipse cx="35" cy="12" rx="8" ry="6" fill="currentColor" className="text-muted-foreground" />
-                                </svg>
-                            </div>
-                        ))}
-
-                        {/* Ground with pattern */}
-                        <div className="absolute bottom-0 left-0 right-0 h-16 bg-secondary/20">
-                            {/* Ground line pattern */}
-                            <div
-                                className="absolute top-0 left-0 right-0 h-0.5 text-border"
-                                style={{
-                                    backgroundImage: 'repeating-linear-gradient(to right, currentColor 0, currentColor 10px, transparent 10px, transparent 20px)',
-                                    transform: `translateX(-${groundOffset}px)`,
-                                }}
-                            ></div>
+                        {/* Background browser windows */}
+                        <div className="absolute inset-0 opacity-20">
+                            {[0, 1, 2].map((i) => (
+                                <div
+                                    key={i}
+                                    className="absolute"
+                                    style={{
+                                        left: `${20 + i * 30}%`,
+                                        top: `${15 + i * 10}%`,
+                                        transform: `translateX(-${groundOffset * 0.3}px)`,
+                                    }}
+                                >
+                                    <svg width="40" height="30" viewBox="0 0 40 30" className="text-muted-foreground">
+                                        <rect x="0" y="0" width="40" height="30" fill="currentColor" rx="2" />
+                                        <rect x="2" y="2" width="36" height="6" fill="currentColor" opacity="0.3" rx="1" />
+                                        <rect x="4" y="10" width="32" height="2" fill="currentColor" opacity="0.2" />
+                                        <rect x="4" y="14" width="24" height="2" fill="currentColor" opacity="0.2" />
+                                    </svg>
+                                </div>
+                            ))}
                         </div>
 
-                        {/* Dino */}
+                        {/* Lane dividers */}
+                        <div className="absolute inset-0 flex">
+                            {[0, 1, 2].map((lane) => (
+                                <div
+                                    key={lane}
+                                    className="flex-1 border-r border-border/30 last:border-r-0"
+                                    style={{ borderStyle: 'dashed' }}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Ground with browser tabs */}
+                        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-blue-200/40 to-blue-100/20 dark:from-blue-800/40 dark:to-blue-900/20">
+                            {/* Browser tabs pattern */}
+                            <div
+                                className="absolute top-0 left-0 right-0 h-8 flex gap-2"
+                                style={{
+                                    transform: `translateX(-${groundOffset}px)`,
+                                }}
+                            >
+                                {Array.from({ length: 20 }).map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className="w-16 h-6 bg-card/60 rounded-t-lg border border-border/50 flex items-center justify-center"
+                                    >
+                                        <div className="w-2 h-2 bg-primary/40 rounded-full"></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Cursor Character */}
                         <div
-                            className={`absolute left-16 transition-all ${isJumping ? 'duration-300 ease-out' : 'duration-200 ease-in'
-                                }`}
+                            className="absolute transition-all duration-200 ease-out"
                             style={{
+                                left: `${getLaneX(currentLane)}%`,
                                 bottom: isJumping ? '120px' : '64px',
-                                width: "50px",
-                                height: isDucking ? "35px" : "55px",
+                                transform: 'translateX(-50%)',
+                                width: "30px",
+                                height: "30px",
                                 transition: isJumping
-                                    ? 'bottom 0.3s cubic-bezier(0.33, 1, 0.68, 1), height 0.1s ease'
-                                    : 'bottom 0.2s cubic-bezier(0.6, -0.28, 0.74, 0.05), height 0.1s ease',
-                                willChange: 'bottom, height',
+                                    ? 'bottom 0.3s cubic-bezier(0.33, 1, 0.68, 1), left 0.2s ease-out'
+                                    : 'bottom 0.2s cubic-bezier(0.6, -0.28, 0.74, 0.05), left 0.2s ease-out',
+                                willChange: 'bottom, left',
                             }}
                         >
                             <svg
-                                viewBox={isDucking ? "0 20 50 30" : "0 0 50 55"}
+                                viewBox="0 0 30 30"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
                                 className="w-full h-full drop-shadow-lg"
                             >
-                                {!isDucking ? (
-                                    <>
-                                        {/* Head */}
-                                        <rect x="8" y="5" width="20" height="18" fill="currentColor" className="text-primary" rx="2" />
-                                        <rect x="25" y="10" width="8" height="8" fill="currentColor" className="text-primary" />
-
-                                        {/* Eye */}
-                                        <circle cx="18" cy="13" r="3" fill="currentColor" className="text-white" />
-                                        <circle cx="18" cy="13" r="1.5" fill="currentColor" className="text-gray-900" />
-
-                                        {/* Body */}
-                                        <rect x="10" y="23" width="25" height="20" fill="currentColor" className="text-primary" rx="2" />
-
-                                        {/* Arms */}
-                                        <rect x="7" y="28" width="5" height="8" fill="currentColor" className="text-primary/80" rx="1" />
-                                        <rect x="33" y="28" width="5" height="8" fill="currentColor" className="text-primary/80" rx="1" />
-
-                                        {/* Legs with animation */}
-                                        <rect
-                                            x={legFrame < 2 ? "15" : "17"}
-                                            y="43"
-                                            width="7"
-                                            height="12"
-                                            fill="currentColor"
-                                            className="text-primary/80"
-                                            rx="1"
-                                        />
-                                        <rect
-                                            x={legFrame < 2 ? "26" : "24"}
-                                            y="43"
-                                            width="7"
-                                            height="12"
-                                            fill="currentColor"
-                                            className="text-primary/80"
-                                            rx="1"
-                                        />
-
-                                        {/* Tail */}
-                                        <polygon points="35,30 43,28 43,35 35,35" fill="currentColor" className="text-primary/80" />
-                                    </>
-                                ) : (
-                                    <>
-                                        {/* Ducking pose */}
-                                        <rect x="8" y="20" width="35" height="18" fill="currentColor" className="text-primary" rx="2" />
-                                        <rect x="8" y="15" width="15" height="12" fill="currentColor" className="text-primary" rx="2" />
-                                        <circle cx="15" cy="20" r="2" fill="currentColor" className="text-white" />
-                                        <circle cx="15" cy="20" r="1" fill="currentColor" className="text-gray-900" />
-                                        <polygon points="43,25 48,23 48,28 43,28" fill="currentColor" className="text-primary/80" />
-                                    </>
-                                )}
+                                {/* Cursor pointer */}
+                                <path
+                                    d="M 3 3 L 3 18 L 10 18 L 10 25 L 20 12 L 12 12 L 20 3 Z"
+                                    fill="currentColor"
+                                    className="text-primary"
+                                    stroke="white"
+                                    strokeWidth="1.5"
+                                    strokeLinejoin="round"
+                                />
                             </svg>
                         </div>
 
-                        {/* Obstacles */}
-                        {obstacles.map((obstacle, index) => (
-                            <div
-                                key={index}
-                                className="absolute"
-                                style={{
-                                    left: `${obstacle.position}%`,
-                                    bottom: obstacle.type === 'bird' ? '100px' : '64px',
-                                    willChange: 'left',
-                                }}
-                            >
-                                {obstacle.type === 'cactus' ? (
-                                    <svg width="30" height="48" viewBox="0 0 30 48" className="drop-shadow-md">
-                                        <rect x="11" y="10" width="8" height="38" fill="currentColor" className="text-primary/80" rx="2" />
-                                        <rect x="5" y="20" width="8" height="15" fill="currentColor" className="text-primary/80" rx="2" />
-                                        <rect x="17" y="15" width="8" height="18" fill="currentColor" className="text-primary/80" rx="2" />
-                                        {/* Spikes */}
-                                        <circle cx="15" cy="12" r="2" fill="currentColor" className="text-accent" />
-                                        <circle cx="15" cy="22" r="2" fill="currentColor" className="text-accent" />
-                                        <circle cx="15" cy="32" r="2" fill="currentColor" className="text-accent" />
+                        {/* Collectibles */}
+                        {collectibles.map((collectible, index) => {
+                            const laneOffset = getLaneX(collectible.lane) - 50; // Offset from center
+                            return (
+                                <div
+                                    key={`collectible-${index}`}
+                                    className="absolute"
+                                    style={{
+                                        left: `calc(${collectible.position}% + ${laneOffset}%)`,
+                                        bottom: '80px',
+                                        transform: 'translateX(-50%)',
+                                        willChange: 'left',
+                                    }}
+                                >
+                                {collectible.type === 'coin' ? (
+                                    <svg width="20" height="20" viewBox="0 0 20 20" className="drop-shadow-md animate-bounce" style={{ animationDuration: '0.8s' }}>
+                                        <circle cx="10" cy="10" r="8" fill="currentColor" className="text-yellow-500" />
+                                        <circle cx="10" cy="10" r="6" fill="currentColor" className="text-yellow-400" />
+                                        <text x="10" y="13" textAnchor="middle" className="text-xs font-bold fill-yellow-900">$</text>
                                     </svg>
                                 ) : (
-                                    <svg width="40" height="25" viewBox="0 0 40 25" className="drop-shadow-md animate-bounce" style={{ animationDuration: '0.5s' }}>
-                                        {/* Bird */}
-                                        <ellipse cx="20" cy="12" rx="15" ry="8" fill="currentColor" className="text-muted-foreground" />
-                                        <polygon points="5,12 0,10 0,14" fill="currentColor" className="text-muted-foreground" />
-                                        <polygon points="35,12 40,10 40,14" fill="currentColor" className="text-muted-foreground" />
-                                        <circle cx="23" cy="10" r="2" fill="currentColor" className="text-white" />
-                                        <circle cx="28" cy="12" r="3" fill="currentColor" className="text-accent" />
+                                    <svg width="24" height="24" viewBox="0 0 24 24" className="drop-shadow-md animate-bounce" style={{ animationDuration: '0.8s' }}>
+                                        <circle cx="12" cy="12" r="10" fill="currentColor" className="text-green-500" />
+                                        <path d="M 8 12 L 11 15 L 16 9" stroke="currentColor" strokeWidth="2" fill="none" className="text-white" />
                                     </svg>
                                 )}
-                            </div>
-                        ))}
+                                </div>
+                            );
+                        })}
+
+                        {/* Obstacles */}
+                        {obstacles.map((obstacle, index) => {
+                            const laneOffset = getLaneX(obstacle.lane) - 50; // Offset from center
+                            return (
+                                <div
+                                    key={index}
+                                    className="absolute"
+                                    style={{
+                                        left: `calc(${obstacle.position}% + ${laneOffset}%)`,
+                                        bottom: '64px',
+                                        transform: 'translateX(-50%)',
+                                        willChange: 'left',
+                                    }}
+                                >
+                                {obstacle.type === 'popup' ? (
+                                    <svg width="40" height="50" viewBox="0 0 40 50" className="drop-shadow-md">
+                                        <rect x="0" y="0" width="40" height="50" fill="currentColor" className="text-red-500" rx="2" />
+                                        <rect x="2" y="2" width="36" height="8" fill="currentColor" className="text-red-600" rx="1" />
+                                        <circle cx="8" cy="6" r="2" fill="currentColor" className="text-white" />
+                                        <rect x="4" y="12" width="32" height="4" fill="currentColor" className="text-white/80" />
+                                        <rect x="4" y="18" width="24" height="4" fill="currentColor" className="text-white/60" />
+                                        <rect x="8" y="28" width="12" height="8" fill="currentColor" className="text-white" rx="1" />
+                                    </svg>
+                                ) : obstacle.type === 'ad' ? (
+                                    <svg width="35" height="35" viewBox="0 0 35 35" className="drop-shadow-md">
+                                        <rect x="0" y="0" width="35" height="35" fill="currentColor" className="text-orange-500" rx="2" />
+                                        <rect x="2" y="2" width="31" height="31" fill="currentColor" className="text-orange-400" rx="1" />
+                                        <text x="17.5" y="20" textAnchor="middle" className="text-xs font-bold fill-orange-900">AD</text>
+                                    </svg>
+                                ) : obstacle.type === 'cookie' ? (
+                                    <svg width="30" height="30" viewBox="0 0 30 30" className="drop-shadow-md">
+                                        <circle cx="15" cy="15" r="12" fill="currentColor" className="text-amber-600" />
+                                        <circle cx="15" cy="15" r="10" fill="currentColor" className="text-amber-500" />
+                                        <circle cx="10" cy="10" r="1.5" fill="currentColor" className="text-amber-800" />
+                                        <circle cx="20" cy="12" r="1.5" fill="currentColor" className="text-amber-800" />
+                                        <circle cx="12" cy="18" r="1.5" fill="currentColor" className="text-amber-800" />
+                                        <circle cx="18" cy="20" r="1.5" fill="currentColor" className="text-amber-800" />
+                                    </svg>
+                                ) : (
+                                    <svg width="35" height="40" viewBox="0 0 35 40" className="drop-shadow-md">
+                                        {/* Bot */}
+                                        <rect x="5" y="5" width="25" height="30" fill="currentColor" className="text-blue-600" rx="3" />
+                                        <rect x="8" y="8" width="19" height="12" fill="currentColor" className="text-blue-500" rx="1" />
+                                        <circle cx="13" cy="14" r="2" fill="currentColor" className="text-white" />
+                                        <circle cx="21" cy="14" r="2" fill="currentColor" className="text-white" />
+                                        <rect x="10" y="22" width="15" height="3" fill="currentColor" className="text-white" rx="1" />
+                                        <rect x="12" y="28" width="11" height="4" fill="currentColor" className="text-blue-400" rx="1" />
+                                    </svg>
+                                )}
+                                </div>
+                            );
+                        })}
 
                         {/* Game Over Overlay */}
                         {gameOver && (
@@ -449,8 +523,12 @@ export function LoadingDino() {
                                 <span className="text-sm text-muted-foreground">Jump</span>
                             </div>
                             <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg border border-border">
-                                <kbd className="px-2 py-1 bg-card rounded text-xs font-mono border border-border">↓</kbd>
-                                <span className="text-sm text-muted-foreground">Duck</span>
+                                <kbd className="px-2 py-1 bg-card rounded text-xs font-mono border border-border">←</kbd>
+                                <span className="text-sm text-muted-foreground">Left</span>
+                            </div>
+                            <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg border border-border">
+                                <kbd className="px-2 py-1 bg-card rounded text-xs font-mono border border-border">→</kbd>
+                                <span className="text-sm text-muted-foreground">Right</span>
                             </div>
                             <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg border border-border">
                                 <span className="text-sm text-muted-foreground">or click to jump</span>
