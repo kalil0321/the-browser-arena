@@ -17,9 +17,10 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (git required for browser-use from git)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,7 +30,7 @@ RUN pip install uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Copy the rest of the application
+# Copy the rest of the application first (but we'll regenerate requirements.txt)
 COPY . .
 
 # Install Python dependencies using uv pip install
