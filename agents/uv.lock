@@ -6,6 +6,9 @@ resolution-markers = [
     "python_full_version < '3.13'",
 ]
 
+[manifest]
+overrides = [{ name = "aiohttp", specifier = "==3.12.15" }]
+
 [[package]]
 name = "agents"
 version = "0.1.0"
@@ -25,13 +28,13 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.9.0" },
+    { name = "aiohttp", specifier = "==3.12.15" },
     { name = "anchorbrowser", specifier = ">=0.1.0" },
     { name = "browser-use", git = "https://github.com/browser-use/browser-use.git" },
     { name = "convex", specifier = ">=0.5.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "filetype", specifier = ">=1.2.0" },
-    { name = "notte-sdk", specifier = ">=1.7.0" },
+    { name = "notte-sdk", specifier = ">=1.7.11" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
@@ -1370,7 +1373,7 @@ wheels = [
 
 [[package]]
 name = "notte-core"
-version = "1.7.9"
+version = "1.7.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1391,23 +1394,23 @@ dependencies = [
     { name = "tldextract" },
     { name = "toml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/cf/b9584a3f363ecfe220ed2cbf492b10991f648181b74326673667aa116b0c/notte_core-1.7.9.tar.gz", hash = "sha256:a574161a228b5b7bfea06071db986f5b2345ab2c8e3a7405b39efb11d74f98d5", size = 550650, upload-time = "2025-10-24T17:42:17.128Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d1/0c/cb99cb5f210bf0473c5d29b9ad2b184797c93cd1466c08d684e0f709ee3a/notte_core-1.7.11.tar.gz", hash = "sha256:881bbb62ff4fd59f21ffa645658636ed5b83b1a81a8904f4f256ebc67cbd3d3f", size = 552651, upload-time = "2025-11-04T16:07:12.944Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/06/f1014bc070290c9cf33904e1dc570009ad38acfae0942ff2410ad730586d/notte_core-1.7.9-py3-none-any.whl", hash = "sha256:986f3f607211b19740943d25ec55a2d920d5d8cc74b2cc775d912b52d353588f", size = 562904, upload-time = "2025-10-24T17:42:05.79Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/a3/2eea484c5086d6ea2eb715d79b4a0a6babbeed9e1138290a9d610850f044/notte_core-1.7.11-py3-none-any.whl", hash = "sha256:64d32a62d164e4e235895f8acb490b3f3a90ecc5258b753a37b502d80ae47049", size = 564893, upload-time = "2025-11-04T16:07:00.107Z" },
 ]
 
 [[package]]
 name = "notte-sdk"
-version = "1.7.9"
+version = "1.7.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "halo" },
     { name = "notte-core" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/20/a6/72aabe295510f273ac7b270c12830aa636f635f92e63cdf81cdb25daf0de/notte_sdk-1.7.9.tar.gz", hash = "sha256:1faa40067697e23ae8b29d094145048aee5bf9098ac89c5e246ff2fe336b1ace", size = 63822, upload-time = "2025-10-24T17:42:21.013Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2a/19/17fb261309ece429159ddb6c713dc3d87b99a7030ded83d63eb75df6913a/notte_sdk-1.7.11.tar.gz", hash = "sha256:8eaf06571a79ff3364090e42f955da276c261ba25b4c9d490cb2363d9c344132", size = 64406, upload-time = "2025-11-04T16:07:16.769Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ba/76/04766cfc3dfc10a879f131598822d5fed5a1c767d11ade125225b5658cac/notte_sdk-1.7.9-py3-none-any.whl", hash = "sha256:398d0c34eeb57505c3c05b1746a6734cd0a6efbd690094a0efb36459f7495447", size = 72355, upload-time = "2025-10-24T17:42:11.928Z" },
+    { url = "https://files.pythonhosted.org/packages/31/74/fc6673833b3cab4dbb01dca51e26ee549f2c4ddc83b3d5e080db876fbad4/notte_sdk-1.7.11-py3-none-any.whl", hash = "sha256:eb7c8f5fa98b571825b4aab86772a23bcfb705515d9c69d1079227f4fea75235", size = 73109, upload-time = "2025-11-04T16:07:05.821Z" },
 ]
 
 [[package]]

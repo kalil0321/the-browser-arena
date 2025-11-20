@@ -1345,4 +1345,5 @@ if __name__ == "__main__":
         port=8080,
         reload=True,
         log_level="info",
+        loop="asyncio",  # Use asyncio loop instead of uvloop for nest_asyncio compatibility
     )

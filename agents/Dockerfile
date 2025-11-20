@@ -20,6 +20,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager
@@ -31,19 +32,38 @@ COPY pyproject.toml uv.lock ./
 # Copy the rest of the application
 COPY . .
 
-# Install Python dependencies using uv
+# Install Python dependencies using uv pip install
+# Install aiohttp first, then all notte-core and notte-sdk dependencies, then notte packages with --no-deps
+# Then install browser-use (which requires aiohttp==3.12.15)
 # Using --system installs packages system-wide (no virtual environment in Docker)
-# Install dependencies directly from pyproject.toml (without installing the package itself)
-RUN uv pip install --system \
-    "aiohttp>=3.9.0" \
+RUN uv pip install --system "aiohttp==3.12.15" && \
+    uv pip install --system \
+    "cryptography>=43.0.3" \
+    "loguru>=0.7.3" \
+    "nest-asyncio>=1.6.0" \
+    "opentelemetry-sdk>=1.34.1" \
+    "packaging>=25.0" \
+    "pillow>=11.1.0" \
+    "posthog>=3.0.1" \
+    "pydantic-settings>=2.8.1" \
+    "pydantic>=2.10.6" \
+    "pyotp>=2.9.0" \
+    "python-dotenv>=1.0.1" \
+    "requests>=2.32.3" \
+    "restrictedpython>=8.0" \
+    "scarf-sdk>=0.1.2" \
+    "tldextract>=5.3.0" \
+    "toml>=0.10.2" \
+    "halo>=0.0.28" \
+    "websockets>=13.1" && \
+    uv pip install --system "notte-core>=1.7.11" --no-deps && \
+    uv pip install --system "notte-sdk>=1.7.11" --no-deps && \
+    uv pip install --system "browser-use @ git+https://github.com/browser-use/browser-use.git" && \
+    uv pip install --system \
     "anchorbrowser>=0.1.0" \
-    "browser-use>=0.9.0" \
-    "notte-sdk>=1.7.0" \
     "fastapi>=0.115.0" \
     "uvicorn[standard]>=0.32.0" \
     "convex>=0.5.0" \
-    "python-dotenv>=1.0.0" \
-    "pydantic>=2.10.0" \
     "filetype>=1.2.0"
 
 # Create directory for temporary file uploads
@@ -61,5 +81,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"
 
 # Run the server
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "info"]
+# Use --loop asyncio to avoid uvloop compatibility issues with nest_asyncio (required by notte_sdk)
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "info", "--loop", "asyncio"]
 
