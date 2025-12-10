@@ -1,12 +1,24 @@
 import Browserbase from "@browserbasehq/sdk";
 import AnchorBrowser from "anchorbrowser";
 
+const requireEnv = (name: string): string => {
+    const value = process.env[name];
+    if (!value) {
+        throw new Error(`${name} is not set`);
+    }
+    return value;
+};
+
+const BROWSERBASE_API_KEY = requireEnv("BROWSERBASE_API_KEY");
+const ANCHOR_API_KEY = requireEnv("ANCHOR_API_KEY");
+const BROWSERBASE_PROJECT_ID = requireEnv("BROWSERBASE_PROJECT_ID");
+
 export const browserbase = new Browserbase({
-    apiKey: process.env.BROWSERBASE_API_KEY as string,
+    apiKey: BROWSERBASE_API_KEY,
 });
 
 export const anchorBrowser = new AnchorBrowser({
-    apiKey: process.env.ANCHOR_API_KEY as string,
+    apiKey: ANCHOR_API_KEY,
 });
 
 
@@ -33,7 +45,7 @@ export interface BrowserSession {
 
 export const createBrowserSession = async (config?: any, options?: { navBar?: boolean }): Promise<BrowserSession> => {
     const browserSession = await browserbase.sessions.create({
-        projectId: process.env.BROWSERBASE_PROJECT_ID as string,
+        projectId: BROWSERBASE_PROJECT_ID,
     })
 
     const liveViewUrls = await browserbase.sessions.debug(browserSession.id)
@@ -53,7 +65,7 @@ export const createBrowserSession = async (config?: any, options?: { navBar?: bo
 export const deleteBrowserSession = async (id: string) => {
     await browserbase.sessions.update(id, {
         status: "REQUEST_RELEASE",
-        projectId: process.env.BROWSERBASE_PROJECT_ID as string,
+        projectId: BROWSERBASE_PROJECT_ID,
     });
 };
 

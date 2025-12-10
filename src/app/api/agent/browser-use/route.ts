@@ -108,10 +108,6 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        if (!process.env.ANCHOR_API_KEY) {
-            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-        }
-
         // Create browser profile configuration using user_id
         const browserConfig = {
             browser: {

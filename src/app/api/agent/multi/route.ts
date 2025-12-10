@@ -411,9 +411,6 @@ export async function POST(request: NextRequest) {
 
         // Create browser sessions for all browser-use agents in parallel
         if (needsBrowserSessions) {
-            if (!process.env.ANCHOR_API_KEY) {
-                return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-            }
             console.log("[api/agent/multi] Creating browser sessions, count:", browserUseAgents.length);
             browserUseAgents.forEach(() => {
                 parallelPromises.push(createBrowserSession(browserConfig));

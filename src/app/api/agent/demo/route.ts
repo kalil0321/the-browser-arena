@@ -137,11 +137,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Ensure required server env keys exist
-        if (!process.env.ANCHOR_API_KEY) {
-            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-        }
-
         const demoUserId = "demo-user";
 
         // Create one browser session per requested agent
