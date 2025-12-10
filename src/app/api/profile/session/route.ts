@@ -45,7 +45,7 @@ export async function POST(_request: NextRequest) {
         } as any, { navBar: true });
 
         // Add usage cost: prorated for 10 minutes
-        const cost = computeBrowserCost(10);
+        const cost = computeBrowserCost(10 * 60);
         await convex.mutation(api.mutations.addUsageCost, { cost });
 
         return NextResponse.json({ url: liveViewUrl }, { status: 200 });
