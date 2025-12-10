@@ -6,12 +6,11 @@ from browser_use import (
     ChatAnthropic,
     ChatGoogle,
 )
-from anchorbrowser import Anchorbrowser
 import os
 import time
 from typing import Dict, Optional
 from .tools import tools
-
+from browser import create_browser_session, delete_browser_session
 
 def wrap_user_instruction(instruction: str) -> str:
     """
@@ -138,8 +137,6 @@ async def run_browser_use(
     prompt: str,
     cdp_url: str,
     provider_model: str,
-    browser: Anchorbrowser,
-    session_id: str,
     secrets: Optional[Dict[str, str]] = None,
     openai_api_key: str = None,
     google_api_key: str = None,
@@ -207,12 +204,15 @@ async def run_browser_use(
             )
 
     # Wrap user instruction in safety context to prevent prompt injection
-    wrapped_prompt = wrap_user_instruction(prompt)
+    # wrapped_prompt = wrap_user_instruction(prompt)
+
+    # For now we don't wrap prompt, no need to be too safe...
+
 
     # Time Agent initialization
     agent_start = time.time()
     agent = Agent(
-        task=wrapped_prompt,
+        task=prompt,
         llm=llm,
         browser=automation_browser,
         calculate_cost=True,
@@ -263,22 +263,37 @@ async def run_browser_use(
     return result, usage, timings
 
 
+async def test_browser_use():
+    browser = Browser(
+        use_cloud=True,
+    )
+
+    print(browser)
+    
+    result = Agent(
+        task="Find companies that raised more than $10M in the US this month",
+        browser=browser,
+    )
+
+    #  91232e9c-3084-4fd0-8612-f1c26d70fad3
+    # Live URL: https://live.browser-use.com?wss=https%3A%2F%2F91232e9c-3084-4fd0-8612-f1c26d70fad3.cdp0.browser-use.com
+
+    await result.run()
+
 async def main():
-    browser = Anchorbrowser(api_key=os.getenv("ANCHOR_API_KEY"))
-    session = browser.sessions.create()
+    session_id, cdp_url, live_view_url = create_browser_session()
 
     result, usage, timings = await run_browser_use(
         prompt="Find companies that raised more than $10M in the US this month",
-        cdp_url=session.data.cdp_url,
+        cdp_url=cdp_url,
         provider_model="",
-        browser=browser,
-        session_id=session.data.id,
+        session_id=session_id,
     )
 
-    browser.sessions.delete(session.data.id)
+    delete_browser_session(session_id)
 
 
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(main())
+    asyncio.run(test_browser_use())

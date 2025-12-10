@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { bearerAuth } from '../lib/auth.js'
 import { getConvexBackendClient } from '../lib/convex.js'
 import { AISdkClient, Stagehand } from '@browserbasehq/stagehand'
-import { tool } from 'ai'
 import { randomUUID } from 'node:crypto'
 import { openrouter, AISdkClientWithLanguageModel } from '../lib/llm.js'
 
@@ -56,14 +55,6 @@ const ALLOWED_SECRET_KEYS = new Set([
   'BROWSER_USE_API_KEY',
 ])
 
-const SUSPICIOUS_SECRET_KEYS = new Set([
-  'PATH',
-  'LD_PRELOAD',
-  'HOME',
-  'SHELL',
-  'LD_LIBRARY_PATH',
-])
-
 const MAX_SECRET_VALUE_LENGTH = 500
 const MAX_SECRET_KEY_LENGTH = 100
 
@@ -80,24 +71,6 @@ function validateSecrets(secrets: Record<string, string> | undefined): { isValid
   }
 
   const secretKeys = Object.keys(secrets)
-
-  // Check for suspicious keys
-  for (const key of secretKeys) {
-    if (SUSPICIOUS_SECRET_KEYS.has(key)) {
-      return {
-        isValid: false,
-        error: `Suspicious secret key detected: ${key}. This may indicate an injection attempt.`,
-      }
-    }
-
-    // Check for environment variable injection patterns
-    if (key.startsWith('LD_') || key.includes('PRELOAD') || key.includes('PATH')) {
-      return {
-        isValid: false,
-        error: `Potentially dangerous secret key: ${key}. Environment variable injection detected.`,
-      }
-    }
-  }
 
   // Validate against whitelist
   for (const key of secretKeys) {
@@ -143,7 +116,7 @@ function validateSecrets(secrets: Record<string, string> | undefined): { isValid
   return { isValid: true }
 }
 
-function createORClient(model: string, apiKey?: string): AISdkClient {
+function createOpenRouterClient(model: string, apiKey?: string): AISdkClient {
   return new AISdkClientWithLanguageModel({
     model: openrouter(model, apiKey),
   })
@@ -296,7 +269,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 
     const stagehand = new Stagehand({
       env: 'LOCAL',
-      llmClient: isOpenRouter(modelString) ? createORClient(formatModelName(modelString), openRouterApiKey) : undefined,
+      llmClient: isOpenRouter(modelString) ? createOpenRouterClient(formatModelName(modelString), openRouterApiKey) : undefined,
       verbose: process.env.NODE_ENV === 'production' ? 0 : 1,
       disablePino: process.env.NODE_ENV === 'production',
       model: isOpenRouter(modelString) ? undefined : { modelName: formatModelName(modelString), apiKey },
@@ -373,6 +346,29 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
       llm_cost: llmCost,
     }
 
+    // Extract structured extraction output (if present) so it is persisted even when actions are trimmed.
+    const normalizeExtraction = (raw: any) => {
+      if (!raw) return undefined
+      if (Array.isArray(raw)) return raw
+      if (typeof raw === 'string') {
+        try {
+          return JSON.parse(raw)
+        } catch {
+          return raw
+        }
+      }
+      return raw
+    }
+
+    const extractionResults = normalizeExtraction(
+      result?.message?.object?.extraction ??
+      result?.message?.extraction ??
+      result?.message?.object?.value ??
+      result?.message?.value ??
+      result?.message?.output ??
+      undefined
+    )
+
     // Build final payload matching original format
     const payload = {
       usage: usageWithCost,
@@ -380,6 +376,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
       duration,
       message: result?.message ?? result,
       actions: result?.actions ?? [],
+      extraction: extractionResults ?? result?.extraction,
       success: result?.success ?? true,
       agent: 'stagehand',
       completed: result?.completed ?? true,
@@ -387,6 +384,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
         durationMs: endTime - startTime,
         init: initResult ?? {},
         ...(result?.metadata || {}),
+        ...(extractionResults ? { extractionResults } : {}),
       },
     }
 

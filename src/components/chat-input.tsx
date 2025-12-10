@@ -140,7 +140,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         return loadAgentConfigsFromCache();
     });
 
-    // Privacy state
+    // Privacy state (removed for now)
     const [isPrivate, setIsPrivate] = useState(false);
 
     // API key availability state for privacy warnings
@@ -876,7 +876,10 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                         {agentConfigs.length}
                                     </span>
                                 </Button>
-                                <div className="flex items-center gap-2 rounded-full px-2.5 sm:px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 shrink-0">
+
+                                
+                                {/* Privacy state (removed for now) */}
+                                {/* <div className="flex items-center gap-2 rounded-full px-2.5 sm:px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 shrink-0">
                                     <Label htmlFor="private-session" className="text-[11px] sm:text-[11px] text-muted-foreground whitespace-nowrap">Private</Label>
                                     <Switch
                                         id="private-session"
@@ -885,7 +888,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                         disabled={isLoading}
                                         className="touch-manipulation"
                                     />
-                                </div>
+                                </div> */}
 
                                 <AgentPills
                                     agentConfigs={agentConfigs}

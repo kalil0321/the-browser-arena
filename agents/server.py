@@ -12,7 +12,6 @@ import aiohttp
 
 import uvicorn
 import filetype
-from anchorbrowser import Anchorbrowser
 from convex import ConvexClient
 from dotenv import load_dotenv
 from fastapi import (
@@ -34,6 +33,7 @@ from notte_agent import run_notte
 from instruction_validation import validate_instruction_field
 from notte_sdk import NotteClient
 
+from browser import create_browser_session, delete_browser_session
 
 # Configure logging
 logging.basicConfig(
@@ -59,13 +59,6 @@ if not CONVEX_URL:
 # Create Convex client without authentication
 # Backend mutations don't require auth
 convex_client = ConvexClient(CONVEX_URL)
-
-# Initialize Anchor Browser
-ANCHOR_API_KEY = os.getenv("ANCHOR_API_KEY")
-if not ANCHOR_API_KEY:
-    raise ValueError("ANCHOR_API_KEY environment variable is required")
-
-anchor_browser = Anchorbrowser(api_key=ANCHOR_API_KEY)
 
 # Initialize Notte client (optional)
 NOTTE_API_KEY = os.getenv("NOTTE_API_KEY")
@@ -589,8 +582,6 @@ async def run_browser_use_task(
             prompt=instruction,
             cdp_url=cdp_url,
             provider_model=provider_model,
-            browser=anchor_browser,
-            session_id=browser_session_id,
             secrets=secrets,
             openai_api_key=openai_api_key,
             google_api_key=google_api_key,
@@ -823,7 +814,7 @@ async def run_browser_use_task(
 
         # Delete browser session after payload is sent to backend
         try:
-            anchor_browser.sessions.delete(browser_session_id)
+            delete_browser_session(browser_session_id)
             logger.info(
                 f"[Agent {agent_id[:8]}] Deleted browser session {browser_session_id[:8]}"
             )
@@ -1068,18 +1059,9 @@ async def run_browser_use_agent(
                         }
                     }
                 }
-                browser_session = anchor_browser.sessions.create(browser_config)
+                browser_session_id, cdp_url, live_view_url = create_browser_session(browser_config)
             else:
-                browser_session = anchor_browser.sessions.create()
-            browser_session_id = browser_session.data.id
-            cdp_url = browser_session.data.cdp_url
-            live_view_url = browser_session.data.live_view_url
-
-            if not live_view_url:
-                raise ValueError("Failed to create browser session - no live_view_url")
-
-            if not cdp_url:
-                raise ValueError("Failed to create browser session - no cdp_url")
+                browser_session_id, cdp_url, live_view_url = create_browser_session()
 
         file_path = None
         if request.fileId:
