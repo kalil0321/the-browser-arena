@@ -41,7 +41,7 @@ export const createBrowserSession = async (config?: any, options?: { navBar?: bo
     return {
         browserSessionId: browserSession.id,
         cdpUrl: browserSession.connectUrl,
-        liveViewUrl: liveViewUrls.debuggerUrl + "&navBar=false",
+        liveViewUrl: liveViewUrls.debuggerFullscreenUrl + "&navBar=false",
     };
 };
 
@@ -60,5 +60,5 @@ export const deleteBrowserSession = async (id: string) => {
 
 export const computeBrowserCost = (duration: number): number => {
     const hours = Math.max(duration / 3600, 0);
-    return 0.01 + 0.05 * hours;
+    return 0.2 * hours;
 };

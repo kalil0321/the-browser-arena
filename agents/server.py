@@ -33,7 +33,7 @@ from notte_agent import run_notte
 from instruction_validation import validate_instruction_field
 from notte_sdk import NotteClient
 
-from browser import create_browser_session, delete_browser_session
+from browser import create_browser_session, delete_browser_session, computeBrowserCost
 
 # Configure logging
 logging.basicConfig(
@@ -705,13 +705,10 @@ async def run_browser_use_task(
                     else 0,
                 }
 
-                # Base LLM cost
                 llm_cost = compute_cost(provider_model, usage_data)
 
-                # Add Anchor Browser session cost: $0.01 base + $0.05 per hour
                 total_seconds = float(timings.get("total", 0))
-                hours = max(total_seconds / 3600.0, 0.0)
-                browser_cost = 0.01 + 0.05 * hours
+                browser_cost = computeBrowserCost(total_seconds)
 
                 usage_dict = {
                     "total_tokens": usage.total_tokens,

@@ -173,12 +173,13 @@ export async function POST(request: NextRequest) {
 
         after(async () => {
             try {
+                const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
                 // Poll for live URL availability instead of streaming
                 const pollForLiveUrl = async () => {
                     const bgClient = getBrowserUseClient(backgroundApiKey);
                     const maxAttempts = 30; // ~30s
                     const delayMs = 1000;
-                    const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
                     for (let attempt = 0; attempt < maxAttempts; attempt++) {
                         try {
@@ -217,11 +218,46 @@ export async function POST(request: NextRequest) {
                     }
                 };
 
+                const waitForCompletion = async () => {
+                    const bgClient = getBrowserUseClient(backgroundApiKey);
+                    const maxAttempts = 600; // ~10 minutes
+                    const delayMs = 1000;
+
+                    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                        const taskView = await bgClient.tasks.getTask(backgroundTaskId);
+                        const status = (taskView as any).status;
+
+                        if (status === "finished" || status === "stopped" || status === "paused") {
+                            return taskView;
+                        }
+
+                        if (status === "created" || status === "started") {
+                            await sleep(delayMs);
+                            continue;
+                        }
+
+                        throw new Error(`Unexpected Browser Use status: ${status}`);
+                    }
+
+                    throw new Error("Timed out waiting for Browser Use Cloud task completion");
+                };
+
                 // Start live URL polling in background while we wait for completion
                 const pollPromise = pollForLiveUrl();
 
-                // Wait for task to complete (this internally waits, but we stream in parallel for live URL updates)
-                const result = await backgroundTask.complete();
+                // Wait for task to complete (fallback to manual polling if SDK bails on new statuses)
+                const result = await (async () => {
+                    try {
+                        return await backgroundTask.complete();
+                    } catch (err) {
+                        const message = err instanceof Error ? err.message : String(err);
+                        if (message.includes("Unreachable case")) {
+                            console.warn("Browser Use Cloud SDK hit unknown status, falling back to polling", { message });
+                            return await waitForCompletion();
+                        }
+                        throw err;
+                    }
+                })();
 
                 // Ensure polling finishes (or times out) before proceeding
                 await pollPromise.catch(() => { });

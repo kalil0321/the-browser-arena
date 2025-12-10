@@ -6,6 +6,11 @@ import { AISdkClient, Stagehand } from '@browserbasehq/stagehand'
 import { randomUUID } from 'node:crypto'
 import { openrouter, AISdkClientWithLanguageModel } from '../lib/llm.js'
 
+function computeBrowserCost(duration: number): number {
+  const hours = Math.max(duration / 3600, 0);
+  return 0.2 * hours;
+}
+
 export const router = Router()
 
 function formatModelName(model: string): string {
@@ -330,12 +335,9 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     // Clean up
     await stagehand.close().catch((e: any) => console.warn(`[${requestId}] stagehand.close warning`, { error: e?.message }))
 
-    // Calculate costs
     const usageData = result?.usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 }
     const llmCost = computeCost(modelString, usageData)
-    // Anchor Browser pricing: $0.01 base + $0.05 per hour
-    const hours = Math.max(duration / 3600, 0)
-    const browserCost = 0.01 + 0.05 * hours
+    const browserCost = computeBrowserCost(duration)
     const cost = llmCost + browserCost
 
     // Format usage with cost breakdown
