@@ -4,6 +4,7 @@ import { ChatInput, ChatInputState } from "@/components/chat-input";
 import { AnimatedHeadline } from "@/components/animated-headline";
 import { IconFull } from "@/components/logo";
 import { SidebarInset } from "@/components/ui/sidebar";
+import { GitHubStarButton } from "@/components/github-star-button";
 import { useState } from "react";
 
 export default function Home() {
@@ -21,6 +22,12 @@ export default function Home() {
     <SidebarInset className="flex flex-1 flex-col items-center justify-center overflow-hidden">
       <div className="absolute inset-0 bg-[url('/bg.jpeg')] bg-cover bg-center will-change-transform" />
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+
+      {/* GitHub Star Button - Top Right */}
+      <div className="absolute top-4 right-4 z-20 sm:top-6 sm:right-6">
+        <GitHubStarButton />
+      </div>
+
       <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-4 text-center sm:px-6 md:px-12">
         {/* Main content area */}
         <div className="flex w-full flex-col items-center gap-4 py-8 sm:gap-6 sm:py-12 md:py-16">

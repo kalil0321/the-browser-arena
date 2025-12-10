@@ -1,8 +1,20 @@
 # The Browser Arena
 
-Compare AI browser automation agents side-by-side. Submit a task, watch agents run in real-time, and compare speed, cost, and success.
+<div align="center">
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**Compare AI browser automation agents side-by-side. Submit a task, watch agents run in real-time, and compare speed, cost, and success.**
 
 ![Arena Demo](assets/tba-demo-bg.gif)
+
+### 🌟 If this project helps you, please star it on GitHub! 🌟
+
+**[⭐ Star this repo](https://github.com/kalil0321/the-browser-arena)** to support development and help others discover it!
+
+</div>
+
+---
 
 
 ## What it does
@@ -58,3 +70,21 @@ npx convex dev
 ```
 
 Open http://localhost:3000
+
+---
+
+## 🚀 Support This Project
+
+If you find The Browser Arena useful, please consider:
+
+- **⭐ Starring this repository** 
+- **🐛 Reporting bugs** or **💡 suggesting features** via [GitHub Issues](https://github.com/kalil0321/the-browser-arena/issues)
+- **🔀 Contributing** - PRs are welcome!
+- **📢 Sharing** with others who might benefit
+
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details
