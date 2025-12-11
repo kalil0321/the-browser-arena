@@ -33,7 +33,7 @@ from notte_agent import run_notte
 from instruction_validation import validate_instruction_field
 from notte_sdk import NotteClient
 
-from browser import create_browser_session, delete_browser_session, computeBrowserCost
+from browser import create_browser_session, delete_browser_session, compute_browser_cost
 
 # Configure logging
 logging.basicConfig(
@@ -708,7 +708,7 @@ async def run_browser_use_task(
                 llm_cost = compute_cost(provider_model, usage_data)
 
                 total_seconds = float(timings.get("total", 0))
-                browser_cost = computeBrowserCost(total_seconds)
+                browser_cost = compute_browser_cost(total_seconds)
 
                 usage_dict = {
                     "total_tokens": usage.total_tokens,

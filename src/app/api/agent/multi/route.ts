@@ -345,8 +345,8 @@ export async function POST(request: NextRequest) {
             openrouterApiKey,
         });
 
-        // Check global session limit (5 sessions)
-        const MAX_SESSIONS = 5;
+        // Check global session limit (20 sessions)
+        const MAX_SESSIONS = 20;
         const usageStats = await convex.query(api.queries.getUserUsageStats, {});
         const currentSessionCount = usageStats?.totalSessions ?? 0;
         console.log("[api/agent/multi] Current session count:", currentSessionCount);

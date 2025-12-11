@@ -1,181 +1,21 @@
 import { Router } from 'express'
-import { z } from 'zod'
 import { bearerAuth } from '../lib/auth.js'
 import { getConvexBackendClient } from '../lib/convex.js'
 import { AISdkClient, Stagehand } from '@browserbasehq/stagehand'
 import { randomUUID } from 'node:crypto'
 import { openrouter, AISdkClientWithLanguageModel } from '../lib/llm.js'
-
-function computeBrowserCost(duration: number): number {
-  const hours = Math.max(duration / 3600, 0);
-  return 0.2 * hours;
-}
+// import { startBrowserAgent } from 'magnitude-core'
+import { bodySchema, magnitudeBodySchema, validateSecrets } from '../lib/body-validation.js'
+import { determineKey, formatModelName, isCUA, isOpenRouter, validateModelName } from '../lib/llm.js'
+import { computeBrowserCost } from '../lib/browser.js'
+import { computeCost } from '../lib/llm-pricing.js'
 
 export const router = Router()
-
-function formatModelName(model: string): string {
-  // in case we ever add groq :)
-  return model.includes('openrouter') ? model.split('/').slice(1).join('/') : model
-}
-
-const bodySchema = z.object({
-  sessionId: z.string().min(1),
-  instruction: z.string().min(1),
-  model: z.string().optional(),
-  thinkingModel: z.string().optional(),
-  executionModel: z.string().optional(),
-  cdpUrl: z.string().url().min(1),
-  liveViewUrl: z.string().url().optional(),
-  userId: z.string().optional(),
-  agentId: z.string().optional(),
-  keys: z
-    .object({ openai: z.string().optional(), google: z.string().optional(), anthropic: z.string().optional(), openrouter: z.string().optional() })
-    .optional(),
-  fileData: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
-  secrets: z.record(z.string(), z.string()).optional(),
-})
-
-function determineKey(model: string | undefined, keys: { openai?: string; google?: string; anthropic?: string; openrouter?: string } = {}): string {
-  const m = (model || '').toLowerCase()
-  if (m.includes('openrouter')) return (keys.openrouter || process.env.OPENROUTER_API_KEY || '').trim()
-  if (m.includes('google') || m.includes('gemini')) return (keys.google || process.env.GOOGLE_API_KEY || '').trim()
-  if (m.includes('anthropic') || m.includes('claude')) return (keys.anthropic || process.env.ANTHROPIC_API_KEY || '').trim()
-  return (keys.openai || process.env.OPENAI_API_KEY || '').trim()
-}
-
-function isCUA(model: string): boolean {
-  return model.includes('computer-use') || model.includes('claude')
-}
-
-function isOpenRouter(model: string): boolean {
-  return model.includes('openrouter')
-}
-
-// Security validation functions
-const ALLOWED_SECRET_KEYS = new Set([
-  'OPENAI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-  'OPENROUTER_API_KEY',
-  'BROWSER_USE_API_KEY',
-])
-
-const MAX_SECRET_VALUE_LENGTH = 500
-const MAX_SECRET_KEY_LENGTH = 100
-
-function validateSecrets(secrets: Record<string, string> | undefined): { isValid: boolean; error?: string } {
-  if (!secrets) {
-    return { isValid: true }
-  }
-
-  if (typeof secrets !== 'object' || Array.isArray(secrets)) {
-    return {
-      isValid: false,
-      error: 'Secrets must be an object with string keys and values',
-    }
-  }
-
-  const secretKeys = Object.keys(secrets)
-
-  // Validate against whitelist
-  for (const key of secretKeys) {
-    if (!ALLOWED_SECRET_KEYS.has(key)) {
-      return {
-        isValid: false,
-        error: `Invalid secret key: ${key}. Only allowed secret keys are permitted.`,
-      }
-    }
-  }
-
-  // Validate key and value lengths
-  for (const [key, value] of Object.entries(secrets)) {
-    if (typeof key !== 'string' || key.length === 0) {
-      return {
-        isValid: false,
-        error: 'Secret keys must be non-empty strings',
-      }
-    }
-
-    if (key.length > MAX_SECRET_KEY_LENGTH) {
-      return {
-        isValid: false,
-        error: `Secret key too long: ${key.length} characters (max: ${MAX_SECRET_KEY_LENGTH})`,
-      }
-    }
-
-    if (typeof value !== 'string') {
-      return {
-        isValid: false,
-        error: `Secret value for ${key} must be a string`,
-      }
-    }
-
-    if (value.length > MAX_SECRET_VALUE_LENGTH) {
-      return {
-        isValid: false,
-        error: `Secret value for ${key} too long: ${value.length} characters (max: ${MAX_SECRET_VALUE_LENGTH})`,
-      }
-    }
-  }
-
-  return { isValid: true }
-}
 
 function createOpenRouterClient(model: string, apiKey?: string): AISdkClient {
   return new AISdkClientWithLanguageModel({
     model: openrouter(model, apiKey),
   })
-}
-
-// LLM pricing per 1M tokens
-const pricing: Record<string, { in: number; out: number; cached: number }> = {
-  'google/gemini-2.5-flash': {
-    in: 0.3 / 1_000_000,
-    out: 2.5 / 1_000_000,
-    cached: 0.03 / 1_000_000,
-  },
-  'google/gemini-2.5-pro': {
-    in: 1.25 / 1_000_000,
-    out: 10.0 / 1_000_000,
-    cached: 0.3125 / 1_000_000,
-  },
-  "google/gemini-3-pro-preview": {
-    "in": 2 / 1_000_000,
-    "out": 12.0 / 1_000_000,
-    "cached": 0.2 / 1_000_000,
-  },
-  'openai/gpt-4.1': {
-    in: 2.0 / 1_000_000,
-    out: 8.0 / 1_000_000,
-    cached: 0.5 / 1_000_000,
-  },
-  'anthropic/claude-haiku-4.5': {
-    in: 1.0 / 1_000_000,
-    out: 5.0 / 1_000_000,
-    cached: 0.1 / 1_000_000,
-  },
-  'openrouter/moonshotai/kimi-k2-thinking': {
-    in: 0.6 / 1_000_000,
-    out: 2.5 / 1_000_000,
-    cached: 0.06 / 1_000_000,
-  },
-}
-
-function computeCost(model: string | undefined, usage: any): number {
-  if (!usage) return 0
-
-  const modelKey = model ?? 'google/gemini-2.5-flash'
-  const price = pricing[modelKey] || {
-    in: 0.5 / 1_000_000,
-    out: 3.0 / 1_000_000,
-    cached: 0.1 / 1_000_000,
-  }
-
-  const inputTokens = usage.input_tokens || 0
-  const outputTokens = usage.output_tokens || 0
-  const cachedTokens = usage.cached_tokens || usage.input_tokens_cached || 0
-
-  return inputTokens * price.in + outputTokens * price.out + cachedTokens * price.cached
 }
 
 router.post('/stagehand', bearerAuth, async (req, res) => {
@@ -201,12 +41,14 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     return
   }
 
+  let { model, thinkingModel, executionModel } = parse.data
+  model = validateModelName(model)
+  thinkingModel = validateModelName(thinkingModel)
+  executionModel = validateModelName(executionModel)
+
   const {
     sessionId,
     instruction,
-    model,
-    thinkingModel,
-    executionModel,
     cdpUrl,
     liveViewUrl,
     agentId: maybeAgentId,
@@ -254,30 +96,45 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
       console.log(`[${requestId}] liveViewUrl updated`)
     }
 
-    const modelString = model || 'google/gemini-2.5-flash'
-    const apiKey = determineKey(modelString, keys || {})
-    if (!apiKey && !isOpenRouter(modelString)) {
+    console.log(`[${requestId}] 🔑 Checking API key for model: ${model}`)
+    console.log(`[${requestId}] 🔑 Keys from request:`, keys ? 
+      { anthropic: keys.anthropic ? `${keys.anthropic.slice(0, 4)}...` : 'missing', 
+      google: keys.google ? `${keys.google.slice(0, 4)}...` : 'missing', 
+      openai: keys.openai ? `${keys.openai.slice(0, 4)}...` : 'missing', 
+      openrouter: keys.openrouter ? `${keys.openrouter.slice(0, 4)}...` : 'missing', 
+      groq: keys.groq ? `${keys.groq.slice(0, 4)}...` : 'missing' } : 'none')
+      
+    console.log(`[${requestId}] 🔑 Environment keys:`, {
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? `${process.env.ANTHROPIC_API_KEY.slice(0, 4)}...` : 'missing',
+      GOOGLE_API_KEY: process.env.GOOGLE_API_KEY ? `${process.env.GOOGLE_API_KEY.slice(0, 4)}...` : 'missing',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? `${process.env.OPENAI_API_KEY.slice(0, 4)}...` : 'missing',
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ? `${process.env.OPENROUTER_API_KEY.slice(0, 4)}...` : 'missing',
+      GROQ_API_KEY: process.env.GROQ_API_KEY ? `${process.env.GROQ_API_KEY.slice(0, 4)}...` : 'missing',
+    })
+    const apiKey = determineKey(model, keys || {})
+    console.log(`[${requestId}] 🔑 Determined API key:`, apiKey ? `${apiKey.slice(0, 4)}...` : 'EMPTY')
+    if (!apiKey && !isOpenRouter(model)) {
       await convex.updateAgentStatusFailed(agentId, 'Missing model API key')
-      console.error(`[${requestId}] ✖ apiKey for model ${modelString}`)
+      console.error(`[${requestId}] ✖ apiKey for model ${model}`)
       res.status(500).json({ error: 'Server misconfigured: missing model API key', requestId, step: 'apiKey' })
       return
     }
 
     console.log(`[${requestId}] stagehand.init (cdpUrl) starting, verbose=${process.env.NODE_ENV === 'production' ? 0 : 1}, disablePino=${process.env.NODE_ENV === 'production'}`)
 
-    const planningModel = thinkingModel || modelString
-    const execution = executionModel || planningModel
+    const planning = thinkingModel || model
+    const execution = executionModel || planning
 
     // Check if any model (main, planning, or execution) is OpenRouter
-    const hasOpenRouterModel = isOpenRouter(modelString) || isOpenRouter(planningModel) || isOpenRouter(execution)
-    const openRouterApiKey = hasOpenRouterModel ? determineKey(modelString, keys || {}) : undefined
+    const hasOpenRouterModel = isOpenRouter(model) || isOpenRouter(planning) || isOpenRouter(execution)
+    const openRouterApiKey = hasOpenRouterModel ? determineKey(model, keys || {}) : undefined
 
     const stagehand = new Stagehand({
       env: 'LOCAL',
-      llmClient: isOpenRouter(modelString) ? createOpenRouterClient(formatModelName(modelString), openRouterApiKey) : undefined,
+      llmClient: isOpenRouter(model) ? createOpenRouterClient(formatModelName(model, "openrouter"), openRouterApiKey) : undefined,
       verbose: process.env.NODE_ENV === 'production' ? 0 : 1,
       disablePino: process.env.NODE_ENV === 'production',
-      model: isOpenRouter(modelString) ? undefined : { modelName: formatModelName(modelString), apiKey },
+      model: isOpenRouter(model) ? undefined : { modelName: formatModelName(model, "openrouter"), apiKey },
       localBrowserLaunchOptions: { cdpUrl, viewport: { width: 1288, height: 711 } },
     })
 
@@ -292,17 +149,19 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     })
     console.log(`[${requestId}] stagehand.init done in ${Date.now() - initT}ms`)
 
-    console.log(`[${requestId}] creating stagehand agent (plan=${planningModel}, exec=${execution})`)
+    console.log(`[${requestId}] creating stagehand agent (plan=${planning}, exec=${execution})`)
 
     let agent;
 
-    if (isOpenRouter(planningModel) || isOpenRouter(execution)) {
+    if (isOpenRouter(planning) || isOpenRouter(execution) || isOpenRouter(model)) {
+      console.log(`[${requestId}] OPENROUTER: creating stagehand agent (plan=${planning}, exec=${execution}, model=${model})`)
       agent = await stagehand.agent();
     } else {
+      console.log(`[${requestId}] NOT OPENROUTER: creating stagehand agent (plan=${planning}, exec=${execution}, model=${model})`)
       agent = await stagehand.agent({
-        cua: isCUA(planningModel),
-        model: formatModelName(planningModel),
-        executionModel: formatModelName(execution),
+        cua: isCUA(planning),
+        model: formatModelName(planning, "openrouter"),
+        executionModel: formatModelName(execution, "openrouter"),
         systemPrompt: fileData
           ? `You are a helpful assistant. You also have the ability to upload files to the browser using the uploadFile tool.`
           : undefined,
@@ -318,9 +177,9 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     }
     const execT = Date.now()
     const result = await agent.execute({
-      instruction,
+      instruction: instruction + "Don't forget to include the answer to my query in the final answer.",
       maxSteps: 30,
-      highlightCursor: true,
+      highlightCursor: false,
       ...(secrets && { variables: secrets }),
     }).catch(async (e: any) => {
       console.error(`[${requestId}] ✖ agent.execute`, { error: e?.message, stack: e?.stack })
@@ -336,7 +195,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
     await stagehand.close().catch((e: any) => console.warn(`[${requestId}] stagehand.close warning`, { error: e?.message }))
 
     const usageData = result?.usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 }
-    const llmCost = computeCost(modelString, usageData)
+    const llmCost = computeCost(model, usageData)
     const browserCost = computeBrowserCost(duration)
     const cost = llmCost + browserCost
 
@@ -417,3 +276,38 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
 })
 
 
+
+// router.post('/magnitude', bearerAuth, async (req, res) => {
+//   const requestId = randomUUID()
+//   const parse = magnitudeBodySchema.safeParse(req.body)
+//   if (!parse.success) {
+//     console.error(`[${requestId}] ✖ validation`, parse.error.flatten())
+//     res.status(400).json({ error: 'Invalid request', details: parse.error.flatten(), requestId })
+//     return;
+//   }
+
+//   const { instruction, model, cdpUrl, liveViewUrl, userId } = parse.data;
+
+
+//   const agent = await startBrowserAgent({
+//     // Starting URL for agent
+//     url: 'about:blank',
+//     // Show thoughts and actions
+//     narrate: false,
+//     // LLM configuration
+//     llm: {
+//       provider: 'anthropic',
+//       options: {
+//         model: model
+//       }
+//     },
+//   });
+
+//   await agent.act(instruction);
+
+//   const result = await agent.query("What is the output for the following task: " + instruction + "?", z.object({
+//     result: z.string(),
+//   }));
+
+//   return res.status(200).json(result);
+// });

@@ -4,6 +4,7 @@ import { ChatInput, ChatInputState } from "@/components/chat-input";
 import { IconFull } from "@/components/logo";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { GitHubStarButton } from "@/components/github-star-button";
+import { ModeToggle } from "@/components/mode-toggle";
 import { useState } from "react";
 
 export function Session() {
@@ -21,6 +22,11 @@ export function Session() {
     <SidebarInset className="flex flex-1 flex-col items-center justify-center overflow-hidden">
       <div className="absolute inset-0 bg-[url('/bg.jpeg')] bg-cover bg-center will-change-transform" />
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+
+      {/* Mode Toggle - Top Left */}
+      <div className="absolute top-4 left-4 z-20 sm:top-6 sm:left-6">
+        <ModeToggle />
+      </div>
 
       {/* GitHub Star Button - Top Right */}
       <div className="absolute top-4 right-4 z-20 sm:top-6 sm:right-6">

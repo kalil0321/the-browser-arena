@@ -111,7 +111,7 @@ export function StagehandPanel({ agent }: StagehandPanelProps) {
             {agentResult.message && (
                 <div className="bg-gray-50 dark:bg-card rounded-lg p-4">
                     <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Result</h4>
-                    <div className="font-default prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0">
+                    <div className="font-default prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0 max-h-96 overflow-y-auto">
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
@@ -171,41 +171,28 @@ export function StagehandPanel({ agent }: StagehandPanelProps) {
                                 ),
                             }}
                         >
-                            {agentResult.message.replace(/\\n/g, "\n")}
+                            {typeof agentResult.message === "string" 
+                                ? agentResult.message.replace(/\\n/g, "\n")
+                                : agentResult.message?.output || agentResult.message?.value || JSON.stringify(agentResult.message, null, 2)}
                         </ReactMarkdown>
                     </div>
                 </div>
             )}
 
             {/* Metrics Grid */}
-            {(agentResult.duration || agentResult.usage) && (
+            {agentResult.usage && (
                 <div className="grid grid-cols-2 gap-2">
-                    {agentResult.duration !== undefined && (
-                        <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration</h4>
-                            </div>
-                            <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                {agentResult.duration.toFixed(1)}s
-                            </p>
+                    <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                            </svg>
+                            <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Tokens</h4>
                         </div>
-                    )}
-                    {agentResult.usage && (
-                        <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                                </svg>
-                                <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Tokens</h4>
-                            </div>
-                            <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                                {((agentResult.usage.input_tokens ?? 0) + (agentResult.usage.output_tokens ?? 0)).toLocaleString()} (${agentResult.usage.total_cost?.toFixed(4) ?? "0.0000"})
-                            </p>
-                        </div>
-                    )}
+                        <p className="text-sm font-default text-gray-900 dark:text-gray-100">
+                            {((agentResult.usage.input_tokens ?? 0) + (agentResult.usage.output_tokens ?? 0)).toLocaleString()} (${agentResult.usage.total_cost?.toFixed(4) ?? "0.0000"})
+                        </p>
+                    </div>
                 </div>
             )}
 
