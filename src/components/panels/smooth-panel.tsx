@@ -136,24 +136,8 @@ export function SmoothPanel({ agent }: SmoothPanelProps) {
             )}
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-2 gap-2">
-                {/* Duration */}
-                {agentResult.metadata?.duration !== undefined && (
-                    <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
-                        <div className="flex items-center gap-2 mb-1">
-                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Duration</h4>
-                        </div>
-                        <p className="text-sm font-default text-gray-900 dark:text-gray-100">
-                            {agentResult.metadata.duration.toFixed(1)}s
-                        </p>
-                    </div>
-                )}
-
-                {/* Cost */}
-                {agentResult.cost !== undefined && (
+            {agentResult.cost !== undefined && (
+                <div className="grid grid-cols-2 gap-2">
                     <div className="bg-gray-50 dark:bg-card rounded-lg p-3">
                         <div className="flex items-center gap-2 mb-1">
                             <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -165,9 +149,8 @@ export function SmoothPanel({ agent }: SmoothPanelProps) {
                             ${agentResult.cost.toFixed(4)}
                         </p>
                     </div>
-                )}
-
-            </div>
+                </div>
+            )}
 
             {/* Error Message */}
             {agentResult.error && (

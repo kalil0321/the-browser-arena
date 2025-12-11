@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
-import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, providerUnavailable, serverMisconfigured, unauthorized, mapProviderError } from "@/lib/http-errors";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 import { validateSecrets, validateApiKeyFormat, validateModelName, detectSuspiciousSecrets, logSecurityViolation } from "@/lib/security/validation";
+import { BrowserSession, createBrowserSession, deleteBrowserSession } from "@/lib/browser";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
-
-// Initialize browser client for browser-use agents
-const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 
 interface AgentConfig {
     agent: "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud" | "notte";
@@ -348,8 +345,8 @@ export async function POST(request: NextRequest) {
             openrouterApiKey,
         });
 
-        // Check global session limit (5 sessions)
-        const MAX_SESSIONS = 5;
+        // Check global session limit (20 sessions)
+        const MAX_SESSIONS = 20;
         const usageStats = await convex.query(api.queries.getUserUsageStats, {});
         const currentSessionCount = usageStats?.totalSessions ?? 0;
         console.log("[api/agent/multi] Current session count:", currentSessionCount);
@@ -365,7 +362,7 @@ export async function POST(request: NextRequest) {
         }
 
         // If user has BYOK for all agents, allow them to exceed the limit
-        if (!byokCheck.hasAllKeys) {
+        if (!byokCheck.hasAllKeys && process.env.NODE_ENV === 'production') {
             // Not all agents have BYOK - check session limit
             if (currentSessionCount >= MAX_SESSIONS) {
                 const missingKeysList = byokCheck.missingKeys.join(", ");
@@ -403,7 +400,9 @@ export async function POST(request: NextRequest) {
         };
 
         // Create session in Convex, and browser sessions in parallel if needed
-        const parallelPromises: Promise<any>[] = [
+
+        // first element will be { sessionId: string } and the rest will be BrowserSession
+        const parallelPromises: Promise<{ sessionId: string } | BrowserSession>[] = [
             convex.mutation(api.mutations.createSession, {
                 instruction,
                 isPrivate: isPrivate ?? false,
@@ -412,19 +411,21 @@ export async function POST(request: NextRequest) {
 
         // Create browser sessions for all browser-use agents in parallel
         if (needsBrowserSessions) {
-            if (!process.env.ANCHOR_API_KEY) {
-                return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-            }
             console.log("[api/agent/multi] Creating browser sessions, count:", browserUseAgents.length);
             browserUseAgents.forEach(() => {
-                parallelPromises.push(browser.sessions.create(browserConfig));
+                parallelPromises.push(createBrowserSession(browserConfig));
             });
         }
 
-        const parallelResults = await Promise.all(parallelPromises);
+        const parallelResults = await Promise.all(parallelPromises) as (BrowserSession | { sessionId: string })[];
+
+
+        // DB Session ID is the ID of the agents session, meaning 
+        // the id to retrieve the session from the database, the agents activity, what we see in the UI
+        // it's different from the browser session id
         const { sessionId: dbSessionId } = parallelResults[0] as { sessionId: string };
         const browserSessions = needsBrowserSessions
-            ? parallelResults.slice(1) as any[]
+            ? parallelResults.slice(1) as BrowserSession[]
             : [];
         console.log("[api/agent/multi] Session created:", dbSessionId, "browser sessions:", browserSessions.length);
 
@@ -467,11 +468,8 @@ export async function POST(request: NextRequest) {
                     case "browser-use":
                         endpoint = `${AGENT_SERVER_URL}/agent/browser-use`;
                         // Use pre-created browser session for performance
-                        const browserSession = browserSessions[browserSessionIndex++];
-                        const browserSessionId = browserSession?.data?.id ?? "";
-                        const cdpUrl = browserSession?.data?.cdp_url ?? "";
-                        const liveViewUrl = browserSession?.data?.live_view_url ?? "";
-
+                        const { browserSessionId, cdpUrl, liveViewUrl } = browserSessions[browserSessionIndex++];
+                        
                         payload = {
                             sessionId: dbSessionId,
                             instruction,

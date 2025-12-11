@@ -19,7 +19,7 @@ import { SettingsButton } from "@/components/settings-button";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { Trophy, Plus } from "lucide-react";
+import { Trophy, Plus, Swords, Medal } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
@@ -199,6 +199,30 @@ export function DashboardSidebar() {
                                 >
                                     <Trophy className="size-4" />
                                     {!isCollapsed && <span>Arena</span>}
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton tooltip="Leaderboard" asChild>
+                                <Link
+                                    href="/leaderboard"
+                                    prefetch={true}
+                                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors"
+                                >
+                                    <Medal className="size-4" />
+                                    {!isCollapsed && <span>Leaderboard</span>}
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton tooltip="Battles" asChild>
+                                <Link
+                                    href="/battles"
+                                    prefetch={true}
+                                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground transition-colors"
+                                >
+                                    <Swords className="size-4" />
+                                    {!isCollapsed && <span>Battles</span>}
                                 </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>

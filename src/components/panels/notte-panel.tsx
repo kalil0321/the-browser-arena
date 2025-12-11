@@ -30,16 +30,6 @@ const formatCurrency = (value?: number) => {
     return currencyFormatter.format(value);
 };
 
-const formatDuration = (seconds?: number) => {
-    if (typeof seconds !== "number" || Number.isNaN(seconds)) {
-        return "—";
-    }
-    if (seconds < 1) {
-        return `${(seconds * 1000).toFixed(0)}ms`;
-    }
-    return `${seconds.toFixed(1)}s`;
-};
-
 interface StepComponentProps {
     step: Record<string, any>;
     index: number;
@@ -371,7 +361,7 @@ export function NottePanel({ agent }: NottePanelProps) {
             )}
 
             {/* Stats Grid */}
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
                 <div className="bg-card rounded-lg border p-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Cost
@@ -388,16 +378,6 @@ export function NottePanel({ agent }: NottePanelProps) {
                         {usage.steps ?? actualSteps.length}
                     </p>
                 </div>
-                {duration !== null && (
-                    <div className="bg-card rounded-lg border p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Duration
-                        </p>
-                        <p className="text-base font-medium mt-1">
-                            {formatDuration(duration)}
-                        </p>
-                    </div>
-                )}
             </div>
 
             {/* Final Answer */}

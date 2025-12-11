@@ -23,28 +23,6 @@ export const ALLOWED_SECRET_KEYS = new Set([
     // Add other legitimate secret keys as needed
 ]);
 
-// Suspicious secret keys that should trigger security alerts
-export const SUSPICIOUS_SECRET_KEYS = new Set([
-    'PATH',
-    'LD_PRELOAD',
-    'HOME',
-    'SHELL',
-    'LD_LIBRARY_PATH',
-    'LD_ASSUME_KERNEL',
-    'LD_AUDIT',
-    'LD_BIND_NOW',
-    'LD_DEBUG',
-    'LD_DYNAMIC_WEAK',
-    'LD_HWCAP_MASK',
-    'LD_ORIGIN_PATH',
-    'LD_POINTER_GUARD',
-    'LD_PROFILE',
-    'LD_SHOW_AUXV',
-    'LD_USE_LOAD_BIAS',
-    'LD_VERBOSE',
-    'LD_WARN',
-]);
-
 // Maximum length for secret values (500 chars)
 const MAX_SECRET_VALUE_LENGTH = 500;
 
@@ -60,13 +38,19 @@ export const ALLOWED_MODELS = new Set([
     'gpt-4o',
     'gpt-4o-mini',
     'gpt-4.1',
+    'gpt-5.2',
+    'gpt-5-mini',
+    'gpt-5-nano',
+    'computer-use-preview',
     // Anthropic models
     'claude-3-opus',
     'claude-3-sonnet',
     'claude-3-haiku',
     'claude-haiku-4.5',
+    'claude-haiku-4-5-20251001',
     'claude-sonnet-4-20250514',
     'claude-sonnet-4',
+    'claude-sonnet-4-5-20250929',
     // Google models
     'gemini-pro',
     'gemini-1.5-flash',
@@ -79,10 +63,15 @@ export const ALLOWED_MODELS = new Set([
     'browser-use-llm',
     // OpenRouter models (will be validated by prefix)
     // Format: openrouter/provider/model-name
+    'openrouter/moonshotai/kimi-k2-thinking',
+    // Provider-prefixed models
+    'openai/gpt-5.2',
+    'openai/gpt-5-mini',
+    'openai/gpt-5-nano',
 ]);
 
 // Provider prefixes for model validation
-const PROVIDER_PREFIXES = ['openai', 'google', 'anthropic', 'openrouter', 'browser-use'];
+const PROVIDER_PREFIXES = ['openai', 'google', 'anthropic', 'openrouter', 'browser-use', 'groq'];
 
 /**
  * Validates secrets object against whitelist and security rules
@@ -103,24 +92,6 @@ export function validateSecrets(secrets: Record<string, string> | undefined | nu
     }
 
     const secretKeys = Object.keys(secrets);
-
-    // Check for suspicious keys
-    for (const key of secretKeys) {
-        if (SUSPICIOUS_SECRET_KEYS.has(key)) {
-            return {
-                isValid: false,
-                error: `Suspicious secret key detected: ${key}. This may indicate an injection attempt.`,
-            };
-        }
-
-        // Check for environment variable injection patterns
-        if (key.startsWith('LD_') || key.includes('PRELOAD') || key.includes('PATH')) {
-            return {
-                isValid: false,
-                error: `Potentially dangerous secret key: ${key}. Environment variable injection detected.`,
-            };
-        }
-    }
 
     // Validate against whitelist
     for (const key of secretKeys) {
@@ -177,18 +148,6 @@ export function detectSuspiciousSecrets(secrets: Record<string, string> | undefi
         return false;
     }
 
-    const secretKeys = Object.keys(secrets);
-
-    for (const key of secretKeys) {
-        if (SUSPICIOUS_SECRET_KEYS.has(key)) {
-            return true;
-        }
-
-        if (key.startsWith('LD_') || key.includes('PRELOAD')) {
-            return true;
-        }
-    }
-
     return false;
 }
 
@@ -230,7 +189,7 @@ export function validateApiKeyFormat(
         google: /^[A-Za-z0-9_-]{20,}$/, // Google keys can vary in length
         openrouter: /^sk-or-[A-Za-z0-9]{32,}$/,
         browseruse: /^[A-Za-z0-9]{32,}$/,
-        smooth: /^[A-Za-z0-9]{32,}$/,
+        smooth: /^[A-Za-z0-9_-]{20,}$/, // Smooth keys can vary in length and may contain dashes/underscores
     };
 
     const pattern = patterns[provider];

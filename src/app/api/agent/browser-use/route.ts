@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
-import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, mapProviderError, serverMisconfigured, unauthorized, providerUnavailable } from "@/lib/http-errors";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 import { validateSecrets, validateApiKeyFormat, validateModelName, detectSuspiciousSecrets, logSecurityViolation } from "@/lib/security/validation";
+import { createBrowserSession } from "@/lib/browser";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
-// Initialize browser client
-const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
+
 
 export async function POST(request: NextRequest) {
     try {
@@ -109,10 +108,6 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        if (!process.env.ANCHOR_API_KEY) {
-            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-        }
-
         // Create browser profile configuration using user_id
         const browserConfig = {
             browser: {
@@ -125,17 +120,20 @@ export async function POST(request: NextRequest) {
 
         // CRITICAL: Parallelize browser session creation with Convex session creation
         // This saves 3-5 seconds by not blocking on browser session creation
-        const [sessionResult, browserSession] = await Promise.all([
+        const [sessionResult, 
+            { browserSessionId, cdpUrl, liveViewUrl }
+        ] = await Promise.all([
             convex.mutation(api.mutations.createSession, {
                 instruction,
             }),
-            browser.sessions.create(browserConfig),
+            createBrowserSession(browserConfig),
         ]);
 
+
+        // This is the Convex sesssion ID (the ID of the agents session, meaning 
+        // the id to retrieve the session from the database, the agents activity, what we see in the UI
+        // it's different from the browser session id)
         const { sessionId: dbSessionId } = sessionResult;
-        const browserSessionId = browserSession.data?.id ?? "";
-        const cdpUrl = browserSession.data?.cdp_url ?? "";
-        const liveViewUrl = browserSession.data?.live_view_url ?? "";
 
         if (!liveViewUrl) {
             return NextResponse.json({ error: "Failed to create browser session - no live_view_url" }, { status: 500 });

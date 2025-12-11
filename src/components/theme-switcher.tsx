@@ -4,7 +4,7 @@ import { MonitorIcon, MoonStarIcon, SunIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { useTheme } from "next-themes";
 import type { JSX } from "react";
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -62,6 +62,31 @@ const THEME_OPTIONS = [
 
 function ThemeSwitcher() {
     const { theme, setTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => setMounted(true), []);
+
+    if (!mounted) {
+        // Render a stable placeholder to avoid server/client mismatches
+        return (
+            <div
+                className="inline-flex items-center overflow-hidden rounded-full bg-white ring-1 ring-zinc-200 ring-inset dark:bg-zinc-950 dark:ring-zinc-700 w-fit"
+                role="presentation"
+                aria-hidden="true"
+            >
+                {THEME_OPTIONS.map((option) => (
+                    <button
+                        key={option.value}
+                        className="relative flex size-9 sm:size-8 cursor-default items-center justify-center rounded-full transition-[color] [&_svg]:size-4 touch-manipulation text-zinc-400 dark:text-zinc-500"
+                        type="button"
+                        tabIndex={-1}
+                    >
+                        {option.icon}
+                    </button>
+                ))}
+            </div>
+        );
+    }
 
     return (
         <div

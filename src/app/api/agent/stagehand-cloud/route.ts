@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
                 });
 
                 const { message, actions, usage, success, completed, metadata } = await agent.execute({
-                    highlightCursor: true,
+                    highlightCursor: false,
                     instruction,
                 });
 

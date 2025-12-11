@@ -53,7 +53,7 @@ export default function PrivacyPage() {
             <section className="space-y-4">
               <h2 className="text-2xl font-semibold">3. Information Sharing and Disclosure</h2>
               <p className="text-foreground/90 leading-relaxed">
-                We do not share your personal information with third parties except in the following circumstances:
+                We may share your personal information with third parties,  in the following circumstances:
               </p>
               <ul className="list-disc list-inside space-y-2 text-foreground/90 ml-4">
                 <li>With your consent or at your direction</li>

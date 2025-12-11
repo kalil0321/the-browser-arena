@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
-import AnchorBrowser from "anchorbrowser";
 import { Stagehand } from "@browserbasehq/stagehand";
 import { after } from "next/server";
 import { api } from "../../../../../convex/_generated/api";
@@ -10,12 +9,11 @@ import { computeCost } from "@/lib/pricing";
 import { z } from "zod";
 import { tool } from "ai";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { computeBrowserCost, createBrowserSession, deleteBrowserSession } from "@/lib/browser";
+import { browser } from "node:process";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
-
-// Initialize browser client
-const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 
 // Create a separate Convex client for background tasks (no auth needed)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -139,11 +137,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Ensure required server env keys exist
-        if (!process.env.ANCHOR_API_KEY) {
-            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-        }
-
         const demoUserId = "demo-user";
 
         // Create one browser session per requested agent
@@ -172,17 +165,15 @@ export async function POST(request: NextRequest) {
                     }
                 }
             };
-            const sessionResp = await browser.sessions.create(profileConfig).catch((e: any) => {
+            const { browserSessionId, cdpUrl, liveViewUrl } = await createBrowserSession(profileConfig).catch((e: any) => {
                 console.error("Error creating browser session:", e);
                 return Promise.reject(e);
             });
-            const live = sessionResp.data?.live_view_url ?? "";
-            const sid = sessionResp.data?.id ?? "";
-            const cdp = sessionResp.data?.cdp_url ?? "";
-            if (!live || !cdp) {
+
+            if (!liveViewUrl || !cdpUrl) {
                 return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
             }
-            builtAgents.push({ kind: a.agent, model: modelForAgent, browserSessionId: sid, liveViewUrl: live, cdpUrl: cdp });
+            builtAgents.push({ kind: a.agent, model: modelForAgent, browserSessionId, liveViewUrl, cdpUrl });
         }
 
         // Create demo session with all agents
@@ -265,7 +256,7 @@ export async function POST(request: NextRequest) {
                         });
 
                         const { message, actions, usage, success, completed, metadata } = await agent.execute({
-                            highlightCursor: true,
+                            highlightCursor: false,
                             instruction,
                         });
 
@@ -273,7 +264,7 @@ export async function POST(request: NextRequest) {
                         const endTime = Date.now();
                         const duration = (endTime - startTime) / 1000;
 
-                        await browser.sessions.delete(b.browserSessionId);
+                        await deleteBrowserSession(b.browserSessionId);
 
                         // let recordingUrl = "";
                         // try {
@@ -287,8 +278,7 @@ export async function POST(request: NextRequest) {
 
                         const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
                         const llmCost = computeCost(modelString, usageData);
-                        const hours = Math.max(duration / 3600, 0);
-                        const browserCost = 0.01 + 0.05 * hours;
+                        const browserCost = computeBrowserCost(duration);
                         const cost = llmCost + browserCost;
 
                         const payload = {
@@ -342,7 +332,7 @@ export async function POST(request: NextRequest) {
                                 status: "failed",
                                 error: "Python agent execution failed",
                             });
-                            await browser.sessions.delete(b.browserSessionId);
+                            await deleteBrowserSession(b.browserSessionId);
                         } else {
                             const agentData = await agentResponse.json();
                             console.log("Browser-Use execution completed", agentData);
@@ -355,7 +345,7 @@ export async function POST(request: NextRequest) {
                             agentId,
                             status: "failed",
                         });
-                        await browser.sessions.delete(b.browserSessionId);
+                        await deleteBrowserSession(b.browserSessionId);
                     } catch (cleanupError) {
                         console.error("❌ Error cleaning up session:", cleanupError);
                     }

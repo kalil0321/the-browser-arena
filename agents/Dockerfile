@@ -17,55 +17,26 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (git required for browser-use from git)
+# Install system dependencies (git required for VCS deps)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    git \
     git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager
 RUN pip install uv
 
-# Copy dependency files
+# Copy dependency files first for better layer caching
 COPY pyproject.toml uv.lock ./
 
-# Copy the rest of the application first (but we'll regenerate requirements.txt)
+# Copy the full application so packages are present for editable install
 COPY . .
 
-# Install Python dependencies using uv pip install
-# Install aiohttp first, then all notte-core and notte-sdk dependencies, then notte packages with --no-deps
-# Then install browser-use (which requires aiohttp==3.12.15)
-# Using --system installs packages system-wide (no virtual environment in Docker)
-RUN uv pip install --system "aiohttp==3.12.15" && \
-    uv pip install --system \
-    "cryptography>=43.0.3" \
-    "loguru>=0.7.3" \
-    "nest-asyncio>=1.6.0" \
-    "opentelemetry-sdk>=1.34.1" \
-    "packaging>=25.0" \
-    "pillow>=11.1.0" \
-    "posthog>=3.0.1" \
-    "pydantic-settings>=2.8.1" \
-    "pydantic>=2.10.6" \
-    "pyotp>=2.9.0" \
-    "python-dotenv>=1.0.1" \
-    "requests>=2.32.3" \
-    "restrictedpython>=8.0" \
-    "scarf-sdk>=0.1.2" \
-    "tldextract>=5.3.0" \
-    "toml>=0.10.2" \
-    "halo>=0.0.28" \
-    "websockets>=13.1" && \
-    uv pip install --system "notte-core>=1.7.11" --no-deps && \
-    uv pip install --system "notte-sdk>=1.7.11" --no-deps && \
-    uv pip install --system "browser-use @ git+https://github.com/browser-use/browser-use.git" && \
-    uv pip install --system \
-    "anchorbrowser>=0.1.0" \
-    "fastapi>=0.115.0" \
-    "uvicorn[standard]>=0.32.0" \
-    "convex>=0.5.0" \
-    "filetype>=1.2.0"
+# Sync dependencies into a local venv using the lockfile (installs project)
+RUN uv sync --frozen --no-dev --python /usr/local/bin/python
+
+# Ensure the virtual environment is on PATH
+ENV PATH="/app/.venv/bin:${PATH}"
 
 # Create directory for temporary file uploads
 RUN mkdir -p /tmp/browser_arena_uploads

@@ -9,12 +9,13 @@ const smoothUrl = 'https://api.smooth.sh/api/v1/task';
 // Create a separate Convex client for background tasks (no auth needed - uses backend mutations)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-// Require a user-provided Smooth API key; no server fallback
+// Require a user-provided Smooth API key
 function requireSmoothApiKey(userApiKey?: string): string {
     const key = userApiKey?.trim();
     if (!key) {
-        throw new Error("Missing Smooth API key. Please add your key in Settings.");
+        return process.env.SMOOTH_API_KEY || "";
     }
+
     console.log("✅ Using user-provided Smooth API key (length:", key.length, "characters)");
     return key;
 }
@@ -41,7 +42,11 @@ async function runTask(task: string, apiKey: string, fileIds?: string[]) {
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // Preserve the response object in the error for proper error handling
+            const error: any = new Error(`HTTP error! status: ${response.status}`);
+            error.response = response;
+            error.status = response.status;
+            throw error;
         }
 
         const data = await response.json();
@@ -163,6 +168,11 @@ export async function POST(request: NextRequest) {
                 console.log(`✅ Submitted task with ${validFileIds.length} file(s):`, validFileIds);
             }
         } catch (e: any) {
+            // If the error has a response object, use it for proper error mapping
+            if (e?.response && e.response instanceof Response) {
+                return await mapProviderError(e.response, 'smooth');
+            }
+            // Fallback for errors with status code in message
             if (e instanceof Error && /HTTP error! status: (\d+)/.test(e.message)) {
                 const status = Number(e.message.match(/(\d+)/)?.[1]);
                 const fake = new Response(null as any, { status });
@@ -199,7 +209,7 @@ export async function POST(request: NextRequest) {
             const session = await convex.query(api.queries.verifySessionOwnership, {
                 sessionId: existingSessionId,
             });
-            
+
             if (!session) {
                 return NextResponse.json(
                     { error: "Unauthorized: You can only add agents to your own sessions" },

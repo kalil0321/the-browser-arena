@@ -1,19 +1,14 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import AnchorBrowser from "anchorbrowser";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { missingKey, serverMisconfigured, unauthorized, badRequest } from "@/lib/http-errors";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 import { validateSecrets, validateApiKeyFormat, validateModelName, detectSuspiciousSecrets, logSecurityViolation } from "@/lib/security/validation";
+import { createBrowserSession, deleteBrowserSession } from "@/lib/browser";
 
-// Stagehand server URL - dev: localhost:3001, prod: stagehand.thebrowserarena.com
-// const STAGEHAND_SERVER_URL = "https://stagehand.thebrowserarena.com"
 const STAGEHAND_SERVER_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "https://stagehand.thebrowserarena.com";
 
-
-// Initialize the client
-const browser = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
 
 // Backend Convex client (no auth) for status updates from this route if needed
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -151,26 +146,7 @@ export async function POST(request: NextRequest) {
             }
         };
 
-        // Create browser session (external API call) - this is the main bottleneck
-        const browserSession = await browser.sessions.create(browserProfileConfig).catch((e: any) => {
-            if (e?.status === 401 || e?.status === 403) {
-                return Promise.reject(missingKey("Anchor Browser", true));
-            }
-            return Promise.reject(e);
-        });
-        const liveViewUrl = browserSession.data?.live_view_url ?? "";
-        const browserSessionId = browserSession.data?.id ?? "";
-        const cdpUrl = browserSession.data?.cdp_url ?? "";
-
-        if (!liveViewUrl) {
-            console.error("❌ Failed to create session - no live_view_url");
-            return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
-        }
-
-        if (!cdpUrl) {
-            console.error("❌ Failed to create session - no cdp_url");
-            return NextResponse.json({ error: "Failed to create session - missing cdp_url" }, { status: 500 });
-        }
+        const { browserSessionId, cdpUrl, liveViewUrl } = await createBrowserSession(browserProfileConfig);
 
         let dbSessionId: string;
         let agentId: any; // Use any to avoid type conflicts with Convex ID types

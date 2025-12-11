@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
-import AnchorBrowser from "anchorbrowser";
 import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, serverMisconfigured, unauthorized, providerUnavailable } from "@/lib/http-errors";
+import { computeBrowserCost, createBrowserSession } from "@/lib/browser";
 
 // Create a lightweight session specifically for interactive browser profile usage
 export async function POST(_request: NextRequest) {
@@ -16,9 +16,6 @@ export async function POST(_request: NextRequest) {
         if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
             return serverMisconfigured("Missing NEXT_PUBLIC_CONVEX_URL");
         }
-        if (!process.env.ANCHOR_API_KEY) {
-            return serverMisconfigured("Missing ANCHOR_API_KEY", { provider: "anchor" });
-        }
 
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
         convex.setAuth(token);
@@ -29,13 +26,11 @@ export async function POST(_request: NextRequest) {
             return unauthorized();
         }
 
-        const anchorClient = new AnchorBrowser({ apiKey: process.env.ANCHOR_API_KEY });
-
         // Prepare profile and timeouts
         const profileName = `profile-${user._id}`;
 
         // 10 minutes max, 3 minutes idle as specified
-        const session = await anchorClient.sessions.create({
+        const { liveViewUrl } = await createBrowserSession({
             session: {
                 timeout: {
                     max_duration: 10,
@@ -47,25 +42,16 @@ export async function POST(_request: NextRequest) {
                     persist: true,
                 },
             },
-        } as any);
+        } as any, { navBar: true });
 
-        // Expect URL to embed from Anchor; fail gracefully if not present
-        const url = (session as any)?.url || (session as any)?.session_url || (session as any)?.embed_url;
-        if (!url) {
-            return providerUnavailable("Anchor did not return a browser URL", { provider: "anchor" });
-        }
-
-        // Add usage cost: base 0.1 + 0.05 per hour (prorated for 10 minutes)
-        const proratedHours = 10 / 60;
-        const cost = 0.1 + 0.05 * proratedHours;
+        // Add usage cost: prorated for 10 minutes
+        const cost = computeBrowserCost(10 * 60);
         await convex.mutation(api.mutations.addUsageCost, { cost });
 
-        return NextResponse.json({ url }, { status: 200 });
+        return NextResponse.json({ url: liveViewUrl }, { status: 200 });
     } catch (error: any) {
         // Normalize common error shapes
         const message = error?.message || "Failed to create profile session";
         return badRequest(message);
     }
 }
-
-

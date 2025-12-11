@@ -10,12 +10,14 @@
 
 import type * as actions from "../actions.js";
 import type * as auth from "../auth.js";
+import type * as battles from "../battles.js";
 import type * as betterAuth__generated_api from "../betterAuth/_generated/api.js";
 import type * as betterAuth__generated_server from "../betterAuth/_generated/server.js";
 import type * as betterAuth_adapter from "../betterAuth/adapter.js";
 import type * as betterAuth_auth from "../betterAuth/auth.js";
 import type * as http from "../http.js";
 import type * as lib_arena from "../lib/arena.js";
+import type * as lib_battle_elo from "../lib/battle/elo.js";
 import type * as mutations from "../mutations.js";
 import type * as queries from "../queries.js";
 
@@ -36,12 +38,14 @@ import type {
 declare const fullApi: ApiFromModules<{
   actions: typeof actions;
   auth: typeof auth;
+  battles: typeof battles;
   "betterAuth/_generated/api": typeof betterAuth__generated_api;
   "betterAuth/_generated/server": typeof betterAuth__generated_server;
   "betterAuth/adapter": typeof betterAuth_adapter;
   "betterAuth/auth": typeof betterAuth_auth;
   http: typeof http;
   "lib/arena": typeof lib_arena;
+  "lib/battle/elo": typeof lib_battle_elo;
   mutations: typeof mutations;
   queries: typeof queries;
 }>;
