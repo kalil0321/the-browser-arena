@@ -177,7 +177,7 @@ function DemoSessionAgents({ sessionId }: { sessionId: Id<"sessions"> }) {
                     {agent.name === "smooth" && (
                         <SmoothLogo className="h-3 w-3" />
                     )}
-                    {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                    {agent.name === "stagehand" && (
                         <StagehandLogo className="h-3 w-3" />
                     )}
                     {agent.name}

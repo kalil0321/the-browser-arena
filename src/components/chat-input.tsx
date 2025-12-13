@@ -40,7 +40,7 @@ const validateAgentConfigs = (configs: any): configs is AgentConfig[] => {
         }
 
         // Check if agent type is valid
-        const validAgentTypes: AgentType[] = ["stagehand", "smooth", "stagehand-bb-cloud", "browser-use", "browser-use-cloud", "notte"];
+        const validAgentTypes: AgentType[] = ["stagehand", "smooth", "browser-use", "browser-use-cloud", "notte"];
         if (!validAgentTypes.includes(config.agent)) {
             return false;
         }
@@ -877,7 +877,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                     </span>
                                 </Button>
 
-                                
+
                                 {/* Privacy state (removed for now) */}
                                 {/* <div className="flex items-center gap-2 rounded-full px-2.5 sm:px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 shrink-0">
                                     <Label htmlFor="private-session" className="text-[11px] sm:text-[11px] text-muted-foreground whitespace-nowrap">Private</Label>

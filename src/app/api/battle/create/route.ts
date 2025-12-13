@@ -166,9 +166,7 @@ export async function POST(request: NextRequest) {
                         };
                         break;
                     case "stagehand":
-                    case "stagehand-bb-cloud":
-                    case "stagehand-cloud":
-                        endpoint = `/api/agent/${agent.type === "stagehand-bb-cloud" ? "stagehand-cloud" : agent.type}`;
+                        endpoint = `/api/agent/${agent.type}`;
                         isLocalEndpoint = true;
                         payload = {
                             instruction,

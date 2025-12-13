@@ -10,7 +10,7 @@ export type Framework = "browser-use" | "stagehand" | "smooth" | "notte";
 /**
  * Get framework from agent type
  *
- * @param agentType Agent type string (e.g., "browser-use", "browser-use-cloud", "stagehand-bb-cloud")
+ * @param agentType Agent type string (e.g., "browser-use", "browser-use-cloud", "stagehand")
  * @returns Framework identifier
  */
 export function getFramework(agentType: string): Framework {
@@ -46,8 +46,6 @@ export function hasSameFramework(agentA: string, agentB: string): boolean {
  */
 export function getAgentDisplayName(agentType: string): string {
     if (agentType === "browser-use-cloud") return "BU Cloud";
-    if (agentType === "stagehand-bb-cloud") return "SH BB Cloud";
-    if (agentType === "stagehand-cloud") return "SH Cloud";
     if (agentType === "browser-use") return "Browser-Use";
     if (agentType === "stagehand") return "Stagehand";
     if (agentType === "smooth") return "Smooth";
@@ -76,7 +74,7 @@ export function getAgentTypesForFramework(framework: Framework): string[] {
         case "browser-use":
             return ["browser-use", "browser-use-cloud"];
         case "stagehand":
-            return ["stagehand", "stagehand-bb-cloud", "stagehand-cloud"];
+            return ["stagehand"];
         case "smooth":
             return ["smooth"];
         case "notte":

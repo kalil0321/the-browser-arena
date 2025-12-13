@@ -430,7 +430,7 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
 
                         {agentResult && showOutput && (() => {
                             const agentType = getAgentType(agent, agentResult);
-                            const isStagehand = agentType === "stagehand" || agentType === "stagehand-bb-cloud" || agentType === "stagehand-cloud";
+                            const isStagehand = agentType === "stagehand";
                             const isBrowserUse = agentType === "browser-use" || agentType === "browser_use" || agentType === "browser-use-cloud";
                             const isSmooth = agentType === "smooth";
                             const isNotte = agentType === "notte";

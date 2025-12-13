@@ -31,7 +31,7 @@ interface AgentPropertiesDialogProps {
 
 export function AgentPropertiesDialog({ agent, open, onOpenChange }: AgentPropertiesDialogProps) {
     const isBrowserUse = agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud";
-    const isStagehand = agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud";
+    const isStagehand = agent.name === "stagehand";
     const isSmooth = agent.name === "smooth";
 
     // Don't show dialog for smooth

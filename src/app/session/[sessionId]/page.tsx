@@ -94,8 +94,8 @@ export default function SessionPage() {
                     <div className="flex flex-col gap-1 min-w-0 flex-1">
                         <div className="flex items-start gap-2 group">
                             <h1 className="text-base sm:text-lg font-default font-medium text-gray-900 dark:text-gray-100 break-words flex-1" title={session.instruction}>
-                                {session.instruction && session.instruction.length > 100 
-                                    ? session.instruction.substring(0, 100) + '...' 
+                                {session.instruction && session.instruction.length > 100
+                                    ? session.instruction.substring(0, 100) + '...'
                                     : session.instruction}
                             </h1>
                             <button
@@ -190,14 +190,12 @@ export default function SessionPage() {
                                                 {agent.name === "smooth" && (
                                                     <SmoothLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
-                                                {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                                                {agent.name === "stagehand" && (
                                                     <StagehandLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
                                                 <span className="data-[state=active]:border-current transition-colors truncate max-w-[100px] sm:max-w-[120px]" title={agent.name}>
                                                     {agent.name === "browser-use-cloud" ? "BU Cloud" :
-                                                        agent.name === "stagehand-bb-cloud" ? "SH BB Cloud" :
-                                                            agent.name === "stagehand-cloud" ? "SH Cloud" :
-                                                                agent.name}
+                                                        agent.name}
                                                 </span>
                                                 {agent.status === "completed" && (
                                                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

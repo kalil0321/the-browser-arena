@@ -105,7 +105,6 @@ export function AgentSelectionDialog({
                 <div className="py-3">
                     <div className="space-y-4">
                         {(Object.keys(AGENT_LABELS) as AgentType[])
-                            .filter((agentType) => agentType !== "stagehand-bb-cloud") // Commented out: Stagehand Cloud
                             .map((agentType) => {
                                 const instances = getAgentInstances(agentType);
                                 const instanceCount = getAgentInstanceCount(agentType);

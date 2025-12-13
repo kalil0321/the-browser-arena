@@ -11,7 +11,7 @@ import { BrowserSession, createBrowserSession, deleteBrowserSession } from "@/li
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
 interface AgentConfig {
-    agent: "stagehand" | "smooth" | "stagehand-bb-cloud" | "browser-use" | "browser-use-cloud" | "notte";
+    agent: "stagehand" | "smooth" | "browser-use" | "browser-use-cloud" | "notte";
     model: string;
     secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
     thinkingModel?: string; // For stagehand: model used for thinking/planning
@@ -44,7 +44,6 @@ function getRequiredKeysForAgent(agentConfig: AgentConfig): RequiredKeys {
             // Uses server-side credentials
             break;
         case "stagehand":
-        case "stagehand-bb-cloud":
         case "browser-use":
             // These agents require LLM API keys based on model
             const model = agentConfig.model?.toLowerCase() || "";
@@ -449,27 +448,11 @@ export async function POST(request: NextRequest) {
                             ...(smoothFileIds && smoothFileIds.length > 0 ? { fileIds: smoothFileIds } : {}),
                         };
                         break;
-                    case "stagehand-bb-cloud":
-                        // Stagehand BrowserBase Cloud is a Next.js route
-                        endpoint = `/api/agent/stagehand-cloud`;
-                        isLocalEndpoint = true;
-                        payload = {
-                            instruction,
-                            model: agentConfig.model,
-                            sessionId: dbSessionId, // Pass the shared session ID
-                            openaiApiKey,
-                            googleApiKey,
-                            anthropicApiKey,
-                            openrouterApiKey,
-                            ...(agentConfig.thinkingModel && { thinkingModel: agentConfig.thinkingModel }),
-                            ...(agentConfig.executionModel && { executionModel: agentConfig.executionModel }),
-                        };
-                        break;
                     case "browser-use":
                         endpoint = `${AGENT_SERVER_URL}/agent/browser-use`;
                         // Use pre-created browser session for performance
                         const { browserSessionId, cdpUrl, liveViewUrl } = browserSessions[browserSessionIndex++];
-                        
+
                         payload = {
                             sessionId: dbSessionId,
                             instruction,

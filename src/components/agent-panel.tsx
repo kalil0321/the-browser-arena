@@ -92,12 +92,6 @@ export function AgentPanel({ agent }: AgentPanelProps) {
         if (name === "browser-use-cloud") {
             return "BU Cloud";
         }
-        if (name === "stagehand-bb-cloud") {
-            return "SH BB Cloud";
-        }
-        if (name === "stagehand-cloud") {
-            return "SH Cloud";
-        }
         return name;
     };
 
@@ -113,7 +107,7 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                     {agent.name === "smooth" && (
                         <SmoothLogo className="h-4 w-4 shrink-0" />
                     )}
-                    {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                    {agent.name === "stagehand" && (
                         <StagehandLogo className="h-4 w-4 shrink-0" />
                     )}
                     {agent.name === "notte" && (
@@ -289,10 +283,10 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                             <div className="p-4">
                                 {agent.name === "smooth" && <SmoothPanel agent={agent} />}
                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && <BUPanel agent={agent} />}
-                                {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && <StagehandPanel agent={agent} />}
+                                {agent.name === "stagehand" && <StagehandPanel agent={agent} />}
                                 {agent.name === "notte" && <NottePanel agent={agent} />}
 
-                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "stagehand-bb-cloud", "stagehand-cloud", "notte"].includes(agent.name) && (
+                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "notte"].includes(agent.name) && (
                                     <div className="space-y-3">
                                         <div className="bg-card rounded-lg p-4">
                                             <h4 className="text-xs font-medium mb-2 uppercase tracking-wide">Result</h4>

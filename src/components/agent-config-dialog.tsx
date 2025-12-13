@@ -48,7 +48,7 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
     if (!agentConfig) return null;
 
     const isBrowserUse = agentConfig.agent === "browser-use" || agentConfig.agent === "browser-use-cloud";
-    const isStagehand = agentConfig.agent === "stagehand" || agentConfig.agent === "stagehand-bb-cloud";
+    const isStagehand = agentConfig.agent === "stagehand";
     const isSmooth = agentConfig.agent === "smooth";
     const isNotte = agentConfig.agent === "notte";
 

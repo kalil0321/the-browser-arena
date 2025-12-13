@@ -180,14 +180,12 @@ export default function DemoSessionPage() {
                                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && (
                                                     <BrowserUseLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
-                                                {(agent.name === "stagehand" || agent.name === "stagehand-bb-cloud" || agent.name === "stagehand-cloud") && (
+                                                {agent.name === "stagehand" && (
                                                     <StagehandLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
                                                 <span className="data-[state=active]:border-current transition-colors truncate max-w-[100px] sm:max-w-[120px]" title={agent.name}>
                                                     {agent.name === "browser-use-cloud" ? "BU Cloud" :
-                                                        agent.name === "stagehand-bb-cloud" ? "SH BB Cloud" :
-                                                            agent.name === "stagehand-cloud" ? "SH Cloud" :
-                                                                agent.name}
+                                                        agent.name}
                                                 </span>
                                                 {agent.status === "completed" && (
                                                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
