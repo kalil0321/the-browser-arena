@@ -3,14 +3,13 @@ import { ConvexHttpClient } from "convex/browser";
 import { Stagehand } from "@browserbasehq/stagehand";
 import { after } from "next/server";
 import { api } from "../../../../../convex/_generated/api";
-import { badRequest, mapProviderError, serverMisconfigured } from "@/lib/http-errors";
+import { badRequest } from "@/lib/http-errors";
 import { getOrCreateSignedFingerprint } from "@/lib/fingerprint";
 import { computeCost } from "@/lib/pricing";
 import { z } from "zod";
 import { tool } from "ai";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 import { computeBrowserCost, createBrowserSession, deleteBrowserSession } from "@/lib/browser";
-import { browser } from "node:process";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
