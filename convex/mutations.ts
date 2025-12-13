@@ -876,11 +876,11 @@ export const claimDemoQuerySlot = mutation({
 
         if (existingByFingerprint) {
             // Check if limit already exceeded for this fingerprint
-            if (existingByFingerprint.queriesUsed >= 1) {
+            if (existingByFingerprint.queriesUsed >= 3) {
                 return {
                     allowed: false,
                     queriesUsed: existingByFingerprint.queriesUsed,
-                    maxQueries: 1,
+                    maxQueries: 3,
                 };
             }
 
@@ -894,7 +894,7 @@ export const claimDemoQuerySlot = mutation({
                 allowed: true,
                 usageId: existingByFingerprint._id,
                 queriesUsed: existingByFingerprint.queriesUsed + 1,
-                maxQueries: 1,
+                maxQueries: 3,
             };
         }
 
@@ -907,12 +907,12 @@ export const claimDemoQuerySlot = mutation({
                 .withIndex("by_ip", (q) => q.eq("ipAddress", args.ipAddress))
                 .first();
 
-            if (existingByIP && existingByIP.queriesUsed >= 1) {
+            if (existingByIP && existingByIP.queriesUsed >= 3) {
                 // IP has already used a query, deny even with different fingerprint
                 return {
                     allowed: false,
                     queriesUsed: existingByIP.queriesUsed,
-                    maxQueries: 1,
+                    maxQueries: 3,
                 };
             }
         }
@@ -933,7 +933,7 @@ export const claimDemoQuerySlot = mutation({
             allowed: true,
             usageId,
             queriesUsed: 1,
-            maxQueries: 1,
+            maxQueries: 3,
         };
     },
 });

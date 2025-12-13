@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
-import { Stagehand } from "@browserbasehq/stagehand";
 import { after } from "next/server";
 import { api } from "../../../../../convex/_generated/api";
 import { badRequest } from "@/lib/http-errors";
 import { getOrCreateSignedFingerprint } from "@/lib/fingerprint";
-import { computeCost } from "@/lib/pricing";
-import { z } from "zod";
-import { tool } from "ai";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
-import { computeBrowserCost, createBrowserSession, deleteBrowserSession } from "@/lib/browser";
+import { createBrowserSession, deleteBrowserSession } from "@/lib/browser";
+
+export const runtime = "nodejs";
 
 // Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
+
+// Stagehand server URL
+const STAGEHAND_SERVER_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "https://stagehand.thebrowserarena.com";
 
 // Create a separate Convex client for background tasks (no auth needed)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -26,22 +27,6 @@ const config = {
     }
 };
 
-const determineKey = (model: string | undefined) => {
-    if (!model) {
-        return process.env.GOOGLE_API_KEY;
-    }
-    const provider = model.split("/")[0];
-    if (provider === "google") {
-        return process.env.GOOGLE_API_KEY;
-    }
-    if (provider === "openai") {
-        return process.env.OPENAI_API_KEY;
-    }
-    if (provider === "anthropic") {
-        return process.env.ANTHROPIC_API_KEY;
-    }
-    return process.env.GOOGLE_API_KEY;
-};
 
 // Get client IP address from request
 function getClientIP(request: NextRequest): string {
@@ -213,95 +198,50 @@ export async function POST(request: NextRequest) {
 
         // Execute each agent in background
         after(async () => {
-            const startTime = Date.now();
             await Promise.all(builtAgents.map(async (b, idx) => {
                 const agentId = allAgentIds[idx];
                 try {
                     if (b.kind === "stagehand") {
                         const modelString = b.model;
-                        const stagehand = new Stagehand({
-                            env: "LOCAL",
-                            verbose: 0,
-                            disablePino: true,
-                            model: {
-                                modelName: modelString,
-                                apiKey: determineKey(modelString),
+                        const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+                        if (!agentServerApiKey) {
+                            console.error("AGENT_SERVER_API_KEY is not configured");
+                        }
+
+                        const resp = await fetch(`${STAGEHAND_SERVER_URL}/agent/stagehand`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${agentServerApiKey}`,
                             },
-                            localBrowserLaunchOptions: {
+                            body: JSON.stringify({
+                                sessionId: dbSessionId,
+                                instruction,
+                                model: modelString,
                                 cdpUrl: b.cdpUrl,
-                            },
+                                liveViewUrl: b.liveViewUrl,
+                                agentId: agentId,
+                                userId: demoUserId,
+                                keys: {
+                                    openai: process.env.OPENAI_API_KEY,
+                                    google: process.env.GOOGLE_API_KEY,
+                                    anthropic: process.env.ANTHROPIC_API_KEY,
+                                    openrouter: process.env.OPENROUTER_API_KEY,
+                                },
+                            }),
                         });
 
-                        await stagehand.init();
-                        const agent = await stagehand.agent({
-                            model: modelString,
-                            executionModel: modelString,
-                            tools: {
-                                uploadFile: tool({
-                                    description: "Upload a file to the browser",
-                                    inputSchema: z.object({
-                                        locator: z.string(),
-                                    }),
-                                    execute: async ({ locator }) => {
-                                        const page = stagehand.context.pages()[0];
-                                        if (!page) {
-                                            return {
-                                                error: "No page found",
-                                            };
-                                        }
-                                    },
-                                }),
-                            },
-                        });
-
-                        const { message, actions, usage, success, completed, metadata } = await agent.execute({
-                            highlightCursor: false,
-                            instruction,
-                        });
-
-                        await stagehand.close();
-                        const endTime = Date.now();
-                        const duration = (endTime - startTime) / 1000;
-
-                        await deleteBrowserSession(b.browserSessionId);
-
-                        // let recordingUrl = "";
-                        // try {
-                        //     const recording = await browser.sessions.recordings.primary.get(b.browserSessionId);
-                        //     const arrayBuffer = await recording.arrayBuffer();
-                        //     const base64 = Buffer.from(arrayBuffer).toString('base64');
-                        //     recordingUrl = `data:video/mp4;base64,${base64}`;
-                        // } catch (recordingError) {
-                        //     console.error("Failed to get recording:", recordingError);
-                        // }
-
-                        const usageData = usage ?? { input_tokens: 0, output_tokens: 0, inference_time_ms: 0 };
-                        const llmCost = computeCost(modelString, usageData);
-                        const browserCost = computeBrowserCost(duration);
-                        const cost = llmCost + browserCost;
-
-                        const payload = {
-                            usage: {
-                                ...usageData,
-                                total_cost: cost,
-                                browser_cost: browserCost,
-                                llm_cost: llmCost,
-                            },
-                            cost,
-                            duration,
-                            message,
-                            actions,
-                            success: true,
-                            agent: "stagehand",
-                            completed: true,
-                            metadata,
-                        };
-
-                        await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
-                            agentId,
-                            result: payload,
-                            status: success ? "completed" as const : "failed" as const,
-                        });
+                        if (!resp.ok) {
+                            await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
+                                agentId,
+                                status: "failed",
+                                error: "Stagehand server execution failed",
+                            });
+                            await deleteBrowserSession(b.browserSessionId);
+                        } else {
+                            const agentData = await resp.json();
+                            console.log("Stagehand execution completed", agentData);
+                        }
                     } else {
                         const providerModel = b.model || "browser-use/bu-1.0";
                         const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
