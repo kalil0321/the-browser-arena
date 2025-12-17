@@ -58,6 +58,7 @@ export const ALLOWED_MODELS = new Set([
     'gemini-2.5-flash',
     'gemini-2.5-pro',
     'gemini-3-pro-preview',
+    'gemini-3-flash-preview',
     // Browser-Use models
     'browser-use/bu-1.0',
     'browser-use-llm',
@@ -68,6 +69,7 @@ export const ALLOWED_MODELS = new Set([
     'openai/gpt-5.2',
     'openai/gpt-5-mini',
     'openai/gpt-5-nano',
+    'google/gemini-3-flash-preview',
 ]);
 
 // Provider prefixes for model validation

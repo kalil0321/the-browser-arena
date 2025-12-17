@@ -15,6 +15,11 @@ const pricing: Record<string, { in: number; out: number; cached: number }> = {
         "out": 12.0 / 1_000_000,
         "cached": 0.2 / 1_000_000,
     },
+    'google/gemini-3-flash-preview': {
+        in: 0.5 / 1_000_000,
+        out: 3.0 / 1_000_000,
+        cached: 0.05 / 1_000_000,
+    },
     'openai/gpt-4.1': {
         in: 2.0 / 1_000_000,
         out: 8.0 / 1_000_000,

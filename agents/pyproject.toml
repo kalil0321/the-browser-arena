@@ -11,7 +11,7 @@ dependencies = [
     "aiohttp==3.12.15",
     "anchorbrowser>=0.1.0",
     "browser-use @ git+https://github.com/browser-use/browser-use.git",
-    "notte-sdk>=1.7.11",
+    "notte-sdk>=1.7.15",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "convex>=0.5.0",
