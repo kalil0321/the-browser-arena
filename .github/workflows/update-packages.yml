@@ -1,0 +1,272 @@
+name: Monitor Package Updates
+
+on:
+  schedule:
+    # Run every day at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allows manual triggering
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor-packages:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install npm-check-updates
+        run: npm install -g npm-check-updates
+
+      - name: Check npm packages (root)
+        id: check-npm-root
+        run: |
+          npm install
+          ncu --format json > /tmp/npm-root-outdated.json || echo "[]" > /tmp/npm-root-outdated.json
+          cat /tmp/npm-root-outdated.json
+
+      - name: Check npm packages (stagehand)
+        id: check-npm-stagehand
+        run: |
+          cd stagehand
+          npm install
+          ncu --format json > /tmp/npm-stagehand-outdated.json || echo "[]" > /tmp/npm-stagehand-outdated.json
+          cat /tmp/npm-stagehand-outdated.json
+
+      - name: Check Python packages
+        id: check-python
+        run: |
+          cd agents
+          pip install packaging
+          python3 << 'EOF' > /tmp/python-outdated.json
+          import re
+          import json
+          import urllib.request
+          from pathlib import Path
+          from packaging import version
+          
+          def get_latest_version(package_name):
+              """Get latest version from PyPI JSON API"""
+              try:
+                  url = f"https://pypi.org/pypi/{package_name}/json"
+                  with urllib.request.urlopen(url, timeout=10) as response:
+                      data = json.loads(response.read())
+                      info_version = data.get('info', {}).get('version')
+                      if info_version:
+                          return info_version
+              except Exception as e:
+                  print(f"Error fetching {package_name}: {e}", file=sys.stderr)
+              return None
+          
+          def check_packages():
+              pyproject_path = Path('pyproject.toml')
+              if not pyproject_path.exists():
+                  return []
+              
+              outdated = []
+              content = pyproject_path.read_text()
+              lines = content.split('\n')
+              in_dependencies = False
+              
+              for line in lines:
+                  if 'dependencies = [' in line:
+                      in_dependencies = True
+                      continue
+                  if in_dependencies and line.strip().startswith(']'):
+                      in_dependencies = False
+                      continue
+                  
+                  if in_dependencies:
+                      # Skip git dependencies
+                      if '@ git+' in line or '@git+' in line:
+                          continue
+                      
+                      # Match: "package-name>=1.0.0" or "package-name==1.0.0"
+                      match = re.match(r'\s*"([^"]+)"\s*(>=|==)\s*([\d.]+)', line)
+                      if match:
+                          pkg_name = match.group(1)
+                          current_version = match.group(3)
+                          latest = get_latest_version(pkg_name)
+                          
+                          if latest and latest != current_version:
+                              try:
+                                  # Compare versions properly
+                                  if version.parse(latest) > version.parse(current_version):
+                                      outdated.append({
+                                          "package": pkg_name,
+                                          "current": current_version,
+                                          "latest": latest,
+                                          "location": "agents/pyproject.toml"
+                                      })
+                              except:
+                                  # Fallback: simple string comparison
+                                  if latest != current_version:
+                                      outdated.append({
+                                          "package": pkg_name,
+                                          "current": current_version,
+                                          "latest": latest,
+                                          "location": "agents/pyproject.toml"
+                                      })
+              
+              return outdated
+          
+          import sys
+          outdated = check_packages()
+          print(json.dumps(outdated, indent=2))
+          EOF
+        continue-on-error: true
+
+      - name: Collect outdated packages
+        id: collect-outdated
+        run: |
+          # Combine all outdated packages
+          npm_root=$(cat /tmp/npm-root-outdated.json | jq -r '.[] | select(. != null) | "\(.name)|\(.current)|\(.latest)|package.json"')
+          npm_stagehand=$(cat /tmp/npm-stagehand-outdated.json | jq -r '.[] | select(. != null) | "\(.name)|\(.current)|\(.latest)|stagehand/package.json"')
+          python_packages=$(cat /tmp/python-outdated.json | jq -r '.[] | "\(.package)|\(.current)|\(.latest)|\(.location)"')
+          
+          # Combine into JSON
+          {
+            echo "{"
+            echo "  \"npm_root\": ["
+            echo "$npm_root" | while IFS='|' read -r name current latest location; do
+              [ -n "$name" ] && echo "    {\"name\": \"$name\", \"current\": \"$current\", \"latest\": \"$latest\", \"location\": \"$location\"},"
+            done | sed '$ s/,$//'
+            echo "  ],"
+            echo "  \"npm_stagehand\": ["
+            echo "$npm_stagehand" | while IFS='|' read -r name current latest location; do
+              [ -n "$name" ] && echo "    {\"name\": \"$name\", \"current\": \"$current\", \"latest\": \"$latest\", \"location\": \"$location\"},"
+            done | sed '$ s/,$//'
+            echo "  ],"
+            echo "  \"python\": $(cat /tmp/python-outdated.json)"
+            echo "}"
+          } > /tmp/all-outdated.json
+          
+          # Count total outdated packages
+          total=$(jq '[.npm_root[], .npm_stagehand[], .python[]] | length' /tmp/all-outdated.json)
+          echo "total=$total" >> $GITHUB_OUTPUT
+          
+          # Create markdown summary
+          {
+            echo "# 📦 Package Update Notification"
+            echo ""
+            echo "The following packages have newer versions available:"
+            echo ""
+            
+            npm_root_count=$(cat /tmp/npm-root-outdated.json | jq 'length')
+            if [ "$npm_root_count" -gt 0 ]; then
+              echo "## 📦 npm packages (root)"
+              echo ""
+              echo "| Package | Current | Latest |"
+              echo "|---------|---------|--------|"
+              cat /tmp/npm-root-outdated.json | jq -r '.[] | "| `\(.name)` | `\(.current)` | `\(.latest)` |"'
+              echo ""
+            fi
+            
+            npm_stagehand_count=$(cat /tmp/npm-stagehand-outdated.json | jq 'length')
+            if [ "$npm_stagehand_count" -gt 0 ]; then
+              echo "## 📦 npm packages (stagehand)"
+              echo ""
+              echo "| Package | Current | Latest |"
+              echo "|---------|---------|--------|"
+              cat /tmp/npm-stagehand-outdated.json | jq -r '.[] | "| `\(.name)` | `\(.current)` | `\(.latest)` |"'
+              echo ""
+            fi
+            
+            python_count=$(cat /tmp/python-outdated.json | jq 'length')
+            if [ "$python_count" -gt 0 ]; then
+              echo "## 🐍 Python packages"
+              echo ""
+              echo "| Package | Current | Latest |"
+              echo "|---------|---------|--------|"
+              cat /tmp/python-outdated.json | jq -r '.[] | "| `\(.package)` | `\(.current)` | `\(.latest)` |"'
+              echo ""
+            fi
+            
+            echo "---"
+            echo "*This issue was created automatically by the Monitor Package Updates workflow*"
+            echo "*Please review and update packages manually to avoid breaking changes and peer dependency issues.*"
+          } > /tmp/issue-body.md
+          
+          cat /tmp/issue-body.md
+
+      - name: Create or update GitHub Issue
+        if: steps.collect-outdated.outputs.total > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const issueBody = fs.readFileSync('/tmp/issue-body.md', 'utf8');
+            const outdatedData = JSON.parse(fs.readFileSync('/tmp/all-outdated.json', 'utf8'));
+            const total = (outdatedData.npm_root?.length || 0) + 
+                         (outdatedData.npm_stagehand?.length || 0) + 
+                         (outdatedData.python?.length || 0);
+            
+            // Check if an open issue already exists
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'package-updates'
+            });
+            
+            const existingIssue = issues.find(issue => 
+              issue.title.includes('Package Update Notification')
+            );
+            
+            if (existingIssue) {
+              // Update existing issue
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                title: `📦 Package Update Notification - ${total} package(s) need updating`,
+                body: issueBody
+              });
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              // Create new issue
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `📦 Package Update Notification - ${total} package(s) need updating`,
+                body: issueBody,
+                labels: ['package-updates', 'dependencies']
+              });
+              
+              // Mention the repository owner
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `@${context.repo.owner} New package updates are available!`
+              });
+              
+              console.log(`Created new issue #${issue.number}`);
+            }
+
+      - name: Summary
+        run: |
+          total=$(echo "${{ steps.collect-outdated.outputs.total }}" || echo "0")
+          if [ "$total" -gt 0 ]; then
+            echo "### 📦 Package Updates Found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Total packages with updates:** $total" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "A GitHub issue has been created/updated with details." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ All packages are up to date" >> $GITHUB_STEP_SUMMARY
+          fi
