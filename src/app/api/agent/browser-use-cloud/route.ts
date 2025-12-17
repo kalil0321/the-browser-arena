@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
             const session = await convex.query(api.queries.verifySessionOwnership, {
                 sessionId: existingSessionId,
             });
-            
+
             if (!session) {
                 return NextResponse.json(
                     { error: "Unauthorized: You can only add agents to your own sessions" },
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
                             }
 
                             // Fallback: check task details for embedded session/liveUrl
-                            const taskView = await bgClient.tasks.getTask(backgroundTaskId);
+                            const taskView = await bgClient.tasks.getTask({ task_id: backgroundTaskId });
                             const taskLiveUrl = (taskView as any).session?.liveUrl || (taskView as any).liveUrl || (taskView as any).live_view_url || "";
                             if (taskLiveUrl) {
                                 await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
                     const delayMs = 1000;
 
                     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                        const taskView = await bgClient.tasks.getTask(backgroundTaskId);
+                        const taskView = await bgClient.tasks.getTask({ task_id: backgroundTaskId });
                         const status = (taskView as any).status;
 
                         if (status === "finished" || status === "stopped" || status === "paused") {
