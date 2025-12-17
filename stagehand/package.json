@@ -9,7 +9,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^2.0.64",
     "@ai-sdk/provider": "^2.0.0",
-    "@browserbasehq/stagehand": "^3.0.1",
+    "@browserbasehq/stagehand": "^3.0.6",
     "@openrouter/ai-sdk-provider": "^1.2.0",
     "ai": "^3.4.33",
     "convex": "^1.13.0",
