@@ -7,16 +7,12 @@ export function ModeToggle() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const modeParam = searchParams.get("mode");
-  const currentMode = modeParam === "session" ? "session" : "battle";
+  const currentMode = modeParam === "battle" ? "battle" : "session";
 
   const handleModeChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    
-    if (value === "battle") {
-      params.delete("mode");
-    } else {
-      params.set("mode", value);
-    }
+
+    params.set("mode", value);
 
     const newUrl = params.toString() ? `/?${params.toString()}` : "/";
     router.push(newUrl);
