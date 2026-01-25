@@ -70,3 +70,5 @@ agents/skyvern_agent/__pycache__/main.cpython-312.pyc
 dist/
 build/
 *.egg
+
+PRIVATE.md

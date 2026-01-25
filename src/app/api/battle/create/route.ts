@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         console.log("[api/battle/create] Token fetched:", !!token);
 
         if (!token) {
-            return unauthorized();
+            return unauthorized("Please sign in to create a battle");
         }
 
         // Create Convex client
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         // Get current user
         const user = await convex.query(api.auth.getCurrentUser, {});
         if (!user) {
-            return unauthorized();
+            return unauthorized("Please sign in to create a battle");
         }
         const userId = user._id;
         console.log("[api/battle/create] User ID:", userId);

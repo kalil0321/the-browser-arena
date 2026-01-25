@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         // Get user token for auth
         const token = await getToken();
         if (!token) {
-            return unauthorized();
+            return unauthorized("Please sign in to vote on battles");
         }
 
         // Create Convex client

@@ -45,7 +45,9 @@ export function Battle() {
 
             if (!response.ok) {
                 const data = await response.json();
-                throw new Error(data.message || "Failed to create battle");
+                // Error message is nested under error.message in the response
+                const errorMessage = data.error?.message || data.message || "Failed to create battle";
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
