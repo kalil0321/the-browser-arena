@@ -16,19 +16,6 @@
 
 ---
 
-## 🎯 Why The Browser Arena?
-
-Choosing the right browser automation agent is hard. Each agent has different strengths, costs, and performance characteristics. **The Browser Arena** lets you:
-
-- **Test multiple agents simultaneously** on the same task
-- **Compare real-time performance** with live browser views
-- **Make data-driven decisions** with built-in metrics (time, cost, success rate)
-- **Save and replay sessions** to analyze what worked and what didn't
-
-Perfect for developers, researchers, and teams evaluating browser automation solutions.
-
----
-
 ## ✨ Features
 
 ### 🤖 Multi-Agent Support
@@ -153,26 +140,6 @@ Contributions are welcome! Here's how you can help:
 2. 💡 **Suggest features** - Share your ideas for improvements
 3. 🔀 **Submit PRs** - Fix bugs or add new features
 
----
-
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-Built with amazing open-source tools and browser automation frameworks:
-- [Browser-Use](https://github.com/browser-use/browser-use)
-- [Stagehand](https://github.com/browserbase/stagehand)
-- [Convex](https://convex.dev)
-- [Next.js](https://nextjs.org)
-
----
-
-<div align="center">
-
-**[⭐ Star this repo](https://github.com/kalil0321/the-browser-arena)** if you find it useful!
-
-</div>
