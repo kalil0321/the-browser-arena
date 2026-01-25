@@ -8,9 +8,9 @@ export default function Home() {
   const searchParams = useSearchParams();
   const mode = searchParams.get("mode");
 
-  if (mode === "session") {
-    return <Session />
+  if (mode === "battle") {
+    return <Battle />
   }
 
-  return <Battle />
+  return <Session />
 }
