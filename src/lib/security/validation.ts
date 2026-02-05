@@ -60,6 +60,7 @@ export const ALLOWED_MODELS = new Set([
     'gemini-3-pro-preview',
     'gemini-3-flash-preview',
     // Browser-Use models
+    'browser-use/bu-2.0',
     'browser-use/bu-1.0',
     'browser-use-llm',
     // OpenRouter models (will be validated by prefix)
@@ -70,10 +71,17 @@ export const ALLOWED_MODELS = new Set([
     'openai/gpt-5-mini',
     'openai/gpt-5-nano',
     'google/gemini-3-flash-preview',
+    // Vertex AI models (for Notte)
+    'vertex_ai/gemini-2.0-flash',
+    'vertex_ai/gemini-2.5-flash',
+    // Perplexity models
+    'perplexity/sonar-pro',
+    // Cerebras models
+    'cerebras/llama-3.3-70b',
 ]);
 
 // Provider prefixes for model validation
-const PROVIDER_PREFIXES = ['openai', 'google', 'anthropic', 'openrouter', 'browser-use', 'groq'];
+const PROVIDER_PREFIXES = ['openai', 'google', 'anthropic', 'openrouter', 'browser-use', 'groq', 'vertex_ai', 'perplexity', 'cerebras'];
 
 /**
  * Validates secrets object against whitelist and security rules

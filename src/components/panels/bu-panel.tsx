@@ -230,7 +230,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                                         </div>
                                     ),
                                     thead: ({ children }) => (
-                                        <thead className="bg-gray-50 dark:bg-muted">{children}</thead>
+                                        <thead className="bg-gray-50 dark:bg-muted [&_tr]:hover:bg-transparent">{children}</thead>
                                     ),
                                     th: ({ children }) => (
                                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
@@ -481,7 +481,7 @@ export function BUPanel({ agent }: BUPanelProps) {
                                                                                         </div>
                                                                                     ),
                                                                                     thead: ({ children }) => (
-                                                                                        <thead className="bg-gray-50 dark:bg-muted">{children}</thead>
+                                                                                        <thead className="bg-gray-50 dark:bg-muted [&_tr]:hover:bg-transparent">{children}</thead>
                                                                                     ),
                                                                                     th: ({ children }) => (
                                                                                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">

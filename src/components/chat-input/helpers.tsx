@@ -50,7 +50,11 @@ export const getProviderName = (provider: string) => {
         "openai": "OpenAI",
         "anthropic": "Anthropic",
         "browser-use": "Browser-Use",
-        "moonshotai": "Moonshot AI"
+        "moonshotai": "Moonshot AI",
+        "vertex_ai": "Vertex AI",
+        "perplexity": "Perplexity",
+        "cerebras": "Cerebras",
+        "groq": "Groq"
     };
     // Handle Browser Use Cloud models that don't have provider prefix
     if (provider === "" || !provider) {

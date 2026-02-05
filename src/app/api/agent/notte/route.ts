@@ -14,9 +14,11 @@ export async function POST(request: NextRequest) {
         const {
             instruction,
             isPrivate,
+            model,
         } = body as {
             instruction?: string;
             isPrivate?: boolean;
+            model?: string;
         };
 
         if (!instruction || typeof instruction !== "string" || !instruction.trim()) {
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
         const payload: Record<string, unknown> = {
             sessionId: dbSessionId,
             instruction,
+            model: model || undefined,
         };
 
         const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/notte`, {

@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import time
+import asyncio
 import uuid
 import logging
 import shutil
@@ -253,19 +254,19 @@ class AgentResponse(BaseModel):
 
 
 class NotteAgentRequest(BaseModel):
-    sessionId: str
+    sessionId: str = Field(..., description="The session ID for the request")
     instruction: str = Field(
         ...,
-        description="User instruction for the Notte agent",
         min_length=1,
-        max_length=5000,
+        description="User instruction for the Notte agent",
     )
-    agentId: Optional[str] = None
-
-    @field_validator("instruction")
-    @classmethod
-    def validate_instruction(cls, v: str) -> str:
-        return validate_instruction_field(v)
+    notteSessionId: Optional[str] = Field(
+        None, description="Existing Notte session ID to reuse"
+    )
+    model: Optional[str] = Field(
+        None,
+        description="The model to use for reasoning (e.g., 'vertex_ai/gemini-2.0-flash')",
+    )
 
 
 # Lifespan context manager
@@ -358,6 +359,11 @@ app.add_middleware(
 )
 
 pricing = {
+    "browser-use/bu-2-0": {
+        "in": 0.60 / 1_000_000,
+        "out": 3.50 / 1_000_000,
+        "cached": 0.06 / 1_000_000,
+    },
     "browser-use/bu-1-0": {
         "in": 0.50 / 1_000_000,
         "out": 3.00 / 1_000_000,
@@ -583,7 +589,7 @@ async def run_browser_use_task(
         if file_path:
             logger.info(f"[Agent {agent_id[:8]}] File provided: {file_path}")
 
-        result, usage, timings = await run_browser_use(
+        result, usage, timings, sdk_version = await run_browser_use(
             prompt=instruction,
             cdp_url=cdp_url,
             provider_model=provider_model,
@@ -786,7 +792,26 @@ async def run_browser_use_task(
             )
             actions = []
 
-        # Send payload to backend first
+        # Update agent with SDK version first
+        if sdk_version:
+            try:
+                convex_client.mutation(
+                    "mutations:updateAgentSDKVersion",
+                    {
+                        "agentId": agent_id,
+                        "sdkVersion": sdk_version,
+                    },
+                )
+                logger.info(
+                    f"[Agent {agent_id[:8]}] Updated SDK version: {sdk_version}"
+                )
+            except Exception as version_error:
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Failed to update SDK version: {version_error}",
+                    exc_info=True,
+                )
+
+        # Send payload to backend
         convex_client.mutation(
             "mutations:updateAgentResultFromBackend",
             {
@@ -852,10 +877,13 @@ async def run_browser_use_task(
 
 
 async def run_notte_task(
-    agent_id: str,
-    session_id: str,
     instruction: str,
-    notte_session_id: str,
+    notte_client: NotteClient,
+    session_id: str,
+    agent_id: str,
+    convex_client: ConvexClient,
+    notte_session_id: str = None,
+    model: str = None,
 ):
     """Run Notte agent in background and update Convex"""
     task_start_time = time.time()
@@ -895,13 +923,14 @@ async def run_notte_task(
                 exc_info=True,
             )
 
-        result_payload, usage_dict, timings, browser_url = await run_notte(
+        result_payload, usage_dict, timings, browser_url, sdk_version = await run_notte(
             prompt=instruction,
             notte_client=notte_client,
             session_id=session_id,
             notte_session_id=notte_session_id,
             agent_id=agent_id,
             convex_client=convex_client,
+            reasoning_model=model,
         )
 
         # Update browser URL in Convex if available
@@ -918,6 +947,25 @@ async def run_notte_task(
             except Exception as url_update_error:
                 logger.warning(
                     f"[Agent {agent_id[:8]}] Failed to update browser URL in Convex: {url_update_error}",
+                    exc_info=True,
+                )
+
+        # Update agent with SDK version first
+        if sdk_version:
+            try:
+                convex_client.mutation(
+                    "mutations:updateAgentSDKVersion",
+                    {
+                        "agentId": agent_id,
+                        "sdkVersion": sdk_version,
+                    },
+                )
+                logger.info(
+                    f"[Agent {agent_id[:8]}] Updated SDK version: {sdk_version}"
+                )
+            except Exception as version_error:
+                logger.warning(
+                    f"[Agent {agent_id[:8]}] Failed to update SDK version: {version_error}",
                     exc_info=True,
                 )
 
@@ -1080,17 +1128,19 @@ async def run_browser_use_agent(
         # Create agent in Convex (unless agentId is provided, e.g., for demo sessions)
         agent_id = request.agentId
         if not agent_id:
+            # Build payload without sdkVersion (will be updated when agent runs)
+            agent_payload = {
+                "sessionId": request.sessionId,
+                "name": "browser-use",
+                "model": request.providerModel,
+                "browser": {
+                    "sessionId": browser_session_id,
+                    "url": live_view_url,
+                },
+            }
             agent_id = convex_client.mutation(
                 "mutations:createAgentFromBackend",
-                {
-                    "sessionId": request.sessionId,
-                    "name": "browser-use",
-                    "model": request.providerModel,
-                    "browser": {
-                        "sessionId": browser_session_id,
-                        "url": live_view_url,
-                    },
-                },
+                agent_payload,
             )
 
         # Schedule background task
@@ -1158,28 +1208,32 @@ async def run_notte_agent(
 
     try:
         # Create agent in Convex with placeholder browser URL (will be updated after agent runs)
-        agent_id = request.agentId
-        if not agent_id:
-            agent_id = convex_client.mutation(
-                "mutations:createAgentFromBackend",
-                {
-                    "sessionId": request.sessionId,
-                    "name": "notte",
-                    "model": "",
-                    "browser": {
-                        "sessionId": "",
-                        "url": "",
-                    },
-                },
-            )
+        # Build payload without sdkVersion (will be updated when agent runs)
+        agent_payload = {
+            "sessionId": request.sessionId,
+            "name": "notte",
+            "model": "",
+            "browser": {
+                "sessionId": "",
+                "url": "",
+            },
+        }
+        agent_id = convex_client.mutation(
+            "mutations:createAgentFromBackend",
+            agent_payload,
+        )
 
         # Pass notte_session_id=None so Notte handles session creation internally
-        background_tasks.add_task(
-            run_notte_task,
-            agent_id=agent_id,
-            session_id=request.sessionId,
-            instruction=request.instruction,
-            notte_session_id=None,
+        asyncio.create_task(
+            run_notte_task(
+                instruction=request.instruction,
+                notte_client=notte_client,
+                session_id=request.sessionId,
+                agent_id=agent_id,
+                convex_client=convex_client,
+                notte_session_id=None,
+                model=request.model,
+            )
         )
 
         logger.info(

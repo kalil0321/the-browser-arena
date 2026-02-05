@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         const userId = user._id;
 
         // Prepare Python server request data
-        const providerModel = model || "browser-use/bu-1.0";
+        const providerModel = model || "browser-use/bu-2.0";
 
         // Validate model name
         const modelValidation = validateModelName(providerModel);

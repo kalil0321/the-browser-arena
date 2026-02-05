@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
 
         const builtAgents: BuiltAgent[] = [];
         for (const a of requestedAgents) {
-            const modelForAgent = a.model ?? (a.agent === "browser-use" ? "browser-use/bu-1.0" : "google/gemini-2.5-flash");
+            const modelForAgent = a.model ?? (a.agent === "browser-use" ? "browser-use/bu-2.0" : "google/gemini-2.5-flash");
             const profileConfig = {
                 ...(a.agent === "stagehand" ? config : {}),
                 browser: {
@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
                             console.log("Stagehand execution completed", agentData);
                         }
                     } else {
-                        const providerModel = b.model || "browser-use/bu-1.0";
+                        const providerModel = b.model || "browser-use/bu-2.0";
                         const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
                         if (!agentServerApiKey) {
                             console.error("AGENT_SERVER_API_KEY is not configured");

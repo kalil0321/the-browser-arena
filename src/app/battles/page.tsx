@@ -4,13 +4,62 @@ import { SidebarInset } from "@/components/ui/sidebar";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import Link from "next/link";
-import { Trophy, Calendar } from "lucide-react";
+import { Trophy, Calendar, Loader2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import type { Id, Doc } from "../../../convex/_generated/dataModel";
+
+const PAGE_SIZE = 25;
+
+type BattleRow = Doc<"battles">;
 
 export default function BattlesPage() {
-    // Query all battles
-    const battles = useQuery(api.battles.getAllBattles, { limit: 100 });
+    const [cursor, setCursor] = useState<string | null>(null);
+    const [allBattles, setAllBattles] = useState<BattleRow[]>([]);
 
-    if (battles === undefined) {
+    // Battles-only query for 2-step loading (fast initial render)
+    const paginatedData = useQuery(api.battles.getBattlesPaginated, {
+        paginationOpts: {
+            numItems: PAGE_SIZE,
+            cursor: cursor,
+        },
+    });
+
+    // Query for stats
+    const statsData = useQuery(api.battles.getBattleStatsOptimized);
+
+    // Combine paginated results
+    const { battles, canLoadMore, isDoneLoading } = useMemo(() => {
+        if (!paginatedData) {
+            return {
+                battles: allBattles,
+                canLoadMore: false,
+                isDoneLoading: false,
+            };
+        }
+
+        const currentBattles = cursor === null
+            ? paginatedData.page
+            : [...allBattles, ...paginatedData.page];
+
+        return {
+            battles: currentBattles,
+            canLoadMore: !paginatedData.isDone,
+            isDoneLoading: paginatedData.isDone,
+        };
+    }, [paginatedData, allBattles, cursor]);
+
+    // Handle load more
+    const handleLoadMore = () => {
+        if (paginatedData && paginatedData.continueCursor) {
+            setAllBattles(battles);
+            setCursor(paginatedData.continueCursor);
+        }
+    };
+
+    const isLoading = paginatedData === undefined;
+
+    if (isLoading && battles.length === 0) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">
@@ -36,7 +85,9 @@ export default function BattlesPage() {
                         </p>
                     </div>
                     <div className="text-right">
-                        <div className="text-2xl font-bold">{battles.length}</div>
+                        <div className="text-2xl font-bold">
+                            {statsData?.totalVotedBattles ?? battles.length}
+                        </div>
                         <div className="text-xs text-muted-foreground">Battles</div>
                     </div>
                 </div>
@@ -83,70 +134,117 @@ export default function BattlesPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {battles.map((battle) => (
-                                    <tr
-                                        key={battle._id}
-                                        className="hover:bg-muted/50 transition-colors cursor-pointer"
-                                        onClick={() => window.location.href = `/battle/${battle._id}`}
-                                    >
-                                        <td className="px-4 py-3">
-                                            <div className="max-w-md">
-                                                <div className="text-sm font-medium truncate">
-                                                    {battle.instruction}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="text-sm">
-                                                <div className="font-medium capitalize">
-                                                    {battle.agentA?.name || "Unknown"}
-                                                </div>
-                                                {battle.agentA?.model && (
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {battle.agentA.model}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="text-sm">
-                                                <div className="font-medium capitalize">
-                                                    {battle.agentB?.name || "Unknown"}
-                                                </div>
-                                                {battle.agentB?.model && (
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {battle.agentB.model}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            {battle.winner ? (
-                                                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300">
-                                                    <Trophy className="w-3 h-3" />
-                                                    {battle.winner.name === battle.agentA?.name ? "Agent A" : "Agent B"}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">No winner</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                                                <Calendar className="w-3 h-3" />
-                                                {new Date(battle.createdAt).toLocaleDateString(undefined, {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    year: 'numeric'
-                                                })}
-                                            </div>
-                                        </td>
-                                    </tr>
+                                {battles.map((battle: BattleRow) => (
+                                    <BattleRowComponent key={battle._id} battle={battle} />
                                 ))}
                             </tbody>
                         </table>
+
+                        {/* Load More Button */}
+                        {canLoadMore && (
+                            <div className="flex justify-center py-4 border-t border-border">
+                                <Button
+                                    variant="outline"
+                                    onClick={handleLoadMore}
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <Loader2 className="size-4 animate-spin mr-2" />
+                                            Loading...
+                                        </>
+                                    ) : (
+                                        "Load More Battles"
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+
+                        {isDoneLoading && battles.length > 0 && (
+                            <div className="flex justify-center py-4 border-t border-border text-sm text-muted-foreground">
+                                All battles loaded
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
         </SidebarInset>
+    );
+}
+
+// Battle row with 2-step loading - agents are fetched separately
+function BattleRowComponent({ battle }: { battle: BattleRow }) {
+    // Fetch agents for this battle (2-step loading)
+    const agents = useQuery(api.battles.getBattleAgents, {
+        battleId: battle._id,
+    });
+
+    return (
+        <tr
+            className="hover:bg-muted/50 transition-colors cursor-pointer"
+            onClick={() => window.location.href = `/battle/${battle._id}`}
+        >
+            <td className="px-4 py-3">
+                <div className="max-w-md">
+                    <div className="text-sm font-medium truncate">
+                        {battle.instruction}
+                    </div>
+                </div>
+            </td>
+            <td className="px-4 py-3">
+                {agents === undefined ? (
+                    <span className="text-xs text-muted-foreground">Loading...</span>
+                ) : (
+                    <div className="text-sm">
+                        <div className="font-medium capitalize">
+                            {agents?.agentA?.name || "Unknown"}
+                        </div>
+                        {agents?.agentA?.model && (
+                            <div className="text-xs text-muted-foreground truncate max-w-[120px]" title={agents.agentA.model}>
+                                {agents.agentA.model}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </td>
+            <td className="px-4 py-3">
+                {agents === undefined ? (
+                    <span className="text-xs text-muted-foreground">Loading...</span>
+                ) : (
+                    <div className="text-sm">
+                        <div className="font-medium capitalize">
+                            {agents?.agentB?.name || "Unknown"}
+                        </div>
+                        {agents?.agentB?.model && (
+                            <div className="text-xs text-muted-foreground truncate max-w-[120px]" title={agents.agentB.model}>
+                                {agents.agentB.model}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </td>
+            <td className="px-4 py-3 text-center">
+                {agents === undefined ? (
+                    <span className="text-xs text-muted-foreground">...</span>
+                ) : agents?.winner ? (
+                    <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300">
+                        <Trophy className="w-3 h-3" />
+                        {agents.winner.name === agents.agentA?.name ? "Agent A" : "Agent B"}
+                    </div>
+                ) : (
+                    <span className="text-xs text-muted-foreground">No winner</span>
+                )}
+            </td>
+            <td className="px-4 py-3 text-right">
+                <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                    <Calendar className="w-3 h-3" />
+                    {new Date(battle.createdAt).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    })}
+                </div>
+            </td>
+        </tr>
     );
 }

@@ -1,4 +1,6 @@
-Stagehand Node Server (Express)
+![The Browser Arena](../assets/tba.jpeg)
+
+# Stagehand Node Server (Express)
 
 Env vars:
 
@@ -8,7 +10,21 @@ Env vars:
 - OPENAI_API_KEY / GOOGLE_API_KEY / ANTHROPIC_API_KEY (optional fallbacks)
 
 
-To run locally: `vercel dev`
+## Development
+
+Run locally with tsx (hot reload):
+
+```bash
+npx tsx src/index.ts
+```
+
+Or with Vercel:
+
+```bash
+vercel dev
+```
+
+## Build & Production
 
 Install and build:
 
@@ -17,13 +33,13 @@ npm install
 npm run build
 ```
 
-Run:
+Run production build:
 
 ```bash
 PORT=3001 AGENT_SERVER_API_KEY=your_key CONVEX_URL=https://YOUR.convex.cloud npm start
 ```
 
-Endpoints:
+## Endpoints
 
 - GET /healthz → 200 ok
 - GET /status → { status: "ok" }
@@ -31,7 +47,7 @@ Endpoints:
 
 Request body (JSON):
 
-```
+```json
 {
   "sessionId": "...",
   "instruction": "...",
@@ -47,6 +63,6 @@ Request body (JSON):
 
 Response:
 
-```
+```json
 { "agentId": "...", "liveUrl": "https://..." }
 ```

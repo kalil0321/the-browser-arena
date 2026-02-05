@@ -9,6 +9,28 @@ import { bodySchema, magnitudeBodySchema, validateSecrets } from '../lib/body-va
 import { determineKey, formatModelName, isCUA, isOpenRouter, validateModelName } from '../lib/llm.js'
 import { computeBrowserCost } from '../lib/browser.js'
 import { computeCost } from '../lib/llm-pricing.js'
+import { readFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Extract stagehand SDK version from installed package (node_modules)
+function getStagehandVersion(): string {
+  try {
+    // Read actual installed version from node_modules
+    const packageJsonPath = join(__dirname, '../../node_modules/@browserbasehq/stagehand/package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+    if (packageJson.version) {
+      return packageJson.version
+    }
+  } catch (e) {
+    console.warn('Failed to read stagehand version from node_modules:', e)
+  }
+  return '3.0.8' // fallback to known version
+}
+
+const STAGEHAND_VERSION = getStagehandVersion()
 
 export const router = Router()
 
@@ -84,6 +106,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
         sessionId,
         name: 'stagehand',
         model,
+        // sdkVersion will be updated after agent runs
         browser: { sessionId: 'external', url: liveViewUrl || '' },
       })
       console.log(`[${requestId}] created agent ${agentId} in ${Date.now() - t}ms`)
@@ -247,6 +270,14 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
         ...(result?.metadata || {}),
         ...(extractionResults ? { extractionResults } : {}),
       },
+    }
+
+    // Update SDK version first
+    try {
+      await convex.updateAgentSDKVersion(agentId, STAGEHAND_VERSION)
+      console.log(`[${requestId}] SDK version updated: ${STAGEHAND_VERSION}`)
+    } catch (e: any) {
+      console.warn(`[${requestId}] Failed to update SDK version`, { error: e?.message })
     }
 
     // Check if payload is too large (over 1MB)

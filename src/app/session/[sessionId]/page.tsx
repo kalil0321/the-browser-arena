@@ -197,6 +197,11 @@ export default function SessionPage() {
                                                     {agent.name === "browser-use-cloud" ? "BU Cloud" :
                                                         agent.name}
                                                 </span>
+                                                {agent.sdkVersion && (
+                                                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0" title={`SDK Version: ${agent.sdkVersion}`}>
+                                                        v{agent.sdkVersion}
+                                                    </span>
+                                                )}
                                                 {agent.status === "completed" && (
                                                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

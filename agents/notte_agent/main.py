@@ -7,6 +7,14 @@ from notte_sdk import NotteClient
 logger = logging.getLogger("notte-agent")
 
 
+# Extract SDK version at module load time
+try:
+    import notte_sdk
+    SDK_VERSION = getattr(notte_sdk, '__version__', None) or '>=1.7.15'
+except:
+    SDK_VERSION = '>=1.7.15'
+
+
 def get_debug_info_with_polling(
     session,
     session_id: str,
@@ -158,6 +166,7 @@ async def run_notte(
     notte_session_id: str = None,
     agent_id: str = None,
     convex_client=None,
+    reasoning_model: str = None,
 ):
     """
     Run Notte agent with the given prompt
@@ -169,6 +178,7 @@ async def run_notte(
         notte_session_id: Notte session ID (if None, will create a new session)
         agent_id: Agent ID for updating Convex (optional)
         convex_client: Convex client for updating browser URL (optional)
+        reasoning_model: The model to use for reasoning (optional)
 
     Returns:
         Tuple of (Notte agent result, usage summary, timings dict, browser_url)
@@ -313,6 +323,7 @@ async def run_notte(
 
             agent = notte_client_ref.Agent(
                 session=session,
+                reasoning_model=reasoning_model,
             )
             try:
                 logger.info(f"[Session {session_id[:8]}] Executing Notte agent")
@@ -663,7 +674,7 @@ async def run_notte(
             f"[Session {session_id[:8]}] Final result_payload: success={success}, status={status}, answer={answer}, steps={len(steps_serializable)}"
         )
 
-        return result_payload, usage_dict, timings, browser_url
+        return result_payload, usage_dict, timings, browser_url, SDK_VERSION
 
     except Exception as e:
         timings["total"] = time.time() - overall_start

@@ -19,6 +19,10 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
+import { Loader2 } from "lucide-react";
+import { useState, useMemo } from "react";
+
+const PAGE_SIZE = 25;
 
 type SessionRow = {
   _id: Id<"sessions">;
@@ -27,9 +31,49 @@ type SessionRow = {
 };
 
 export default function SessionsPage() {
-  const sessions = useQuery(api.queries.getUserSessions);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [allSessions, setAllSessions] = useState<SessionRow[]>([]);
 
-  const hasSessions = (sessions?.length ?? 0) > 0;
+  // Paginated sessions query
+  const paginatedData = useQuery(api.queries.getUserSessionsPaginated, {
+    paginationOpts: {
+      numItems: PAGE_SIZE,
+      cursor: cursor,
+    },
+  });
+
+  // Total count for header
+  const totalCount = useQuery(api.queries.getUserSessionsCount);
+
+  // Combine paginated results
+  const { sessions, canLoadMore } = useMemo(() => {
+    if (!paginatedData) {
+      return {
+        sessions: allSessions,
+        canLoadMore: false,
+      };
+    }
+
+    const currentSessions = cursor === null
+      ? paginatedData.page
+      : [...allSessions, ...paginatedData.page];
+
+    return {
+      sessions: currentSessions as SessionRow[],
+      canLoadMore: !paginatedData.isDone,
+    };
+  }, [paginatedData, allSessions, cursor]);
+
+  // Handle load more
+  const handleLoadMore = () => {
+    if (paginatedData && paginatedData.continueCursor) {
+      setAllSessions(sessions);
+      setCursor(paginatedData.continueCursor);
+    }
+  };
+
+  const isLoading = paginatedData === undefined;
+  const hasSessions = sessions.length > 0;
 
   return (
     <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -38,6 +82,11 @@ export default function SessionsPage() {
           <h1 className="text-xl font-semibold text-foreground">Sessions</h1>
           <p className="text-sm text-muted-foreground">
             Review the instructions you&apos;ve submitted and the agents that ran.
+            {totalCount !== undefined && totalCount > 0 && (
+              <span className="ml-2 text-foreground font-medium">
+                ({totalCount} total)
+              </span>
+            )}
           </p>
         </div>
         <Button asChild>
@@ -48,7 +97,10 @@ export default function SessionsPage() {
       <div className="flex-1 overflow-auto px-6 py-6">
         <div className="rounded-xl border bg-card shadow-sm">
           <Table data-slot="frame">
-            <TableCaption>Your latest sessions appear here.</TableCaption>
+            <TableCaption>
+              Showing {sessions.length} sessions
+              {totalCount !== undefined && totalCount > 0 && ` of ${totalCount} total`}
+            </TableCaption>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[160px]">Session ID</TableHead>
@@ -57,17 +109,18 @@ export default function SessionsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!sessions && (
+              {isLoading && sessions.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3}>
                     <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin mr-2" />
                       Loading sessions…
                     </div>
                   </TableCell>
                 </TableRow>
               )}
 
-              {sessions && sessions.length === 0 && (
+              {!isLoading && sessions.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3}>
                     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
@@ -86,7 +139,7 @@ export default function SessionsPage() {
               )}
 
               {hasSessions &&
-                sessions!.map((session: SessionRow) => (
+                sessions.map((session: SessionRow) => (
                   <TableRow key={session._id}>
                     <TableCell className="font-mono text-xs">
                       <Link
@@ -94,7 +147,7 @@ export default function SessionsPage() {
                         prefetch={true}
                         className="text-primary underline-offset-2 hover:underline"
                       >
-                        {session._id}
+                        {session._id.slice(-8)}
                       </Link>
                     </TableCell>
                     <TableCell className="max-w-xl truncate">
@@ -113,6 +166,26 @@ export default function SessionsPage() {
                 ))}
             </TableBody>
           </Table>
+
+          {/* Load More Button */}
+          {canLoadMore && (
+            <div className="flex justify-center py-4 border-t">
+              <Button
+                variant="outline"
+                onClick={handleLoadMore}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin mr-2" />
+                    Loading...
+                  </>
+                ) : (
+                  "Load More Sessions"
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </SidebarInset>

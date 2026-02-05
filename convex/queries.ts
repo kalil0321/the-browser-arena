@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query } from "./_generated/server";
 import { getUser } from "./auth";
 import { Doc } from "./_generated/dataModel";
@@ -27,6 +28,58 @@ export const getUserSessions = query({
             .collect();
 
         return sessions;
+    },
+});
+
+/**
+ * Get user sessions with pagination
+ */
+export const getUserSessionsPaginated = query({
+    args: {
+        paginationOpts: paginationOptsValidator,
+    },
+    handler: async (ctx, args) => {
+        const user = await getUser(ctx);
+
+        if (!user) {
+            return {
+                page: [],
+                isDone: true,
+                continueCursor: null,
+            };
+        }
+
+        const result = await ctx.db
+            .query("sessions")
+            .withIndex("by_user", (q) => q.eq("userId", user._id))
+            .order("desc")
+            .paginate(args.paginationOpts);
+
+        return {
+            page: result.page,
+            isDone: result.isDone,
+            continueCursor: result.continueCursor,
+        };
+    },
+});
+
+/**
+ * Get total session count for user
+ */
+export const getUserSessionsCount = query({
+    handler: async (ctx) => {
+        const user = await getUser(ctx);
+
+        if (!user) {
+            return 0;
+        }
+
+        const sessions = await ctx.db
+            .query("sessions")
+            .withIndex("by_user", (q) => q.eq("userId", user._id))
+            .collect();
+
+        return sessions.length;
     },
 });
 
@@ -214,6 +267,138 @@ export const getArenaData = query({
             agentsBySession: buildAgentsBySessionRecord(publicAgents),
             stats: buildArenaStats(publicSessions, publicAgents),
         };
+    },
+});
+
+/**
+ * OPTIMIZED: Sessions-only paginated query for 2-step loading
+ * Returns sessions first without agents for faster initial render
+ */
+export const getArenaSessionsPaginated = query({
+    args: {
+        paginationOpts: paginationOptsValidator,
+    },
+    handler: async (ctx, args) => {
+        // Query all sessions paginated
+        const allSessionsResult = await ctx.db
+            .query("sessions")
+            .order("desc")
+            .paginate(args.paginationOpts);
+
+        // Filter to only public sessions (isPrivate is not true)
+        const publicSessions = allSessionsResult.page.filter(
+            (s) => s.isPrivate !== true
+        );
+
+        return {
+            page: publicSessions,
+            isDone: allSessionsResult.isDone,
+            continueCursor: allSessionsResult.continueCursor,
+        };
+    },
+});
+
+/**
+ * OPTIMIZED: Paginated arena data query
+ * Fetches sessions in pages. For legacy data where isPrivate is undefined,
+ * we treat undefined as public (not private).
+ */
+export const getArenaDataPaginated = query({
+    args: {
+        paginationOpts: paginationOptsValidator,
+        filterAgent: v.optional(v.string()),
+        filterModel: v.optional(v.string()),
+        filterStatus: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        // For legacy data, we query all sessions and filter
+        // isPrivate === true means private, everything else (false or undefined) is public
+        const allSessionsResult = await ctx.db
+            .query("sessions")
+            .order("desc")
+            .paginate(args.paginationOpts);
+
+        // Filter to only public sessions (isPrivate is not true)
+        const publicSessions = allSessionsResult.page.filter(
+            (s) => s.isPrivate !== true
+        );
+
+        // Fetch agents only for this page of sessions
+        const agentsBySession: Record<string, Doc<"agents">[]> = {};
+        const hasFilters = args.filterAgent || args.filterModel || args.filterStatus;
+
+        for (const session of publicSessions) {
+            let agents = await ctx.db
+                .query("agents")
+                .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+                .collect();
+
+            // Apply filters if provided
+            if (args.filterAgent) {
+                agents = agents.filter((a) => a.name === args.filterAgent);
+            }
+            if (args.filterModel) {
+                agents = agents.filter((a) => a.model === args.filterModel);
+            }
+            if (args.filterStatus) {
+                agents = agents.filter((a) => a.status === args.filterStatus);
+            }
+
+            // Only include session if it has matching agents (when filters applied)
+            // or if no filters are applied
+            if (agents.length > 0 || !hasFilters) {
+                agentsBySession[session._id] = agents;
+            }
+        }
+
+        // Filter sessions that didn't match filters
+        const filteredSessions = hasFilters
+            ? publicSessions.filter((s) => agentsBySession[s._id] !== undefined)
+            : publicSessions;
+
+        return {
+            page: filteredSessions,
+            isDone: allSessionsResult.isDone,
+            continueCursor: allSessionsResult.continueCursor,
+            agentsBySession,
+        };
+    },
+});
+
+/**
+ * OPTIMIZED: Separate stats query
+ * Lightweight query for statistics that can load independently.
+ * Uses server-side filtering with index.
+ */
+export const getArenaStatsOptimized = query({
+    handler: async (ctx) => {
+        // Count public sessions using index
+        const publicSessions = await ctx.db
+            .query("sessions")
+            .withIndex("by_isPrivate_createdAt", (q) => q.eq("isPrivate", false))
+            .collect();
+
+        // Also count legacy undefined sessions
+        const allSessions = await ctx.db.query("sessions").collect();
+        const legacyPublicSessions = allSessions.filter(
+            (s) => s.isPrivate === undefined
+        );
+
+        const allPublicSessions = [
+            ...publicSessions,
+            ...legacyPublicSessions.filter(
+                (s) => !publicSessions.some((ps) => ps._id === s._id)
+            ),
+        ];
+
+        // Get all agents for public sessions
+        const publicSessionIds = new Set(allPublicSessions.map((s) => s._id));
+        const allAgents = await ctx.db.query("agents").collect();
+        const publicAgents = allAgents.filter((a) =>
+            publicSessionIds.has(a.sessionId)
+        );
+
+        return buildArenaStats(allPublicSessions, publicAgents);
     },
 });
 

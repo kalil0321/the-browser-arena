@@ -24,7 +24,7 @@ const markdownComponents = {
         </div>
     ),
     thead: ({ children }: any) => (
-        <thead className="bg-gray-50 dark:bg-muted">{children}</thead>
+        <thead className="bg-gray-50 dark:bg-muted [&_tr]:hover:bg-transparent">{children}</thead>
     ),
     th: ({ children }: any) => (
         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
@@ -156,6 +156,7 @@ interface BattleAgentPanelProps {
         _id: string;
         name: string;
         model?: string;
+        sdkVersion?: string;
         status: "pending" | "running" | "completed" | "failed";
         browser: {
             sessionId: string;
@@ -259,6 +260,11 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                             {agent.model && (
                                 <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 max-w-[120px] truncate" title={agent.model}>
                                     {agent.model.replace(/^openrouter\//, '')}
+                                </span>
+                            )}
+                            {agent.sdkVersion && (
+                                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 font-mono" title={`SDK Version: ${agent.sdkVersion}`}>
+                                    v{agent.sdkVersion}
                                 </span>
                             )}
                         </>

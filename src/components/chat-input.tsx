@@ -76,7 +76,7 @@ const loadAgentConfigsFromCache = (): AgentConfig[] => {
     if (typeof window === "undefined") {
         return [
             { id: `agent-${Date.now()}-1`, agent: "stagehand", model: "google/gemini-2.5-flash" },
-            { id: `agent-${Date.now()}-2`, agent: "browser-use", model: "browser-use/bu-1.0" }
+            { id: `agent-${Date.now()}-2`, agent: "browser-use", model: "browser-use/bu-2.0" }
         ];
     }
 

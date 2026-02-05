@@ -10,13 +10,15 @@ export default defineSchema({
         createdAt: v.number(),
         updatedAt: v.number(),
     })
-        .index("by_user", ["userId"]),
+        .index("by_user", ["userId"])
+        .index("by_isPrivate_createdAt", ["isPrivate", "createdAt"]),
 
     // Agents table - stores individual agent runs within a session
     agents: defineTable({
         sessionId: v.id("sessions"),
         name: v.string(),
         model: v.optional(v.string()), // Model used for this agent
+        sdkVersion: v.optional(v.string()), // SDK version (e.g., "0.11.7", "1.7.15")
         status: v.union(v.literal("pending"), v.literal("running"), v.literal("completed"), v.literal("failed")),
         browser: v.object({
             sessionId: v.string(), // Anchor Browser session ID

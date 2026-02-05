@@ -8,6 +8,7 @@
  */
 
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
 import { Doc } from "./_generated/dataModel";
 import { getUser } from "./auth";
@@ -696,14 +697,16 @@ export const getBattle = query({
             ...battle,
             agentA: {
                 ...agentA,
-                // Mask name and model if not voted yet
+                // Mask name, model, and sdkVersion if not voted yet
                 name: hasVoted ? agentA.name : "Agent A",
                 model: hasVoted ? agentA.model : undefined,
+                sdkVersion: hasVoted ? agentA.sdkVersion : undefined,
             },
             agentB: {
                 ...agentB,
                 name: hasVoted ? agentB.name : "Agent B",
                 model: hasVoted ? agentB.model : undefined,
+                sdkVersion: hasVoted ? agentB.sdkVersion : undefined,
             },
             isOwner,
         };
@@ -776,6 +779,116 @@ export const getAllBattles = query({
         );
 
         return battlesWithAgents;
+    },
+});
+
+/**
+ * Get all public battles with pagination
+ */
+export const getAllBattlesPaginated = query({
+    args: {
+        paginationOpts: paginationOptsValidator,
+    },
+    handler: async (ctx, args) => {
+        // Only return voted battles with pagination
+        const result = await ctx.db
+            .query("battles")
+            .withIndex("by_status", q => q.eq("status", "voted"))
+            .order("desc")
+            .paginate(args.paginationOpts);
+
+        // Fetch agent details for each battle in parallel
+        const battlesWithAgents = await Promise.all(
+            result.page.map(async (battle) => {
+                const [agentA, agentB, winner] = await Promise.all([
+                    ctx.db.get(battle.agentAId),
+                    ctx.db.get(battle.agentBId),
+                    battle.winnerId ? ctx.db.get(battle.winnerId) : null,
+                ]);
+
+                return {
+                    ...battle,
+                    agentA,
+                    agentB,
+                    winner,
+                };
+            })
+        );
+
+        return {
+            page: battlesWithAgents,
+            isDone: result.isDone,
+            continueCursor: result.continueCursor,
+        };
+    },
+});
+
+/**
+ * Get all public battles with pagination - BATTLES ONLY for 2-step loading
+ * Returns battles without agent details for faster initial render
+ */
+export const getBattlesPaginated = query({
+    args: {
+        paginationOpts: paginationOptsValidator,
+    },
+    handler: async (ctx, args) => {
+        // Only return voted battles with pagination
+        const result = await ctx.db
+            .query("battles")
+            .withIndex("by_status", q => q.eq("status", "voted"))
+            .order("desc")
+            .paginate(args.paginationOpts);
+
+        return {
+            page: result.page,
+            isDone: result.isDone,
+            continueCursor: result.continueCursor,
+        };
+    },
+});
+
+/**
+ * Get agents for a specific battle (for 2-step loading)
+ */
+export const getBattleAgents = query({
+    args: {
+        battleId: v.id("battles"),
+    },
+    handler: async (ctx, args) => {
+        const battle = await ctx.db.get(args.battleId);
+        if (!battle) {
+            return null;
+        }
+
+        const [agentA, agentB, winner] = await Promise.all([
+            ctx.db.get(battle.agentAId),
+            ctx.db.get(battle.agentBId),
+            battle.winnerId ? ctx.db.get(battle.winnerId) : null,
+        ]);
+
+        return {
+            agentA,
+            agentB,
+            winner,
+        };
+    },
+});
+
+/**
+ * Get battle stats for header
+ */
+export const getBattleStatsOptimized = query({
+    args: {},
+    handler: async (ctx) => {
+        // Count voted battles using index
+        const votedBattles = await ctx.db
+            .query("battles")
+            .withIndex("by_status", q => q.eq("status", "voted"))
+            .collect();
+
+        return {
+            totalVotedBattles: votedBattles.length,
+        };
     },
 });
 

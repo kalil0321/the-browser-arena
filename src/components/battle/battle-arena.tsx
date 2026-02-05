@@ -307,41 +307,37 @@ export function BattleArena({ battle, onVote, voteResult }: BattleArenaProps) {
                             <div className="flex-1 flex items-center gap-2">
                                 <button
                                     onClick={() => setSelectedVote({ type: "winner", winnerId: battle.agentAId })}
-                                    className={`flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
-                                        selectedVote?.type === "winner" && selectedVote?.winnerId === battle.agentAId
+                                    className={`flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${selectedVote?.type === "winner" && selectedVote?.winnerId === battle.agentAId
                                             ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
                                             : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
-                                    }`}
+                                        }`}
                                 >
                                     Agent A
                                 </button>
                                 <button
                                     onClick={() => setSelectedVote({ type: "winner", winnerId: battle.agentBId })}
-                                    className={`flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
-                                        selectedVote?.type === "winner" && selectedVote?.winnerId === battle.agentBId
+                                    className={`flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${selectedVote?.type === "winner" && selectedVote?.winnerId === battle.agentBId
                                             ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
                                             : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
-                                    }`}
+                                        }`}
                                 >
                                     Agent B
                                 </button>
                                 <button
                                     onClick={() => setSelectedVote({ type: "tie" })}
-                                    className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
-                                        selectedVote?.type === "tie"
+                                    className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${selectedVote?.type === "tie"
                                             ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
                                             : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
-                                    }`}
+                                        }`}
                                 >
                                     Tie
                                 </button>
                                 <button
                                     onClick={() => setSelectedVote({ type: "both-bad" })}
-                                    className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
-                                        selectedVote?.type === "both-bad"
+                                    className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${selectedVote?.type === "both-bad"
                                             ? "border-gray-500 bg-gray-50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300"
                                             : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
-                                    }`}
+                                        }`}
                                 >
                                     Pass
                                 </button>
@@ -370,8 +366,7 @@ export function BattleArena({ battle, onVote, voteResult }: BattleArenaProps) {
                         </h3>
                         <div className="grid grid-cols-2 gap-3 sm:gap-4">
                             {/* Agent A Results */}
-                            <div className={`p-3 sm:p-4 rounded-lg border-2 ${
-                                voteResult.voteType === "both-bad"
+                            <div className={`p-3 sm:p-4 rounded-lg border-2 ${voteResult.voteType === "both-bad"
                                     ? "border-red-500 bg-red-50 dark:bg-red-900/20"
                                     : voteResult.agentA.won
                                         ? "border-green-500 bg-green-50 dark:bg-green-900/20"
@@ -413,8 +408,7 @@ export function BattleArena({ battle, onVote, voteResult }: BattleArenaProps) {
                             </div>
 
                             {/* Agent B Results */}
-                            <div className={`p-3 sm:p-4 rounded-lg border-2 ${
-                                voteResult.voteType === "both-bad"
+                            <div className={`p-3 sm:p-4 rounded-lg border-2 ${voteResult.voteType === "both-bad"
                                     ? "border-red-500 bg-red-50 dark:bg-red-900/20"
                                     : voteResult.agentB.won
                                         ? "border-green-500 bg-green-50 dark:bg-green-900/20"

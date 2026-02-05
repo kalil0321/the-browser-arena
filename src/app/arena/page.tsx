@@ -15,11 +15,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import type { Id, Doc } from "../../../convex/_generated/dataModel";
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Select,
     SelectContent,
@@ -32,60 +32,68 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import type {
-    AgentDoc,
-    AgentsBySessionMap,
-    ArenaDataPayload,
-    ArenaStats,
-    SessionDoc as SessionRow,
-} from "@/types/arena";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import type { ArenaStats } from "@/types/arena";
+
+const PAGE_SIZE = 25;
+
+type SessionRow = Doc<"sessions">;
 
 export default function ArenaPage() {
-    const arenaData = useQuery(api.queries.getArenaData) as ArenaDataPayload | undefined;
-    const stats = arenaData?.stats;
-
-    const agentsBySession = useMemo<AgentsBySessionMap>(() => {
-        if (!arenaData?.agentsBySession) return new Map<Id<"sessions">, AgentDoc[]>();
-        return new Map<Id<"sessions">, AgentDoc[]>(
-            Object.entries(arenaData.agentsBySession).map(([sessionId, agents]) => [
-                sessionId as Id<"sessions">,
-                agents,
-            ])
-        );
-    }, [arenaData?.agentsBySession]);
-
-    const sessions = arenaData?.sessions;
-
     const [filterAgent, setFilterAgent] = useState<string>("all");
     const [filterModel, setFilterModel] = useState<string>("all");
     const [filterStatus, setFilterStatus] = useState<string>("all");
     const [isStatsOpen, setIsStatsOpen] = useState<boolean>(false);
+    const [cursor, setCursor] = useState<string | null>(null);
+    const [allSessions, setAllSessions] = useState<SessionRow[]>([]);
 
-    // Filter sessions based on selected filters
-    const filteredSessions = useMemo(() => {
-        if (!sessions) return [];
+    // Sessions-only query for 2-step loading (fast initial render)
+    const paginatedData = useQuery(api.queries.getArenaSessionsPaginated, {
+        paginationOpts: {
+            numItems: PAGE_SIZE,
+            cursor: cursor,
+        },
+    });
 
-        return sessions.filter((session) => {
-            const sessionAgents = agentsBySession.get(session._id) || [];
+    // Separate query for stats (loads independently)
+    const stats = useQuery(api.queries.getArenaStatsOptimized) as ArenaStats | undefined;
 
-            if (filterAgent !== "all" && !sessionAgents.some((a: AgentDoc) => a.name === filterAgent)) {
-                return false;
-            }
+    // Combine current page with previously loaded sessions
+    const { sessions, isDoneLoading, canLoadMore } = useMemo(() => {
+        if (!paginatedData) {
+            return {
+                sessions: allSessions,
+                isDoneLoading: false,
+                canLoadMore: false,
+            };
+        }
 
-            if (filterModel !== "all" && !sessionAgents.some((a: AgentDoc) => a.model === filterModel)) {
-                return false;
-            }
+        // Merge new page with existing sessions
+        const currentSessions = cursor === null ? paginatedData.page : [...allSessions, ...paginatedData.page];
 
-            if (filterStatus !== "all" && !sessionAgents.some((a: AgentDoc) => a.status === filterStatus)) {
-                return false;
-            }
+        return {
+            sessions: currentSessions,
+            isDoneLoading: paginatedData.isDone,
+            canLoadMore: !paginatedData.isDone,
+        };
+    }, [paginatedData, allSessions, cursor]);
 
-            return true;
-        });
-    }, [sessions, agentsBySession, filterAgent, filterModel, filterStatus]);
+    // Handle load more
+    const handleLoadMore = () => {
+        if (paginatedData && paginatedData.continueCursor) {
+            setAllSessions(sessions);
+            setCursor(paginatedData.continueCursor);
+        }
+    };
 
-    // Get unique values for filters
+    // Reset on filter change
+    const handleFilterChange = (setter: (value: string) => void, value: string) => {
+        setter(value);
+        setCursor(null);
+        setAllSessions([]);
+    };
+
+    // Get unique values for filters from stats
     const uniqueAgents = useMemo(() => {
         if (!stats) return [];
         return Object.keys(stats.agents).sort();
@@ -102,8 +110,11 @@ export default function ArenaPage() {
         return new Date(timestamp).toLocaleString();
     };
 
-    // Loading state while queries are loading
-    if (arenaData === undefined || stats === undefined) {
+    const isLoading = paginatedData === undefined;
+    const hasFilters = filterAgent !== "all" || filterModel !== "all" || filterStatus !== "all";
+
+    // Loading state while initial query is loading
+    if (isLoading && sessions.length === 0) {
         return (
             <SidebarInset className="flex items-center justify-center">
                 <div className="text-center">
@@ -123,9 +134,11 @@ export default function ArenaPage() {
                         View all crowdsourced sessions, models, and agents.
                     </p>
                 </div>
-                <Button asChild>
-                    <Link href="/" prefetch={true}>New Session</Link>
-                </Button>
+                <div className="flex gap-2">
+                    <Button asChild>
+                        <Link href="/" prefetch={true}>New Session</Link>
+                    </Button>
+                </div>
             </header>
 
             {/* Statistics Cards */}
@@ -171,45 +184,55 @@ export default function ArenaPage() {
                                 </Button>
                             </CollapsibleTrigger>
                         </div>
-
                         <CollapsibleContent>
-                            {/* Model and Agent Breakdown */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 pb-2">
-                                {/* Models Usage */}
+                            <div className="grid md:grid-cols-3 gap-4 pt-2 pb-1">
+                                {/* Agent Breakdown */}
                                 <div className="rounded-lg border bg-card p-4">
-                                    <div className="text-sm font-semibold mb-3">Models Used</div>
-                                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                                        {(Object.entries(stats.models) as Array<[string, number]>)
-                                            .sort(([, a], [, b]) => b - a)
-                                            .map(([model, count]) => (
-                                                <div key={model} className="flex items-center justify-between">
-                                                    <span className="text-sm text-muted-foreground font-mono truncate">
-                                                        {model}
-                                                    </span>
-                                                    <Badge variant="outline" className="font-default">{count}</Badge>
-                                                </div>
-                                            ))}
-                                        {Object.keys(stats.models).length === 0 && (
-                                            <p className="text-sm text-muted-foreground">No models used yet</p>
-                                        )}
+                                    <h4 className="text-sm font-semibold mb-3">Agent Breakdown</h4>
+                                    <div className="space-y-2">
+                                        {Object.entries(stats.agents).map(([agent, count]) => (
+                                            <div key={agent} className="flex items-center justify-between text-sm">
+                                                <span className="capitalize">{agent}</span>
+                                                <Badge variant="secondary">{count}</Badge>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-
-                                {/* Agents Usage */}
+                                {/* Model Breakdown */}
                                 <div className="rounded-lg border bg-card p-4">
-                                    <div className="text-sm font-semibold mb-3">Agents Used</div>
-                                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                                        {(Object.entries(stats.agents) as Array<[string, number]>)
-                                            .sort(([, a], [, b]) => b - a)
-                                            .map(([agent, count]) => (
-                                                <div key={agent} className="flex items-center justify-between">
-                                                    <span className="text-sm capitalize">{agent}</span>
-                                                    <Badge variant="outline" className="font-default">{count}</Badge>
-                                                </div>
-                                            ))}
-                                        {Object.keys(stats.agents).length === 0 && (
-                                            <p className="text-sm text-muted-foreground">No agents used yet</p>
-                                        )}
+                                    <h4 className="text-sm font-semibold mb-3">Model Breakdown</h4>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                                        {Object.entries(stats.models).map(([model, count]) => (
+                                            <div key={model} className="flex items-center justify-between text-sm">
+                                                <span className="font-mono text-xs truncate max-w-[180px]" title={model}>{model}</span>
+                                                <Badge variant="secondary">{count}</Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {/* Status Breakdown */}
+                                <div className="rounded-lg border bg-card p-4">
+                                    <h4 className="text-sm font-semibold mb-3">Status Breakdown</h4>
+                                    <div className="space-y-2">
+                                        {Object.entries(stats.statusCounts).map(([status, count]) => (
+                                            <div key={status} className="flex items-center justify-between text-sm">
+                                                <span className="capitalize">{status}</span>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={
+                                                        status === "completed"
+                                                            ? "border-emerald-500 text-emerald-600"
+                                                            : status === "failed"
+                                                                ? "border-red-500 text-red-600"
+                                                                : status === "running"
+                                                                    ? "border-sky-500 text-sky-600"
+                                                                    : undefined
+                                                    }
+                                                >
+                                                    {count as number}
+                                                </Badge>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -219,66 +242,58 @@ export default function ArenaPage() {
             )}
 
             {/* Filters */}
-            <div className="border-b px-4 py-3 bg-background">
-                <div className="flex flex-wrap gap-3 items-center">
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-muted-foreground">Agent:</label>
-                        <Select value={filterAgent} onValueChange={setFilterAgent}>
-                            <SelectTrigger className="w-[150px]">
-                                <SelectValue placeholder="All Agents" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Agents</SelectItem>
-                                {uniqueAgents.map((agent) => (
-                                    <SelectItem key={agent} value={agent}>
-                                        {agent.charAt(0).toUpperCase() + agent.slice(1)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-muted-foreground">Model:</label>
-                        <Select value={filterModel} onValueChange={setFilterModel}>
-                            <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="All Models" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Models</SelectItem>
-                                {uniqueModels.map((model) => (
-                                    <SelectItem key={model} value={model}>
-                                        {model}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-muted-foreground">Status:</label>
-                        <Select value={filterStatus} onValueChange={setFilterStatus}>
-                            <SelectTrigger className="w-[150px]">
-                                <SelectValue placeholder="All Statuses" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {statusOptions.map((status) => (
-                                    <SelectItem key={status} value={status}>
-                                        {status === "all" ? "All Statuses" : status.charAt(0).toUpperCase() + status.slice(1)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {(filterAgent !== "all" || filterModel !== "all" || filterStatus !== "all") && (
+            <div className="flex items-center gap-3 border-b px-4 py-3 flex-wrap">
+                <span className="text-sm font-medium text-muted-foreground">Filter by:</span>
+                <div className="flex gap-2 flex-wrap">
+                    <Select
+                        value={filterAgent}
+                        onValueChange={(v) => handleFilterChange(setFilterAgent, v)}
+                    >
+                        <SelectTrigger className="w-[160px] h-8">
+                            <SelectValue placeholder="Agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Agents</SelectItem>
+                            {uniqueAgents.map((agent) => (
+                                <SelectItem key={agent} value={agent} className="capitalize">{agent}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={filterModel}
+                        onValueChange={(v) => handleFilterChange(setFilterModel, v)}
+                    >
+                        <SelectTrigger className="w-[180px] h-8">
+                            <SelectValue placeholder="Model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Models</SelectItem>
+                            {uniqueModels.map((model) => (
+                                <SelectItem key={model} value={model} className="font-mono text-xs">{model}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={filterStatus}
+                        onValueChange={(v) => handleFilterChange(setFilterStatus, v)}
+                    >
+                        <SelectTrigger className="w-[140px] h-8">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {statusOptions.map((status) => (
+                                <SelectItem key={status} value={status} className="capitalize">{status}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {hasFilters && (
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                                setFilterAgent("all");
-                                setFilterModel("all");
-                                setFilterStatus("all");
+                                handleFilterChange(setFilterAgent, "all");
+                                handleFilterChange(setFilterModel, "all");
+                                handleFilterChange(setFilterStatus, "all");
                             }}
                         >
                             Clear Filters
@@ -292,28 +307,28 @@ export default function ArenaPage() {
                 <div className="rounded-xl border bg-card shadow-sm">
                     <Table>
                         <TableCaption>
-                            Showing <span className="font-default">{filteredSessions?.length || 0}</span> of <span className="font-default">{sessions?.length || 0}</span> sessions
+                            Showing <span className="font-default">{sessions?.length || 0}</span> sessions
+                            {stats && <span className="text-muted-foreground"> of {stats.totalSessions} total</span>}
                         </TableCaption>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[180px]">Session ID</TableHead>
                                 <TableHead>Instruction</TableHead>
                                 <TableHead>Agents</TableHead>
-                                <TableHead>Models</TableHead>
+                                <TableHead className="w-[180px]">Models</TableHead>
                                 <TableHead className="w-[140px]">Created</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {sessions && filteredSessions.length === 0 && (
+                            {sessions && sessions.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={5}>
+                                    <TableCell colSpan={4}>
                                         <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
                                             <p className="text-sm font-medium text-foreground">
-                                                {filterAgent !== "all" || filterModel !== "all" || filterStatus !== "all"
+                                                {hasFilters
                                                     ? "No sessions match the filters"
                                                     : "No sessions yet"}
                                             </p>
-                                            {filterAgent === "all" && filterModel === "all" && filterStatus === "all" && (
+                                            {!hasFilters && (
                                                 <>
                                                     <p className="text-sm text-muted-foreground max-w-sm">
                                                         Start a new session to see it listed here once agents finish running.
@@ -328,75 +343,154 @@ export default function ArenaPage() {
                                 </TableRow>
                             )}
 
-                            {filteredSessions &&
-                                filteredSessions.map((session: SessionRow) => {
-                                    const sessionAgents = agentsBySession.get(session._id) || [];
-                                    const modelsUsed: string[] = Array.from(
-                                        new Set(
-                                            sessionAgents
-                                                .map((agent: AgentDoc) => agent.model)
-                                                .filter((model): model is string => Boolean(model))
-                                        )
-                                    );
-
-                                    return (
-                                        <TableRow key={session._id}>
-                                            <TableCell className="font-mono text-xs">
-                                                <Link
-                                                    href={`/session/${session._id}`}
-                                                    prefetch={true}
-                                                    className="text-primary underline-offset-2 hover:underline"
-                                                >
-                                                    {session._id.slice(-8)}
-                                                </Link>
-                                            </TableCell>
-                                            <TableCell className="max-w-xl">
-                                                <Link
-                                                    href={`/session/${session._id}`}
-                                                    prefetch={true}
-                                                    className="text-foreground hover:text-primary transition-colors"
-                                                >
-                                                    <div className="truncate font-default">{session.instruction}</div>
-                                                </Link>
-                                            </TableCell>
-                                            <TableCell>
-                                                <SessionAgentsDisplay agents={sessionAgents} />
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {modelsUsed.length > 0 ? (
-                                                        modelsUsed.map((model: string) => (
-                                                            <Badge
-                                                                key={model}
-                                                                variant="secondary"
-                                                                className="text-xs font-mono"
-                                                            >
-                                                                {model}
-                                                            </Badge>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground">—</span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">
-                                                {formatDate(session.createdAt)}
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
+                            {sessions &&
+                                sessions.map((session: SessionRow) => (
+                                    <SessionRowComponent
+                                        key={session._id}
+                                        session={session}
+                                        filterAgent={filterAgent === "all" ? undefined : filterAgent}
+                                        filterModel={filterModel === "all" ? undefined : filterModel}
+                                        filterStatus={filterStatus === "all" ? undefined : filterStatus}
+                                        formatDate={formatDate}
+                                    />
+                                ))}
                         </TableBody>
                     </Table>
+
+                    {/* Load More Button */}
+                    {canLoadMore && (
+                        <div className="flex justify-center py-4 border-t">
+                            <Button
+                                variant="outline"
+                                onClick={handleLoadMore}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <Loader2 className="size-4 animate-spin mr-2" />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    "Load More Sessions"
+                                )}
+                            </Button>
+                        </div>
+                    )}
+
+                    {isDoneLoading && sessions.length > 0 && (
+                        <div className="flex justify-center py-4 border-t text-sm text-muted-foreground">
+                            All sessions loaded
+                        </div>
+                    )}
                 </div>
             </div>
         </SidebarInset>
     );
 }
 
+// Session row with 2-step loading - agents are fetched separately
+function SessionRowComponent({
+    session,
+    filterAgent,
+    filterModel,
+    filterStatus,
+    formatDate,
+}: {
+    session: SessionRow;
+    filterAgent?: string;
+    filterModel?: string;
+    filterStatus?: string;
+    formatDate: (timestamp: number) => string;
+}) {
+    // Fetch agents for this session (2-step loading)
+    const agents = useQuery(api.queries.getSessionAgents, {
+        sessionId: session._id,
+    });
+
+    // Apply filters to agents
+    const filteredAgents = useMemo(() => {
+        if (!agents) return [];
+        let result = agents;
+        if (filterAgent) {
+            result = result.filter((a) => a.name === filterAgent);
+        }
+        if (filterModel) {
+            result = result.filter((a) => a.model === filterModel);
+        }
+        if (filterStatus) {
+            result = result.filter((a) => a.status === filterStatus);
+        }
+        return result;
+    }, [agents, filterAgent, filterModel, filterStatus]);
+
+    // If filters active and no matching agents, don't render row
+    const hasFilters = filterAgent || filterModel || filterStatus;
+    if (hasFilters && agents !== undefined && filteredAgents.length === 0) {
+        return null;
+    }
+
+    const modelsUsed: string[] = agents
+        ? Array.from(
+            new Set(
+                (hasFilters ? filteredAgents : agents)
+                    .map((agent) => agent.model)
+                    .filter((model): model is string => Boolean(model))
+            )
+        )
+        : [];
+
+    return (
+        <TableRow>
+            <TableCell className="max-w-xl">
+                <Link
+                    href={`/session/${session._id}`}
+                    prefetch={true}
+                    className="text-foreground hover:text-primary transition-colors"
+                >
+                    <div className="truncate font-default">{session.instruction}</div>
+                </Link>
+            </TableCell>
+            <TableCell>
+                <SessionAgentsDisplay agents={hasFilters ? filteredAgents : agents} />
+            </TableCell>
+            <TableCell className="max-w-[180px]">
+                <div className="flex flex-wrap gap-1">
+                    {agents === undefined ? (
+                        <span className="text-xs text-muted-foreground">Loading...</span>
+                    ) : modelsUsed.length > 0 ? (
+                        <>
+                            {modelsUsed.slice(0, 2).map((model: string) => (
+                                <Badge
+                                    key={model}
+                                    variant="secondary"
+                                    className="text-xs font-mono max-w-[140px] truncate"
+                                    title={model}
+                                >
+                                    {model.length > 20 ? model.slice(0, 18) + "..." : model}
+                                </Badge>
+                            ))}
+                            {modelsUsed.length > 2 && (
+                                <Badge variant="outline" className="text-xs">
+                                    +{modelsUsed.length - 2}
+                                </Badge>
+                            )}
+                        </>
+                    ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                </div>
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+                {formatDate(session.createdAt)}
+            </TableCell>
+        </TableRow>
+    );
+}
+
 function SessionAgentsDisplay({
     agents,
 }: {
-    agents: Array<{
+    agents?: Array<{
         _id: Id<"agents">;
         name: string;
         status: string;
@@ -415,6 +509,10 @@ function SessionAgentsDisplay({
                 return "bg-muted-foreground/60";
         }
     };
+
+    if (agents === undefined) {
+        return <span className="text-xs text-muted-foreground">Loading...</span>;
+    }
 
     if (!agents || agents.length === 0) {
         return <span className="text-xs text-muted-foreground">No agents</span>;
@@ -447,4 +545,3 @@ function SessionAgentsDisplay({
         </div>
     );
 }
-

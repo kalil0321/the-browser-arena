@@ -1,4 +1,4 @@
-# 🌐 The Browser Arena
+![The Browser Arena](assets/tba.jpeg)
 
 <div align="center">
 
@@ -113,7 +113,8 @@ Terminal 3 - Stagehand server:
 ```bash 
 cd stagehand
 npm i
-npx tsx index.ts # if you have tsx
+npx tsx src/index.ts # if you have tsx 
+# OR vercel dev
 ```
 
 6. **Open your browser**

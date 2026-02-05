@@ -12,6 +12,20 @@ from typing import Dict, Optional
 from .tools import tools
 from browser import create_browser_session, delete_browser_session
 
+
+def get_browser_use_version():
+    """Get browser-use SDK version"""
+    try:
+        import browser_use
+        return getattr(browser_use, '__version__', None)
+    except:
+        return None
+
+
+# Extract SDK version at module load time
+SDK_VERSION = get_browser_use_version() or '0.11.7'  # fallback to known version
+
+
 def wrap_user_instruction(instruction: str) -> str:
     """
     Wrap user instruction with safety instructions for the agent.
@@ -53,7 +67,7 @@ def parse_provider_model(provider_model: str):
         # Extract everything after "openrouter/" (e.g., "moonshotai/kimi-k2-thinking")
         return "openrouter", provider_model.split("/", 1)[1]
     if not provider_model:
-        return "browser-use", "bu-1.0"
+        return "browser-use", "bu-2.0"
     provider, model = provider_model.split("/", 1)
     return provider, model
 
@@ -208,7 +222,6 @@ async def run_browser_use(
 
     # For now we don't wrap prompt, no need to be too safe...
 
-
     # Time Agent initialization
     agent_start = time.time()
     agent = Agent(
@@ -260,7 +273,7 @@ async def run_browser_use(
     print(f"  Total:          {timings['total']:.2f}s\n")
 
     # Session deletion is handled in server.py after recording is saved
-    return result, usage, timings
+    return result, usage, timings, SDK_VERSION
 
 
 async def test_browser_use():
@@ -269,7 +282,7 @@ async def test_browser_use():
     )
 
     print(browser)
-    
+
     result = Agent(
         task="Find companies that raised more than $10M in the US this month",
         browser=browser,
@@ -279,6 +292,7 @@ async def test_browser_use():
     # Live URL: https://live.browser-use.com?wss=https%3A%2F%2F91232e9c-3084-4fd0-8612-f1c26d70fad3.cdp0.browser-use.com
 
     await result.run()
+
 
 async def main():
     session_id, cdp_url, live_view_url = create_browser_session()

@@ -143,6 +143,7 @@ export const createSession = mutation({
                 sessionId,
                 name: args.agentName ?? "stagehand",
                 model: args.model,
+                // sdkVersion will be updated by agent after it runs
                 status: "running",
                 browser: {
                     sessionId: args.browserData.sessionId,
@@ -165,6 +166,7 @@ export const createAgent = mutation({
         sessionId: v.id("sessions"),
         name: v.string(),
         model: v.optional(v.string()),
+        sdkVersion: v.optional(v.string()),
         browser: v.object({
             sessionId: v.string(),
             url: v.string(),
@@ -192,6 +194,7 @@ export const createAgent = mutation({
             sessionId: args.sessionId,
             name: args.name,
             model: args.model,
+            sdkVersion: args.sdkVersion,
             status: "running",
             browser: args.browser,
             createdAt: now,
@@ -443,6 +446,7 @@ export const createAgentFromBackend = mutation({
         sessionId: v.id("sessions"),
         name: v.string(),
         model: v.optional(v.string()),
+        sdkVersion: v.optional(v.union(v.string(), v.null())),
         browser: v.object({
             sessionId: v.string(),
             url: v.string(),
@@ -476,6 +480,7 @@ export const createAgentFromBackend = mutation({
             sessionId: args.sessionId,
             name: args.name,
             model: args.model,
+            sdkVersion: args.sdkVersion ?? undefined,
             status: "running",
             browser: args.browser,
             createdAt: now,
@@ -597,6 +602,47 @@ export const updateAgentStatusFromBackend = mutation({
         await ctx.db.patch(args.agentId, updateData);
 
         await scheduleRecordingSync(ctx, args.agentId, args.status);
+    },
+});
+
+/**
+ * Update agent SDK version from Python backend
+ *
+ * Authorization:
+ * - If called by an authenticated user, verifies the user owns the session
+ * - If called without authentication (backend services), allows the call
+ *   (backend services receive agentId from authenticated Next.js routes that already validated ownership)
+ */
+export const updateAgentSDKVersion = mutation({
+    args: {
+        agentId: v.id("agents"),
+        sdkVersion: v.string(),
+    },
+    handler: async (ctx, args) => {
+        // Get current user (if authenticated)
+        const user = await getUser(ctx);
+
+        const agent = await ctx.db.get(args.agentId);
+        if (!agent) {
+            throw new Error("Agent not found");
+        }
+
+        // AUTHORIZATION CHECK: If user is authenticated, verify they own the session
+        if (user) {
+            const session = await ctx.db.get(agent.sessionId);
+            if (!session) {
+                throw new Error("Session not found");
+            }
+            if (session.userId !== user._id) {
+                throw new Error("Unauthorized: You can only update your own agents");
+            }
+        }
+        // If no user is authenticated, allow the call (backend service case)
+
+        await ctx.db.patch(args.agentId, {
+            sdkVersion: args.sdkVersion,
+            updatedAt: Date.now(),
+        });
     },
 });
 
@@ -1002,6 +1048,7 @@ export const createDemoSession = mutation({
                 sessionId,
                 name: args.agentName ?? "stagehand",
                 model: args.model,
+                sdkVersion: undefined, // Will be updated by agent
                 status: "running",
                 browser: {
                     sessionId: args.browserData.sessionId,
@@ -1020,6 +1067,7 @@ export const createDemoSession = mutation({
                     sessionId,
                     name: agentData.name,
                     model: agentData.model,
+                    sdkVersion: undefined, // Will be updated by agent
                     status: "running",
                     browser: {
                         sessionId: agentData.browser.sessionId,

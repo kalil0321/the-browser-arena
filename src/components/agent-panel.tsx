@@ -21,6 +21,7 @@ interface AgentPanelProps {
         _id: string;
         name: string;
         model?: string;
+        sdkVersion?: string;
         status: "pending" | "running" | "completed" | "failed";
         browser: {
             sessionId: string;
@@ -119,6 +120,11 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                     {agent.model && (
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 max-w-[120px] truncate" title={agent.model}>
                             {agent.model.replace(/^openrouter\//, '')}
+                        </span>
+                    )}
+                    {agent.sdkVersion && (
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 font-mono" title={`SDK Version: ${agent.sdkVersion}`}>
+                            v{agent.sdkVersion}
                         </span>
                     )}
                 </div>

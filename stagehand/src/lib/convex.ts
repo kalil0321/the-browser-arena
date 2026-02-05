@@ -11,6 +11,7 @@ export class ConvexBackendClient {
     sessionId: string
     name: string
     model?: string
+    sdkVersion?: string
     browser: { sessionId: string; url: string }
   }): Promise<string> {
     const id = await this.client.mutation('mutations:createAgentFromBackend', args)
@@ -44,6 +45,13 @@ export class ConvexBackendClient {
       agentId,
       status: 'failed',
       error,
+    })
+  }
+
+  async updateAgentSDKVersion(agentId: string, sdkVersion: string): Promise<void> {
+    await this.client.mutation('mutations:updateAgentSDKVersion', {
+      agentId,
+      sdkVersion,
     })
   }
 }
