@@ -51,6 +51,8 @@ export const ALLOWED_MODELS = new Set([
     'claude-sonnet-4-20250514',
     'claude-sonnet-4',
     'claude-sonnet-4-5-20250929',
+    'claude-sonnet-4-6',
+    'anthropic/claude-sonnet-4-6',
     // Google models
     'gemini-pro',
     'gemini-1.5-flash',

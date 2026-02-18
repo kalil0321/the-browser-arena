@@ -23,6 +23,7 @@ const getBrowserUseClient = (userApiKey?: string) => {
 const mapModelToApiModel = (model: string): string => {
     const modelMap: Record<string, string> = {
         "claude-sonnet-4": "claude-sonnet-4-20250514",
+        "claude-sonnet-4-6": "claude-sonnet-4-6",
         // Add other mappings as needed
     };
     return modelMap[model] || model;
