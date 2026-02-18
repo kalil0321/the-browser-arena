@@ -394,6 +394,11 @@ pricing = {
         "out": 8.0 / 1_000_000,
         "cached": 0.5 / 1_000_000,
     },
+    "anthropic/claude-sonnet-4-6": {
+        "in": 3.0 / 1_000_000,
+        "out": 15.0 / 1_000_000,
+        "cached": 0.3 / 1_000_000,
+    },
     "anthropic/claude-haiku-4.5": {
         "in": 1.0 / 1_000_000,
         "out": 5.0 / 1_000_000,
