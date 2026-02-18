@@ -116,6 +116,9 @@ export const getShortModelName = (model: string): string => {
         if (modelName === "claude-sonnet-4-5-20250929") {
             return "Claude Sonnet 4.5 CUA";
         }
+        if (modelName === "claude-sonnet-4-6") {
+            return "Claude Sonnet 4.6";
+        }
         if (modelName.toLowerCase().includes("sonnet")) {
             return "Claude Sonnet";
         }
