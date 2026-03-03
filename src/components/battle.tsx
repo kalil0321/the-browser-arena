@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { HomePageLayout } from "@/components/home-page-layout";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Info } from "lucide-react";
+import { Loader2, Info, Dices } from "lucide-react";
+import { getRandomTask } from "@/lib/battle/sample-tasks";
 
 export function Battle() {
     const router = useRouter();
@@ -88,6 +89,15 @@ export function Battle() {
                             disabled={isCreating}
                         />
                         <div className="absolute right-1 sm:right-0 top-2.5 sm:top-3 flex items-center gap-1.5 sm:gap-1 z-20 pointer-events-auto">
+                            <button
+                                type="button"
+                                onClick={() => setInstruction(getRandomTask())}
+                                disabled={isCreating}
+                                className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 shadow-sm transition-transform duration-150 hover:scale-[1.03] hover:bg-gray-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                                title="Random task"
+                            >
+                                <Dices className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                            </button>
                             <button
                                 type="submit"
                                 disabled={!instruction.trim() || isCreating}
