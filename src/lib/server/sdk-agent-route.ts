@@ -124,7 +124,8 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
                 ? requestedAgentName
                 : agentType;
-            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp") && requestedSdkClient
+            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+                && requestedSdkClient && (requestedSdkClient === "claude-code" || requestedSdkClient === "codex")
                 ? requestedSdkClient
                 : undefined;
             agentId = await convex.mutation(api.mutations.createAgent, {
@@ -142,7 +143,8 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
                 ? requestedAgentName
                 : agentType;
-            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp") && requestedSdkClient
+            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+                && requestedSdkClient && (requestedSdkClient === "claude-code" || requestedSdkClient === "codex")
                 ? requestedSdkClient
                 : undefined;
             const result = await convex.mutation(api.mutations.createSession, {

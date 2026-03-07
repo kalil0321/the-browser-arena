@@ -137,6 +137,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                             {["playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) && agent.sdkClient && (
                                 <span className="shrink-0">· {agent.sdkClient === "codex" ? "Codex" : "Claude Code"}</span>
                             )}
+                            {agent.model && (
+                                <span className="shrink-0 opacity-80">{agent.model.replace(/^(anthropic|openai)\//, '')}</span>
+                            )}
                             {agent.sdkVersion && (
                                 <span className="shrink-0 font-mono">v{agent.sdkVersion}</span>
                             )}

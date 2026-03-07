@@ -96,7 +96,7 @@ function createStdioMcpConfig(mcpType: McpType, cdpUrl: string): Record<string, 
       playwright: {
         type: 'stdio',
         command: process.execPath,
-        args: [PLAYWRIGHT_MCP_BIN, '--cdp-endpoint', cdpUrl, '--isolated'],
+        args: [PLAYWRIGHT_MCP_BIN, '--cdp-endpoint', cdpUrl],
         env: commonEnv,
       },
     }
@@ -306,14 +306,16 @@ async function runCodex(params: RunnerParams): Promise<RunnerResult> {
     .map((id) => itemById.get(id))
     .filter((item): item is ThreadItem => Boolean(item))
 
-  const answer = [...orderedItems]
+  const agentText = [...orderedItems]
     .reverse()
     .find((item) => item.type === 'agent_message')
-    ?.text || failureMessage
+    ?.text || ''
 
-  if (!answer && failureMessage) {
+  if (!agentText && failureMessage) {
     throw new Error(failureMessage)
   }
+
+  const answer = agentText || failureMessage
 
   const duration = (Date.now() - startTime) / 1000
   const u = usage || { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0 }

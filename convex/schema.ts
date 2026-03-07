@@ -18,7 +18,7 @@ export default defineSchema({
         sessionId: v.id("sessions"),
         name: v.string(),
         model: v.optional(v.string()), // Model used for this agent
-        sdkClient: v.optional(v.string()), // For MCP agents: "claude-code" or "codex"
+        sdkClient: v.optional(v.union(v.literal("claude-code"), v.literal("codex"))),
         sdkVersion: v.optional(v.string()), // SDK version (e.g., "0.11.7", "1.7.15")
         status: v.union(v.literal("pending"), v.literal("running"), v.literal("completed"), v.literal("failed")),
         browser: v.object({

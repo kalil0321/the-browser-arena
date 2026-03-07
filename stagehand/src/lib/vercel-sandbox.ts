@@ -37,10 +37,14 @@ function formatError(err: unknown): string {
   try { return JSON.stringify(err) } catch { return String(err) }
 }
 
-function buildSandboxEnv(): Record<string, string> {
+function buildSandboxEnv(agentType: SdkAgentType): Record<string, string> {
   const env: Record<string, string> = {}
-  if (process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
-  if (process.env.OPENAI_API_KEY) env.OPENAI_API_KEY = process.env.OPENAI_API_KEY
+  if (agentType === 'claude-code' && process.env.ANTHROPIC_API_KEY) {
+    env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+  }
+  if (agentType === 'codex' && process.env.OPENAI_API_KEY) {
+    env.OPENAI_API_KEY = process.env.OPENAI_API_KEY
+  }
   return env
 }
 
@@ -54,7 +58,7 @@ export async function runAgentInSandbox(params: SandboxAgentParams): Promise<San
       sandbox = await Sandbox.create({
         runtime: 'node22',
         timeout: SANDBOX_TIMEOUT_MS,
-        env: buildSandboxEnv(),
+        env: buildSandboxEnv(params.agentType),
         resources: { vcpus: 2 },
       })
     } catch (createErr) {

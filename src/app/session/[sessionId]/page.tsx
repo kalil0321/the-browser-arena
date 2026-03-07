@@ -212,8 +212,7 @@ export default function SessionPage() {
                                                 {["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) ? (
                                                     <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1 max-w-[140px] truncate" title={agent.sdkVersion ? `SDK v${agent.sdkVersion}${"result" in agent && agent.result?.metadata?.mcpVersion ? ` · MCP v${agent.result.metadata.mcpVersion}` : ""}` : undefined}>
                                                         <span className="truncate">
-                                                            {agent.name === "browser-use-cloud" ? "BU Cloud" :
-                                                                agent.name === "claude-code" ? "Claude Code" :
+                                                            {agent.name === "claude-code" ? "Claude Code" :
                                                                     agent.name === "codex" ? "Codex" :
                                                                 agent.name === "playwright-mcp" ? "Playwright MCP" :
                                                                 agent.name === "chrome-devtools-mcp" ? "Chrome DevTools MCP" :
