@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 
         const builtAgents: BuiltAgent[] = [];
         for (const a of browserAgents) {
-            const modelForAgent = a.model ?? (a.agent === "browser-use" ? "browser-use/bu-2.0" : a.agent === "notte" ? "gemini/gemini-2.5-flash" : "google/gemini-2.5-flash");
+            const modelForAgent = a.model ?? (a.agent === "browser-use" ? "browser-use/bu-2.0" : "google/gemini-2.5-flash");
             const profileConfig = {
                 ...(a.agent === "stagehand" || a.agent === "claude-code" || a.agent === "codex" ? config : {}),
                 browser: {

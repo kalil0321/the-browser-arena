@@ -919,6 +919,11 @@ async def run_notte_task(
                 exc_info=True,
             )
 
+        # Map google/ prefix to gemini/ for notte (uses LiteLLM format)
+        notte_model = model
+        if notte_model and notte_model.startswith("google/"):
+            notte_model = "gemini/" + notte_model[len("google/"):]
+
         result_payload, usage_dict, timings, browser_url, sdk_version = await run_notte(
             prompt=instruction,
             notte_client=notte_client,
@@ -926,7 +931,7 @@ async def run_notte_task(
             notte_session_id=notte_session_id,
             agent_id=agent_id,
             convex_client=convex_client,
-            reasoning_model=model,
+            reasoning_model=notte_model,
             cdp_url=cdp_url,
         )
 

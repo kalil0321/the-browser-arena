@@ -73,15 +73,12 @@ export const ALLOWED_MODELS = new Set([
     'openai/gpt-5-mini',
     'openai/gpt-5-nano',
     'google/gemini-3-flash-preview',
-    // Gemini models (for Notte via LiteLLM)
-    'gemini/gemini-2.5-flash',
-    'gemini/gemini-2.5-pro',
     // Perplexity models
     'perplexity/sonar-pro',
 ]);
 
 // Provider prefixes for model validation
-const PROVIDER_PREFIXES = ['openai', 'google', 'anthropic', 'openrouter', 'browser-use', 'groq', 'gemini', 'perplexity'];
+const PROVIDER_PREFIXES = ['openai', 'google', 'anthropic', 'openrouter', 'browser-use', 'groq', 'perplexity'];
 
 /**
  * Validates secrets object against whitelist and security rules

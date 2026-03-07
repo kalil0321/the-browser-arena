@@ -70,8 +70,8 @@ export const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
     "stagehand": ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "google/gemini-3-pro-preview", "google/gemini-3-flash-preview", "openai/gpt-4.1", "openai/gpt-5.2", "openai/gpt-5-mini", "anthropic/claude-haiku-4-5-20251001", "anthropic/claude-sonnet-4-6", "openai/computer-use-preview", "openrouter/moonshotai/kimi-k2-thinking"],
     "smooth": [], // Smooth uses its own models
     "notte": [
-        "gemini/gemini-2.5-flash",
-        "gemini/gemini-2.5-pro",
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-pro",
         "openai/gpt-4.1",
         "openai/gpt-5.2",
         "anthropic/claude-sonnet-4-6",
