@@ -4,9 +4,7 @@ import { useState, useRef, useEffect, startTransition, useMemo, lazy, Suspense }
 import { useRouter } from "next/navigation";
 import { useConvexAuth } from "convex/react";
 import { toast } from "sonner";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
@@ -14,14 +12,14 @@ import { api } from "../../convex/_generated/api";
 import { getApiKey, hasApiKey } from "@/lib/api-keys";
 import { AgentConfigDialog } from "./agent-config-dialog";
 import { getClientFingerprint } from "@/lib/fingerprint";
+import { getRandomTask } from "@/lib/battle/sample-tasks";
 
 // Import types and helpers
 import { AgentConfig, ChatInputState, AGENT_LABELS, AgentType, ModelType, MODEL_OPTIONS } from "./chat-input/types";
 import { AgentSelectionDialog } from "./chat-input/agent-selection-dialog";
 import { AuthDialog } from "./chat-input/auth-dialog";
-import { FileUpload } from "./chat-input/file-upload";
 import { AgentPills } from "./chat-input/agent-pills";
-import { Paperclip } from "lucide-react";
+import { Shuffle } from "lucide-react";
 
 // Lazy load the LoadingDino component for better initial load performance
 const LoadingDino = lazy(() => import("@/components/loading-dino").then(mod => ({ default: mod.LoadingDino })));
@@ -132,7 +130,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
     const router = useRouter();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Device fingerprinting for demo mode
     const [clientFingerprint, setClientFingerprint] = useState<string | null>(null);
@@ -167,12 +164,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     // API key availability state for privacy warnings
     const [hasSmoothApiKey, setHasSmoothApiKey] = useState(false);
     const [hasBrowserUseApiKey, setHasBrowserUseApiKey] = useState(false);
-
-    // File upload state (single file only)
-    const [file, setFile] = useState<File | null>(null);
-    const [uploadedFileIds, setUploadedFileIds] = useState<Record<string, string>>({}); // Map file name to Smooth file ID
-    const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null); // For browser-use: fileId (opaque identifier)
-    const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
     // Check if user has API keys for privacy warnings (use hasApiKey for synchronous check)
     useEffect(() => {
@@ -288,34 +279,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                 smoothApiKey = key;
                                 console.log("?? Found user's Smooth API key in localStorage");
                             }
-
-                            // Upload file to Smooth API if file is selected
-                            if (file) {
-                                if (!smoothApiKey) {
-                                    toast.error("Smooth API key required to upload files", {
-                                        duration: 5000,
-                                    });
-                                    setIsLoading(false);
-                                    return;
-                                }
-
-                                setIsUploadingFiles(true);
-                                try {
-                                    const uploadedIds = await uploadFilesToSmooth([file], smoothApiKey);
-                                    setUploadedFileIds(uploadedIds);
-                                    console.log("✅ File uploaded successfully to Smooth:", uploadedIds);
-                                } catch (error) {
-                                    console.error("❌ Error uploading file to Smooth:", error);
-                                    toast.error(`Failed to upload file: ${error instanceof Error ? error.message : "Unknown error"}`, {
-                                        duration: 5000,
-                                    });
-                                    setIsLoading(false);
-                                    setIsUploadingFiles(false);
-                                    return;
-                                } finally {
-                                    setIsUploadingFiles(false);
-                                }
-                            }
                         }
 
                         // Get OpenAI API key if needed
@@ -369,70 +332,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                     }
                 }
 
-                // Prepare file data for different agents
-                const hasBrowserUseAgent = agentConfigs.some(c => c.agent === "browser-use");
-                const hasStagehandAgent = agentConfigs.some(c => c.agent === "stagehand");
-
-                // For Smooth: prepare file IDs
-                const smoothFileIds = hasSmoothAgent && file
-                    ? (uploadedFileIds[file.name] ? [uploadedFileIds[file.name]] : [])
-                    : [];
-
-                // For browser-use and stagehand: upload file if selected
-                let browserUseFileId: string | null = null;
-                let stagehandFileData: { name: string; data: string } | null = null;
-
-                if (file && (hasBrowserUseAgent || hasStagehandAgent)) {
-                    setIsUploadingFiles(true);
-                    try {
-                        if (hasBrowserUseAgent) {
-                            // Upload file to Python server for browser-use via Next.js API route
-                            const formData = new FormData();
-                            formData.append('file', file);
-
-                            const uploadResponse = await fetch('/api/agent/upload-file', {
-                                method: 'POST',
-                                body: formData,
-                            });
-
-                            if (!uploadResponse.ok) {
-                                const errorData = await uploadResponse.json().catch(() => ({}));
-                                throw new Error(errorData.error || `Failed to upload file to browser-use server: ${uploadResponse.statusText}`);
-                            }
-
-                            const uploadData = await uploadResponse.json();
-
-                            if (!uploadData.fileId) {
-                                throw new Error("Server did not return fileId");
-                            }
-                            browserUseFileId = uploadData.fileId;
-                            setUploadedFilePath(browserUseFileId);
-                            console.log("✅ File uploaded to browser-use server, fileId:", browserUseFileId);
-                        }
-
-                        if (hasStagehandAgent) {
-                            // Convert file to base64 for stagehand
-                            const arrayBuffer = await file.arrayBuffer();
-                            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-                            stagehandFileData = {
-                                name: file.name,
-                                data: base64,
-                            };
-                            console.log("✅ File prepared for stagehand:", file.name);
-                        }
-                    } catch (error) {
-                        console.error("❌ Error preparing file:", error);
-                        toast.error(`Failed to prepare file: ${error instanceof Error ? error.message : "Unknown error"}`, {
-                            duration: 5000,
-                        });
-                        setIsLoading(false);
-                        setIsUploadingFiles(false);
-                        return;
-                    } finally {
-                        setIsUploadingFiles(false);
-                    }
-                }
-
                 // Call the multi-agent endpoint
                 const response = await fetch("/api/agent/multi", {
                     method: "POST",
@@ -449,9 +348,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                         browserUseApiKey: browserUseApiKey,
                         openrouterApiKey: openrouterApiKey,
                         isPrivate: isPrivate,
-                        smoothFileIds: smoothFileIds.length > 0 ? smoothFileIds : undefined,
-                        browserUseFileId: browserUseFileId || undefined,
-                        stagehandFileData: stagehandFileData || undefined,
                     }),
                 });
 
@@ -481,10 +377,7 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 // Use startTransition for better React 18 concurrent rendering
                 // and ensure navigation happens properly
                 startTransition(() => {
-                    setInput(""); // Clear input only on successful navigation
-                    setFile(null); // Clear file after successful submission
-                    setUploadedFileIds({}); // Clear uploaded file IDs
-                    setUploadedFilePath(null); // Clear browser-use fileId
+                    setInput("");
                     router.push(`/session/${sessionIdString}`);
                 });
             } catch (error) {
@@ -718,61 +611,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
         }
     };
 
-    const handleRemoveFile = () => {
-        const fileName = file?.name;
-        if (fileName) {
-            // Remove from uploadedFileIds if file was uploaded
-            setUploadedFileIds(prevIds => {
-                const newIds = { ...prevIds };
-                delete newIds[fileName];
-                return newIds;
-            });
-        }
-        setFile(null);
-        setUploadedFilePath(null);
-    };
-
-    // Upload file to Smooth API (single file)
-    const uploadFilesToSmooth = async (filesToUpload: File[], apiKey: string): Promise<Record<string, string>> => {
-        const fileIds: Record<string, string> = {};
-        const smoothFileUrl = 'https://api.smooth.sh/api/v1/file';
-
-        // Only process first file (single file upload)
-        const file = filesToUpload[0];
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('name', file.name);
-            formData.append('purpose', `Uploaded via Browser Arena: ${file.name}`);
-
-            const response = await fetch(smoothFileUrl, {
-                method: 'POST',
-                headers: {
-                    'apikey': apiKey,
-                },
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Failed to upload ${file.name}`);
-            }
-
-            const data = await response.json();
-            if (data.id) {
-                fileIds[file.name] = data.id;
-                console.log(`✅ Uploaded file ${file.name} with ID: ${data.id}`);
-            } else {
-                throw new Error(`No file ID returned for ${file.name}`);
-            }
-        } catch (error) {
-            console.error(`❌ Error uploading file ${file.name}:`, error);
-            throw error;
-        }
-
-        return fileIds;
-    };
-
     // Memoize chatInputState to prevent unnecessary re-renders
     const chatInputState: ChatInputState = useMemo(() => ({
         isPrivate,
@@ -799,14 +637,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                 </Suspense>
             )}
             <div className="container mx-auto max-w-3xl px-3 sm:px-4 font-mono text-white">
-                <FileUpload
-                    file={file}
-                    onFileChange={setFile}
-                    onRemoveFile={handleRemoveFile}
-                    isLoading={isLoading}
-                    isUploadingFiles={isUploadingFiles}
-                    fileInputRef={fileInputRef}
-                >
                     <div
                         className={cn(
                             "bg-background rounded-4xl w-full space-y-2 px-3 py-3 sm:px-4 sm:py-4 relative"
@@ -824,47 +654,43 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 rows={1}
-                                disabled={isUploadingFiles}
+                                disabled={isLoading}
                             />
                             <div className="absolute right-1 sm:right-0 top-2.5 sm:top-3 flex items-center gap-1.5 sm:gap-1 z-20 pointer-events-auto">
                                 <button
                                     type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={isLoading || isUploadingFiles}
+                                    onClick={() => {
+                                        const task = getRandomTask();
+                                        setInput(task);
+                                    }}
+                                    disabled={isLoading}
                                     className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 touch-manipulation"
-                                    title="Upload file"
+                                    title="Random task"
                                 >
-                                    <Paperclip className="h-4 w-4 sm:h-4 sm:w-4 text-zinc-700 dark:text-zinc-200" />
+                                    <Shuffle className="h-4 w-4 sm:h-4 sm:w-4 text-zinc-700 dark:text-zinc-200" />
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={!input.trim() || isLoading || isUploadingFiles}
+                                    disabled={!input.trim() || isLoading}
                                     className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-black text-white border border-black/10 dark:border-white/10 shadow-sm transition-transform duration-150 hover:scale-[1.03] hover:bg-black/90 disabled:bg-gray-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:disabled:bg-zinc-800 touch-manipulation"
                                 >
-                                    {isUploadingFiles ? (
-                                        <svg className="animate-spin h-4 w-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                    ) : (
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            width="24"
-                                            height="24"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            className="h-4 w-4 text-white dark:text-gray-200"
-                                        >
-                                            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                                            <path d="M5 12l14 0" strokeDasharray="50%" strokeDashoffset="50%" />
-                                            <path d="M13 18l6 -6" />
-                                            <path d="M13 6l6 6" />
-                                        </svg>
-                                    )}
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="24"
+                                        height="24"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className="h-4 w-4 text-white dark:text-gray-200"
+                                    >
+                                        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                        <path d="M5 12l14 0" strokeDasharray="50%" strokeDashoffset="50%" />
+                                        <path d="M13 18l6 -6" />
+                                        <path d="M13 6l6 6" />
+                                    </svg>
                                 </button>
                             </div>
                         </form>
@@ -909,7 +735,6 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
                             <div className="flex items-center gap-4" />
                         </div>
                     </div>
-                </FileUpload>
 
                 {/* Agent Selection Dialog */}
                 <AgentSelectionDialog
