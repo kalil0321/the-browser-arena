@@ -39,10 +39,14 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             instruction,
             sessionId: existingSessionId,
             mcpType: requestedMcpType,
+            agentName: requestedAgentName,
+            sdkClient: requestedSdkClient,
         } = body as {
             instruction?: string;
             sessionId?: string;
             mcpType?: McpType;
+            agentName?: "playwright-mcp" | "chrome-devtools-mcp";
+            sdkClient?: "claude-code" | "codex";
         };
 
         if (!instruction || typeof instruction !== "string" || !instruction.trim()) {
@@ -117,10 +121,17 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
                 );
             }
 
+            const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+                ? requestedAgentName
+                : agentType;
+            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp") && requestedSdkClient
+                ? requestedSdkClient
+                : undefined;
             agentId = await convex.mutation(api.mutations.createAgent, {
                 sessionId: existingSessionId,
-                name: agentType,
+                name: agentDisplayName,
                 model,
+                sdkClient,
                 browser: {
                     sessionId: browserSessionId,
                     url: liveViewUrl,
@@ -128,14 +139,21 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             }) as string;
             dbSessionId = existingSessionId;
         } else {
+            const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+                ? requestedAgentName
+                : agentType;
+            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp") && requestedSdkClient
+                ? requestedSdkClient
+                : undefined;
             const result = await convex.mutation(api.mutations.createSession, {
                 instruction,
                 browserData: {
                     sessionId: browserSessionId,
                     url: liveViewUrl,
                 },
-                agentName: agentType,
+                agentName: agentDisplayName,
                 model,
+                sdkClient,
             });
             dbSessionId = result.sessionId;
             agentId = result.agentId! as string;

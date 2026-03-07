@@ -21,6 +21,9 @@ import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
 import { ClaudeLogo } from "@/components/logos/claude";
 import { OpenAI } from "@/components/logos/openai";
+import { PlaywrightLogo } from "@/components/logos/playwright";
+import { ChromeDevtoolsLogo } from "@/components/logos/chrome-devtools";
+import { AGENT_LABELS } from "@/components/chat-input/types";
 import { Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -243,7 +246,13 @@ function SessionAgents({ sessionId }: { sessionId: Id<"sessions"> }) {
           {agent.name === "codex" && (
             <OpenAI className="h-3 w-3" />
           )}
-          {agent.name === "claude-code" ? "Claude Code" : agent.name}
+          {agent.name === "playwright-mcp" && (
+            <PlaywrightLogo className="h-3 w-3" />
+          )}
+          {agent.name === "chrome-devtools-mcp" && (
+            <ChromeDevtoolsLogo className="h-3 w-3" />
+          )}
+          {agent.name in AGENT_LABELS ? AGENT_LABELS[agent.name as keyof typeof AGENT_LABELS] : agent.name}
         </Badge>
       ))}
     </div>

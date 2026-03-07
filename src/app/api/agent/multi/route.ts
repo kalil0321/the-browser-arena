@@ -551,6 +551,8 @@ export async function POST(request: NextRequest) {
                             instruction,
                             sessionId: dbSessionId,
                             mcpType: agentConfig.agent === "chrome-devtools-mcp" ? "chrome-devtools" : "playwright",
+                            agentName: agentConfig.agent,
+                            sdkClient: selectedClient,
                         };
                         break;
                     }

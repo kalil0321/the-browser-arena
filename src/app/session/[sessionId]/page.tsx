@@ -14,6 +14,8 @@ import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
 import { ClaudeLogo } from "@/components/logos/claude";
 import { OpenAI } from "@/components/logos/openai";
+import { PlaywrightLogo } from "@/components/logos/playwright";
+import { ChromeDevtoolsLogo } from "@/components/logos/chrome-devtools";
 import { Copy, Check } from "lucide-react";
 
 export default function SessionPage() {
@@ -201,15 +203,35 @@ export default function SessionPage() {
                                                 {agent.name === "codex" && (
                                                     <OpenAI className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
-                                                <span className="data-[state=active]:border-current transition-colors truncate max-w-[100px] sm:max-w-[120px]" title={agent.name}>
-                                                    {agent.name === "browser-use-cloud" ? "BU Cloud" :
-                                                        agent.name === "claude-code" ? "Claude Code" :
-                                                            agent.name === "codex" ? "Codex" :
-                                                        agent.name}
-                                                </span>
-                                                {agent.sdkVersion && (
-                                                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0" title={`SDK Version: ${agent.sdkVersion}`}>
-                                                        v{agent.sdkVersion}
+                                                {agent.name === "playwright-mcp" && (
+                                                    <PlaywrightLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                                                )}
+                                                {agent.name === "chrome-devtools-mcp" && (
+                                                    <ChromeDevtoolsLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                                                )}
+                                                {["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) ? (
+                                                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1 max-w-[140px] truncate" title={agent.sdkVersion ? `SDK v${agent.sdkVersion}${"result" in agent && agent.result?.metadata?.mcpVersion ? ` · MCP v${agent.result.metadata.mcpVersion}` : ""}` : undefined}>
+                                                        <span className="truncate">
+                                                            {agent.name === "browser-use-cloud" ? "BU Cloud" :
+                                                                agent.name === "claude-code" ? "Claude Code" :
+                                                                    agent.name === "codex" ? "Codex" :
+                                                                agent.name === "playwright-mcp" ? "Playwright MCP" :
+                                                                agent.name === "chrome-devtools-mcp" ? "Chrome DevTools MCP" :
+                                                                agent.name}
+                                                        </span>
+                                                        {["playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) && "sdkClient" in agent && agent.sdkClient && (
+                                                            <span className="shrink-0">· {agent.sdkClient === "codex" ? "Codex" : "Claude Code"}</span>
+                                                        )}
+                                                        {agent.sdkVersion && (
+                                                            <span className="shrink-0 font-mono">v{agent.sdkVersion}</span>
+                                                        )}
+                                                        {"result" in agent && agent.result?.metadata?.mcpVersion && (
+                                                            <span className="shrink-0 opacity-80">(MCP v{agent.result.metadata.mcpVersion})</span>
+                                                        )}
+                                                    </span>
+                                                ) : (
+                                                    <span className="data-[state=active]:border-current transition-colors truncate max-w-[100px] sm:max-w-[120px]" title={agent.name}>
+                                                        {agent.name === "browser-use-cloud" ? "BU Cloud" : agent.name}
                                                     </span>
                                                 )}
                                                 {agent.status === "completed" && (
