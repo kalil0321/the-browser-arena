@@ -93,7 +93,7 @@ export const createSession = mutation({
         })),
         agentName: v.optional(v.string()),
         model: v.optional(v.string()),
-        sdkClient: v.optional(v.string()),
+        sdkClient: v.optional(v.union(v.literal("claude-code"), v.literal("codex"))),
         isPrivate: v.optional(v.boolean()), // Default to false if not provided
     },
     handler: async (ctx, args) => {
@@ -168,7 +168,7 @@ export const createAgent = mutation({
         sessionId: v.id("sessions"),
         name: v.string(),
         model: v.optional(v.string()),
-        sdkClient: v.optional(v.string()),
+        sdkClient: v.optional(v.union(v.literal("claude-code"), v.literal("codex"))),
         sdkVersion: v.optional(v.string()),
         browser: v.object({
             sessionId: v.string(),
