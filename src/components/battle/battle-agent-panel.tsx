@@ -5,7 +5,9 @@ import { SmoothPanel } from "../panels/smooth-panel";
 import { BUPanel } from "../panels/bu-panel";
 import { StagehandPanel } from "../panels/stagehand-panel";
 import { NottePanel } from "../panels/notte-panel";
+import { SdkAgentPanel } from "../panels/sdk-agent-panel";
 import { LoadingDino } from "../loading-dino";
+import { AGENT_LABELS } from "../chat-input/types";
 import { XCircle, AlertTriangle, ShieldQuestion } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -156,6 +158,7 @@ interface BattleAgentPanelProps {
         _id: string;
         name: string;
         model?: string;
+        sdkClient?: string;
         sdkVersion?: string;
         status: "pending" | "running" | "completed" | "failed";
         browser: {
@@ -252,19 +255,27 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                                 {label}
                             </h3>
                         </>
+                    ) : ["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) ? (
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 flex items-center gap-1.5 max-w-[200px] truncate" title={agent.sdkVersion ? `SDK v${agent.sdkVersion}${agent.result?.metadata?.mcpVersion ? ` · MCP v${agent.result.metadata.mcpVersion}` : ""}` : undefined}>
+                            <span className="truncate">{agent.name in AGENT_LABELS ? AGENT_LABELS[agent.name as keyof typeof AGENT_LABELS] : agent.name}</span>
+                            {["playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) && agent.sdkClient && (
+                                <span className="shrink-0">· {agent.sdkClient === "codex" ? "Codex" : "Claude Code"}</span>
+                            )}
+                            {agent.sdkVersion && (
+                                <span className="shrink-0 font-mono">v{agent.sdkVersion}</span>
+                            )}
+                            {agent.result?.metadata?.mcpVersion && (
+                                <span className="shrink-0 text-[10px] opacity-80">(MCP v{agent.result.metadata.mcpVersion})</span>
+                            )}
+                        </span>
                     ) : (
                         <>
                             <h3 className="text-sm font-medium capitalize truncate min-w-0" title={agent.name}>
-                                {agent.name}
+                                {agent.name in AGENT_LABELS ? AGENT_LABELS[agent.name as keyof typeof AGENT_LABELS] : agent.name}
                             </h3>
                             {agent.model && (
                                 <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 max-w-[120px] truncate" title={agent.model}>
                                     {agent.model.replace(/^openrouter\//, '')}
-                                </span>
-                            )}
-                            {agent.sdkVersion && (
-                                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 font-mono" title={`SDK Version: ${agent.sdkVersion}`}>
-                                    v{agent.sdkVersion}
                                 </span>
                             )}
                         </>
@@ -440,6 +451,7 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                             const isBrowserUse = agentType === "browser-use" || agentType === "browser_use" || agentType === "browser-use-cloud";
                             const isSmooth = agentType === "smooth";
                             const isNotte = agentType === "notte";
+                            const isSdkAgent = ["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agentType);
 
                             return (
                                 <div className="p-4 overflow-y-auto max-h-full">
@@ -448,6 +460,7 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                                     {!hideIdentity && isBrowserUse && <BUPanel agent={agent} />}
                                     {!hideIdentity && isStagehand && <StagehandPanel agent={agent} />}
                                     {!hideIdentity && isNotte && <NottePanel agent={agent} />}
+                                    {!hideIdentity && isSdkAgent && <SdkAgentPanel agent={agent} />}
 
                                     {/* Show simplified output if identity is hidden */}
                                     {hideIdentity && (
@@ -492,8 +505,19 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                                                     </div>
                                                 )}
 
+                                                {isSdkAgent && (agentResult.answer || agentResult.message) && (
+                                                    <div className="font-default prose prose-sm dark:prose-invert max-w-none prose-pre:p-0 prose-pre:m-0 prose-table:m-0 max-h-96 overflow-y-auto">
+                                                        <ReactMarkdown
+                                                            remarkPlugins={[remarkGfm]}
+                                                            components={markdownComponents}
+                                                        >
+                                                            {String(agentResult.answer || agentResult.message).replace(/\\n/g, "\n")}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                )}
+
                                                 {/* Fallback for other cases */}
-                                                {!isStagehand && !isNotte && !isBrowserUse && !agentResult.finalResult && !agentResult.extractedContent && (
+                                                {!isStagehand && !isNotte && !isBrowserUse && !isSdkAgent && !agentResult.finalResult && !agentResult.extractedContent && !agentResult.answer && !agentResult.message && (
                                                     <pre className="text-xs whitespace-pre-wrap wrap-break-word overflow-x-auto max-h-96 overflow-y-auto">
                                                         {JSON.stringify(agentResult, null, 2)}
                                                     </pre>
@@ -503,7 +527,7 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                                     )}
 
                                     {/* Fallback for unknown agent types */}
-                                    {!hideIdentity && !isSmooth && !isBrowserUse && !isStagehand && !isNotte && (
+                                    {!hideIdentity && !isSmooth && !isBrowserUse && !isStagehand && !isNotte && !isSdkAgent && (
                                         <div className="space-y-3">
                                             <div className="bg-card rounded-lg p-4">
                                                 <h4 className="text-xs font-medium mb-2 uppercase tracking-wide">Result</h4>

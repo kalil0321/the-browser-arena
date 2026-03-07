@@ -93,6 +93,7 @@ export const createSession = mutation({
         })),
         agentName: v.optional(v.string()),
         model: v.optional(v.string()),
+        sdkClient: v.optional(v.string()),
         isPrivate: v.optional(v.boolean()), // Default to false if not provided
     },
     handler: async (ctx, args) => {
@@ -143,6 +144,7 @@ export const createSession = mutation({
                 sessionId,
                 name: args.agentName ?? "stagehand",
                 model: args.model,
+                sdkClient: args.sdkClient,
                 // sdkVersion will be updated by agent after it runs
                 status: "running",
                 browser: {
@@ -166,6 +168,7 @@ export const createAgent = mutation({
         sessionId: v.id("sessions"),
         name: v.string(),
         model: v.optional(v.string()),
+        sdkClient: v.optional(v.string()),
         sdkVersion: v.optional(v.string()),
         browser: v.object({
             sessionId: v.string(),
@@ -194,6 +197,7 @@ export const createAgent = mutation({
             sessionId: args.sessionId,
             name: args.name,
             model: args.model,
+            sdkClient: args.sdkClient,
             sdkVersion: args.sdkVersion,
             status: "running",
             browser: args.browser,
