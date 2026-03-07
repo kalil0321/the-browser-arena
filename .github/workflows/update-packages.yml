@@ -86,7 +86,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          branch_name="auto/update-packages-$(date +%Y%m%d)"
+          branch_name="auto/update-packages-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "$branch_name"
 
           # Update notte-sdk version in pyproject.toml
@@ -131,7 +131,7 @@ jobs:
           NEEDS_UPDATE: ${{ steps.check.outputs.needs_update }}
         run: |
           if [ "$NEEDS_UPDATE" == "true" ]; then
-            echo "### Package updates found — PR created" >> $GITHUB_STEP_SUMMARY
+            echo "### Package updates found — PR created (if changes existed)" >> $GITHUB_STEP_SUMMARY
           else
             echo "### All packages are up to date" >> $GITHUB_STEP_SUMMARY
           fi

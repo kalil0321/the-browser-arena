@@ -199,7 +199,7 @@ async def run_notte(
             if cdp_url:
                 # External browser via CDP (e.g., Browserbase)
                 logger.info(
-                    f"[Session {session_id[:8]}] Using external CDP browser: {cdp_url[:50]}..."
+                    f"[Session {session_id[:8]}] Using external CDP browser (URL redacted)"
                 )
                 session = notte_client_ref.Session(cdp_url=cdp_url)
             elif notte_session_id:
@@ -226,7 +226,12 @@ async def run_notte(
                             try:
                                 session_cdp = session.cdp_url()
                                 if session_cdp:
-                                    browser_url = f"https://api.notte.cc/sessions/viewer/index.html?ws={session_cdp.split('?')[0]}/recording{session_cdp.split('?')[1] if '?' in session_cdp else ''}"
+                                    from urllib.parse import urlparse, urlencode, parse_qs
+                                    parsed = urlparse(session_cdp)
+                                    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}/recording"
+                                    if parsed.query:
+                                        base = f"{base}?{parsed.query}"
+                                    browser_url = f"https://api.notte.cc/sessions/viewer/index.html?ws={base}"
                             except Exception as cdp_error:
                                 logger.warning(
                                     f"[Session {session_id[:8]}] Failed to get cdp_url: {cdp_error}",

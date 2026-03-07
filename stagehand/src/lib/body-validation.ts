@@ -22,7 +22,7 @@ export const bodySchema = z.object({
 export const sdkAgentBodySchema = z.object({
   sessionId: z.string().min(1),
   instruction: z.string().min(1),
-  cdpUrl: z.string().min(1),
+  cdpUrl: z.string().url().min(1),
   liveViewUrl: z.string().url().optional(),
   agentId: z.string().optional(),
   mcpType: mcpTypeSchema,

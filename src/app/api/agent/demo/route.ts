@@ -17,6 +17,7 @@ const SMOOTH_API_URL = "https://api.smooth.sh/api/v1/task";
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 const BROWSER_AGENTS = ["stagehand", "browser-use", "claude-code", "codex", "notte"] as const;
+const SUPPORTED_DEMO_AGENTS = ["stagehand", "browser-use", "claude-code", "codex", "notte", "smooth", "browser-use-cloud"] as const;
 
 const config = {
     browser: {
@@ -65,9 +66,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Maximum 4 agents allowed for demo" }, { status: 400 });
         }
 
-        const requestedAgents: Array<{ agent: string; model?: string }> = isMulti
+        const rawAgents: Array<{ agent: string; model?: string }> = isMulti
             ? agents
             : [{ agent: agentType!, model }];
+
+        // Filter out unsupported agent types (e.g., playwright-mcp, chrome-devtools-mcp)
+        const requestedAgents = rawAgents.filter(a =>
+            SUPPORTED_DEMO_AGENTS.includes(a.agent as any)
+        );
+
+        if (requestedAgents.length === 0) {
+            return badRequest("No supported agent types provided for demo");
+        }
 
         // clientFingerprint is optional now - we use it for display purposes but not for rate limiting
         // Rate limiting is now based on server-generated signed fingerprint from cookies
@@ -385,9 +395,9 @@ export async function POST(request: NextRequest) {
             }));
 
             for (const { agentId, taskId, apiKey } of smoothTasks) {
-                (async () => {
+                await (async () => {
                     try {
-                        for (let i = 0; i < 100000; i++) {
+                        for (let i = 0; i < 600; i++) {
                             const r = await fetch(`${SMOOTH_API_URL}/${taskId}`, {
                                 headers: { "Content-Type": "application/json", "apikey": apiKey },
                             });
@@ -427,7 +437,7 @@ export async function POST(request: NextRequest) {
             }
 
             for (const { agentId, taskId, apiKey } of buCloudTasks) {
-                (async () => {
+                await (async () => {
                     try {
                         const client = new BrowserUseClient({ apiKey });
                         for (let i = 0; i < 600; i++) {

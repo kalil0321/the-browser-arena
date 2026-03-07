@@ -81,7 +81,7 @@ async function handleSdkAgentPost(req: Request, res: Response, agentType: SdkAge
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`[${requestId}] ❌ ${agentType} failed`, { error: message, stack: error instanceof Error ? error.stack : undefined })
-    res.status(500).json({ error: `${agentType} execution failed`, message, requestId })
+    res.status(500).json({ error: `${agentType} execution failed`, requestId })
   }
 }
 
@@ -348,7 +348,7 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
       if (agentId) await convex.updateAgentStatusFailed(agentId, message)
     } catch { }
     console.error(`[${requestId}] ❌ failed`, { error: message, stack: e?.stack })
-    res.status(500).json({ error: 'Stagehand execution failed', message, requestId })
+    res.status(500).json({ error: 'Stagehand execution failed', requestId })
   }
 })
 

@@ -62,7 +62,9 @@ export function AgentSelectionDialog({
     }, [open, agentConfigs]);
 
     const handleSave = () => {
-        onSave([...tempAgentConfigs]);
+        // Preserve any smooth configs that were filtered out for display
+        const smoothConfigs = agentConfigs.filter((config) => config.agent === "smooth");
+        onSave([...smoothConfigs, ...tempAgentConfigs]);
         onOpenChange(false);
     };
 

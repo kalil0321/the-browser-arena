@@ -5,7 +5,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, mapProviderError, serverMisconfigured, unauthorized } from "@/lib/http-errors";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
-import { createBrowserSession } from "@/lib/browser";
+import { createBrowserSession, deleteBrowserSession } from "@/lib/browser";
 
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
@@ -70,16 +70,23 @@ export async function POST(request: NextRequest) {
             liveViewUrl: browserSession.liveViewUrl,
         };
 
-        const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/notte`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${agentServerApiKey}`,
-            },
-            body: JSON.stringify(payload),
-        });
+        let agentResponse: Response;
+        try {
+            agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/notte`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${agentServerApiKey}`,
+                },
+                body: JSON.stringify(payload),
+            });
+        } catch (fetchError) {
+            await deleteBrowserSession(browserSession.browserSessionId).catch(() => {});
+            throw fetchError;
+        }
 
         if (!agentResponse.ok) {
+            await deleteBrowserSession(browserSession.browserSessionId).catch(() => {});
             return await mapProviderError(agentResponse, "notte");
         }
 

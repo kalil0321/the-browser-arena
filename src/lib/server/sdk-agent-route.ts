@@ -4,7 +4,7 @@ import { api } from "../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, serverMisconfigured, unauthorized } from "@/lib/http-errors";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
-import { createBrowserSession } from "@/lib/browser";
+import { createBrowserSession, deleteBrowserSession } from "@/lib/browser";
 
 const STAGEHAND_SERVER_URL = process.env.NODE_ENV === "development"
     ? "http://localhost:3001"
@@ -91,7 +91,14 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             }
         };
 
-        const { browserSessionId, cdpUrl, liveViewUrl } = await createBrowserSession(browserProfileConfig);
+        let browserSession: { browserSessionId: string; cdpUrl: string; liveViewUrl: string };
+        try {
+            browserSession = await createBrowserSession(browserProfileConfig);
+        } catch (e) {
+            console.error(`Failed to create browser session for ${agentType}:`, e);
+            return NextResponse.json({ error: "Failed to create browser session" }, { status: 500 });
+        }
+        const { browserSessionId, cdpUrl, liveViewUrl } = browserSession;
 
         const model = SDK_AGENT_MODELS[agentType];
         let dbSessionId: string;
@@ -103,6 +110,7 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             });
 
             if (!session) {
+                await deleteBrowserSession(browserSessionId).catch(() => {});
                 return NextResponse.json(
                     { error: "Unauthorized: You can only add agents to your own sessions" },
                     { status: 403 }
@@ -134,6 +142,7 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
         }
 
         if (!agentId) {
+            await deleteBrowserSession(browserSessionId).catch(() => {});
             return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
         }
 
