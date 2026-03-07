@@ -7,7 +7,9 @@ Env vars:
 - PORT (default 3001)
 - AGENT_SERVER_API_KEY (required)
 - CONVEX_URL (required)
-- OPENAI_API_KEY / GOOGLE_API_KEY / ANTHROPIC_API_KEY (optional fallbacks)
+- OPENAI_API_KEY (required for Codex agent runs)
+- ANTHROPIC_API_KEY (required for Claude Code agent runs)
+- GOOGLE_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY (optional fallbacks for Stagehand)
 
 
 ## Development
@@ -44,6 +46,8 @@ PORT=3001 AGENT_SERVER_API_KEY=your_key CONVEX_URL=https://YOUR.convex.cloud npm
 - GET /healthz → 200 ok
 - GET /status → { status: "ok" }
 - POST /agent/stagehand (Bearer AGENT_SERVER_API_KEY)
+- POST /agent/claude-code (Bearer AGENT_SERVER_API_KEY)
+- POST /agent/codex (Bearer AGENT_SERVER_API_KEY)
 
 Request body (JSON):
 
@@ -60,6 +64,21 @@ Request body (JSON):
   "keys": { "openai": "...", "google": "...", "anthropic": "..." }
 }
 ```
+
+Claude Code / Codex request body:
+
+```json
+{
+  "sessionId": "...",
+  "instruction": "...",
+  "cdpUrl": "wss://...",
+  "liveViewUrl": "https://...",
+  "agentId": "optional",
+  "mcpType": "playwright"
+}
+```
+
+`mcpType` can be `"playwright"` or `"chrome-devtools"`.
 
 Response:
 

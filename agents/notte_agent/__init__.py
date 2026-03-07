@@ -1,6 +1,6 @@
 """Notte agent module"""
 
-from .main import run_notte
+from .main import run_notte, SDK_VERSION
 
-__all__ = ["run_notte"]
+__all__ = ["run_notte", "SDK_VERSION"]
 

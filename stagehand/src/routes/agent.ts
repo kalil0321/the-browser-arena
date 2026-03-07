@@ -1,17 +1,18 @@
-import { Router } from 'express'
+import { Router, type Request, type Response } from 'express'
 import { bearerAuth } from '../lib/auth.js'
 import { getConvexBackendClient } from '../lib/convex.js'
 import { AISdkClient, Stagehand } from '@browserbasehq/stagehand'
 import { randomUUID } from 'node:crypto'
 import { openrouter, AISdkClientWithLanguageModel } from '../lib/llm.js'
 // import { startBrowserAgent } from 'magnitude-core'
-import { bodySchema, magnitudeBodySchema, validateSecrets } from '../lib/body-validation.js'
+import { bodySchema, magnitudeBodySchema, sdkAgentBodySchema, validateSecrets } from '../lib/body-validation.js'
 import { determineKey, formatModelName, isCUA, isOpenRouter, validateModelName } from '../lib/llm.js'
 import { computeBrowserCost } from '../lib/browser.js'
 import { computeCost } from '../lib/llm-pricing.js'
 import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
+import { runSdkAgentAndPersist, type SdkAgentType } from '../lib/sdk-agents.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -39,6 +40,58 @@ function createOpenRouterClient(model: string, apiKey?: string): AISdkClient {
     model: openrouter(model, apiKey),
   })
 }
+
+async function handleSdkAgentPost(req: Request, res: Response, agentType: SdkAgentType) {
+  const requestId = randomUUID()
+  try {
+    const body = req.body || {}
+    console.log(`[${requestId}] → POST /agent/${agentType}`, {
+      ...body,
+      cdpUrl: body.cdpUrl ? '<redacted>' : undefined,
+    })
+  } catch {
+    console.log(`[${requestId}] → POST /agent/${agentType} (body log failed)`)
+  }
+
+  const parse = sdkAgentBodySchema.safeParse(req.body)
+  if (!parse.success) {
+    console.error(`[${requestId}] ✖ validation`, parse.error.flatten())
+    res.status(400).json({ error: 'Invalid request', details: parse.error.flatten(), requestId })
+    return
+  }
+
+  try {
+    const { sessionId, instruction, cdpUrl, liveViewUrl, agentId, mcpType } = parse.data
+    const result = await runSdkAgentAndPersist({
+      agentType,
+      sessionId,
+      instruction,
+      cdpUrl,
+      liveViewUrl,
+      agentId,
+      mcpType,
+      requestId,
+    })
+
+    res.status(200).json({
+      agentId: result.agentId,
+      liveUrl: liveViewUrl || '',
+      requestId,
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[${requestId}] ❌ ${agentType} failed`, { error: message, stack: error instanceof Error ? error.stack : undefined })
+    res.status(500).json({ error: `${agentType} execution failed`, message, requestId })
+  }
+}
+
+router.post('/claude-code', bearerAuth, async (req, res) => {
+  await handleSdkAgentPost(req, res, 'claude-code')
+})
+
+router.post('/codex', bearerAuth, async (req, res) => {
+  await handleSdkAgentPost(req, res, 'codex')
+})
 
 router.post('/stagehand', bearerAuth, async (req, res) => {
   const requestId = randomUUID()
@@ -106,14 +159,15 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
         sessionId,
         name: 'stagehand',
         model,
-        // sdkVersion will be updated after agent runs
+        sdkVersion: STAGEHAND_VERSION,
         browser: { sessionId: 'external', url: liveViewUrl || '' },
       })
       console.log(`[${requestId}] created agent ${agentId} in ${Date.now() - t}ms`)
     }
 
     await convex.updateAgentStatusRunning(agentId)
-    console.log(`[${requestId}] status → running (${agentId})`)
+    await convex.updateAgentSDKVersion(agentId, STAGEHAND_VERSION)
+    console.log(`[${requestId}] status → running (${agentId}), sdk v${STAGEHAND_VERSION}`)
     if (liveViewUrl) {
       await convex.updateAgentBrowserUrl(agentId, liveViewUrl)
       console.log(`[${requestId}] liveViewUrl updated`)
@@ -270,14 +324,6 @@ router.post('/stagehand', bearerAuth, async (req, res) => {
         ...(result?.metadata || {}),
         ...(extractionResults ? { extractionResults } : {}),
       },
-    }
-
-    // Update SDK version first
-    try {
-      await convex.updateAgentSDKVersion(agentId, STAGEHAND_VERSION)
-      console.log(`[${requestId}] SDK version updated: ${STAGEHAND_VERSION}`)
-    } catch (e: any) {
-      console.warn(`[${requestId}] Failed to update SDK version`, { error: e?.message })
     }
 
     // Check if payload is too large (over 1MB)

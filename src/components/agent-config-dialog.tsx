@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
-import { AgentConfig, ModelType, MODEL_OPTIONS } from "./chat-input/types";
+import { AgentConfig, McpType, ModelType, MODEL_OPTIONS } from "./chat-input/types";
 
 interface AgentConfigDialogProps {
     agentConfig: AgentConfig | null;
@@ -27,6 +27,7 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
     const [secrets, setSecrets] = useState<Array<{ key: string; value: string }>>([]);
     const [thinkingModel, setThinkingModel] = useState<ModelType | undefined>(undefined);
     const [executionModel, setExecutionModel] = useState<ModelType | undefined>(undefined);
+    const [mcpType, setMcpType] = useState<McpType>("playwright");
 
     useEffect(() => {
         if (agentConfig) {
@@ -38,10 +39,12 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
             }
             setThinkingModel(agentConfig.thinkingModel);
             setExecutionModel(agentConfig.executionModel);
+            setMcpType(agentConfig.mcpType || "playwright");
         } else {
             setSecrets([]);
             setThinkingModel(undefined);
             setExecutionModel(undefined);
+            setMcpType("playwright");
         }
     }, [agentConfig, open]);
 
@@ -51,6 +54,8 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
     const isStagehand = agentConfig.agent === "stagehand";
     const isSmooth = agentConfig.agent === "smooth";
     const isNotte = agentConfig.agent === "notte";
+    const isLegacySdkAgent = agentConfig.agent === "claude-code" || agentConfig.agent === "codex";
+    const isMcpAgent = agentConfig.agent === "playwright-mcp" || agentConfig.agent === "chrome-devtools-mcp";
 
     // Don't show dialog for smooth
     if (isSmooth) {
@@ -81,9 +86,11 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
 
         const updatedConfig: AgentConfig = {
             ...agentConfig,
+            ...(isLegacySdkAgent ? { mcpType } : {}),
+            ...(isMcpAgent ? { model: (thinkingModel || agentConfig.model) } : {}),
             secrets: Object.keys(secretsObj).length > 0 ? secretsObj : undefined,
-            thinkingModel: thinkingModel || undefined,
-            executionModel: executionModel || undefined,
+            thinkingModel: isStagehand ? (thinkingModel || undefined) : undefined,
+            executionModel: isStagehand ? (executionModel || undefined) : undefined,
         };
 
         onSave(updatedConfig);
@@ -270,6 +277,75 @@ export function AgentConfigDialog({ agentConfig, open, onOpenChange, onSave }: A
                                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-3">
                                     <p className="text-xs text-blue-900 dark:text-blue-100">
                                         <strong>Note:</strong> Secrets are passed to the agent at runtime via variables. They are not stored permanently and are securely injected into the agent execution context.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {isLegacySdkAgent && (
+                        <div className="space-y-3">
+                            <div>
+                                <Label className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 block">
+                                    MCP Configuration
+                                </Label>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                    Choose which browser MCP server this agent should use for the run.
+                                </p>
+                                <div>
+                                    <Label htmlFor="mcp-type" className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                                        MCP Server
+                                    </Label>
+                                    <Select
+                                        value={mcpType}
+                                        onValueChange={(value) => setMcpType(value as McpType)}
+                                    >
+                                        <SelectTrigger id="mcp-type">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="playwright">Playwright MCP</SelectItem>
+                                            <SelectItem value="chrome-devtools">Chrome DevTools MCP</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Playwright MCP uses Playwright&apos;s accessibility-driven browser tooling. Chrome DevTools MCP uses the DevTools protocol toolset directly.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {isMcpAgent && (
+                        <div className="space-y-3">
+                            <div>
+                                <Label className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 block">
+                                    Client Configuration
+                                </Label>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                    Choose which coding client should use this MCP server.
+                                </p>
+                                <div>
+                                    <Label htmlFor="sdk-client-model" className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                                        Client
+                                    </Label>
+                                    <Select
+                                        value={thinkingModel || agentConfig.model || MODEL_OPTIONS[agentConfig.agent][0]}
+                                        onValueChange={(value) => setThinkingModel(value as ModelType)}
+                                    >
+                                        <SelectTrigger id="sdk-client-model">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {MODEL_OPTIONS[agentConfig.agent].map((model) => (
+                                                <SelectItem key={model} value={model}>
+                                                    {model === "claude-code" ? "Claude Code" : "Codex"}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {agentConfig.agent === "playwright-mcp" ? "Playwright MCP" : "Chrome DevTools MCP"} stays fixed for this agent slot.
                                     </p>
                                 </div>
                             </div>

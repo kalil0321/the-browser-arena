@@ -26,6 +26,12 @@ export const detectProviderFromModelName = (modelName: string): string => {
 
 // Helper to format model names
 export const formatModelName = (model: string) => {
+    if (model === "claude-code") {
+        return { provider: "anthropic", modelName: "claude-code" };
+    }
+    if (model === "codex") {
+        return { provider: "openai", modelName: "codex" };
+    }
     const parts = model.split("/");
     // Handle openrouter/provider/model format - extract provider from middle segment
     if (parts.length >= 3 && parts[0] === "openrouter") {
@@ -84,6 +90,12 @@ export const ProviderLogo: React.FC<{ provider: string; className?: string }> = 
 // Helper to get short model name for badges
 export const getShortModelName = (model: string): string => {
     const { provider, modelName } = formatModelName(model);
+    if (modelName === "claude-code") {
+        return "Claude Code";
+    }
+    if (modelName === "codex") {
+        return "Codex";
+    }
     // Return short version of model name
     if (modelName.toLowerCase().includes("gemini")) {
         if (modelName.toLowerCase().includes("computer-use")) {
@@ -139,4 +151,3 @@ export const getShortModelName = (model: string): string => {
     // Fallback: return model name as-is, truncate if too long
     return modelName.length > 15 ? modelName.substring(0, 12) + "..." : modelName;
 };
-

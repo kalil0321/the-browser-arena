@@ -1,6 +1,6 @@
 import { MetadataRoute } from "next";
 
-const AGENTS = ["browser-use", "stagehand", "smooth", "notte"] as const;
+const AGENTS = ["browser-use", "stagehand", "smooth", "notte", "claude-code", "codex"] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.thebrowserarena.com";

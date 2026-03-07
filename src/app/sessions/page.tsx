@@ -19,6 +19,8 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
+import { ClaudeLogo } from "@/components/logos/claude";
+import { OpenAI } from "@/components/logos/openai";
 import { Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -235,7 +237,13 @@ function SessionAgents({ sessionId }: { sessionId: Id<"sessions"> }) {
           {agent.name === "stagehand" && (
             <StagehandLogo className="h-3 w-3" />
           )}
-          {agent.name}
+          {agent.name === "claude-code" && (
+            <ClaudeLogo className="h-3 w-3" />
+          )}
+          {agent.name === "codex" && (
+            <OpenAI className="h-3 w-3" />
+          )}
+          {agent.name === "claude-code" ? "Claude Code" : agent.name}
         </Badge>
       ))}
     </div>

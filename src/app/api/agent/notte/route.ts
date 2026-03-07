@@ -5,6 +5,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { getToken } from "@/lib/auth/server";
 import { badRequest, mapProviderError, serverMisconfigured, unauthorized } from "@/lib/http-errors";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
+import { createBrowserSession } from "@/lib/browser";
 
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
@@ -44,10 +45,16 @@ export async function POST(request: NextRequest) {
             return unauthorized();
         }
 
-        const { sessionId: dbSessionId } = await convex.mutation(api.mutations.createSession, {
-            instruction,
-            isPrivate: isPrivate ?? false,
-        });
+        // Create Convex session and Browserbase session in parallel
+        const [sessionResult, browserSession] = await Promise.all([
+            convex.mutation(api.mutations.createSession, {
+                instruction,
+                isPrivate: isPrivate ?? false,
+            }),
+            createBrowserSession(),
+        ]);
+
+        const dbSessionId = sessionResult.sessionId;
 
         const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
         if (!agentServerApiKey) {
@@ -58,6 +65,9 @@ export async function POST(request: NextRequest) {
             sessionId: dbSessionId,
             instruction,
             model: model || undefined,
+            cdpUrl: browserSession.cdpUrl,
+            browserSessionId: browserSession.browserSessionId,
+            liveViewUrl: browserSession.liveViewUrl,
         };
 
         const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/notte`, {
@@ -80,8 +90,8 @@ export async function POST(request: NextRequest) {
                 id: dbSessionId,
             },
             agentId: agentData.agentId,
-            liveViewUrl: agentData.liveUrl,
-            browserSessionId: agentData.browserSessionId,
+            liveViewUrl: browserSession.liveViewUrl,
+            browserSessionId: browserSession.browserSessionId,
         });
     } catch (error) {
         console.error("❌ Error in Notte POST handler:", error);

@@ -11,8 +11,9 @@ import { BrowserSession, createBrowserSession, deleteBrowserSession } from "@/li
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
 interface AgentConfig {
-    agent: "stagehand" | "smooth" | "browser-use" | "browser-use-cloud" | "notte";
+    agent: "stagehand" | "smooth" | "browser-use" | "browser-use-cloud" | "notte" | "claude-code" | "codex" | "playwright-mcp" | "chrome-devtools-mcp";
     model: string;
+    mcpType?: "playwright" | "chrome-devtools";
     secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
     thinkingModel?: string; // For stagehand: model used for thinking/planning
     executionModel?: string; // For stagehand: model used for execution
@@ -25,6 +26,12 @@ interface RequiredKeys {
     anthropicApiKey?: boolean;
     browserUseApiKey?: boolean;
     openrouterApiKey?: boolean;
+}
+
+const SDK_CLIENT_MODELS = new Set(["claude-code", "codex"]);
+
+function isSdkAgent(agent: AgentConfig["agent"]): boolean {
+    return agent === "claude-code" || agent === "codex" || agent === "playwright-mcp" || agent === "chrome-devtools-mcp";
 }
 
 /**
@@ -41,6 +48,10 @@ function getRequiredKeysForAgent(agentConfig: AgentConfig): RequiredKeys {
             required.browserUseApiKey = true;
             break;
         case "notte":
+        case "claude-code":
+        case "codex":
+        case "playwright-mcp":
+        case "chrome-devtools-mcp":
             // Uses server-side credentials
             break;
         case "stagehand":
@@ -293,10 +304,17 @@ export async function POST(request: NextRequest) {
         for (const agentConfig of agents) {
             // Validate model name
             if (agentConfig.model) {
-                const modelValidation = validateModelName(agentConfig.model);
-                if (!modelValidation.isValid) {
-                    logSecurityViolation('invalid_model_name', { model: agentConfig.model, agent: agentConfig.agent }, userId, 'multi-route');
-                    return NextResponse.json({ error: `Invalid model for ${agentConfig.agent}: ${modelValidation.error}` }, { status: 400 });
+                if (isSdkAgent(agentConfig.agent)) {
+                    if (!SDK_CLIENT_MODELS.has(agentConfig.model)) {
+                        logSecurityViolation('invalid_model_name', { model: agentConfig.model, agent: agentConfig.agent }, userId, 'multi-route');
+                        return NextResponse.json({ error: `Invalid model for ${agentConfig.agent}: expected one of ${Array.from(SDK_CLIENT_MODELS).join(", ")}` }, { status: 400 });
+                    }
+                } else {
+                    const modelValidation = validateModelName(agentConfig.model);
+                    if (!modelValidation.isValid) {
+                        logSecurityViolation('invalid_model_name', { model: agentConfig.model, agent: agentConfig.agent }, userId, 'multi-route');
+                        return NextResponse.json({ error: `Invalid model for ${agentConfig.agent}: ${modelValidation.error}` }, { status: 400 });
+                    }
                 }
             }
 
@@ -384,9 +402,9 @@ export async function POST(request: NextRequest) {
         console.log("[api/agent/multi] User ID:", userId);
 
         // Check if we need browser sessions for browser-use agents (not browser-use-cloud)
-        const browserUseAgents = agents.filter(a => a.agent === "browser-use");
-        const needsBrowserSessions = browserUseAgents.length > 0;
-        console.log("[api/agent/multi] Browser sessions needed:", needsBrowserSessions, "count:", browserUseAgents.length);
+        const agentsNeedingBrowser = agents.filter(a => a.agent === "browser-use" || a.agent === "notte");
+        const needsBrowserSessions = agentsNeedingBrowser.length > 0;
+        console.log("[api/agent/multi] Browser sessions needed:", needsBrowserSessions, "count:", agentsNeedingBrowser.length);
 
         // Create browser profile configuration using user_id
         const browserConfig = {
@@ -410,8 +428,8 @@ export async function POST(request: NextRequest) {
 
         // Create browser sessions for all browser-use agents in parallel
         if (needsBrowserSessions) {
-            console.log("[api/agent/multi] Creating browser sessions, count:", browserUseAgents.length);
-            browserUseAgents.forEach(() => {
+            console.log("[api/agent/multi] Creating browser sessions, count:", agentsNeedingBrowser.length);
+            agentsNeedingBrowser.forEach(() => {
                 parallelPromises.push(createBrowserSession(browserConfig));
             });
         }
@@ -484,13 +502,19 @@ export async function POST(request: NextRequest) {
                             ...(agentConfig.secrets && { secrets: agentConfig.secrets }),
                         };
                         break;
-                    case "notte":
+                    case "notte": {
                         endpoint = `${AGENT_SERVER_URL}/agent/notte`;
+                        const notteBrowser = browserSessions[browserSessionIndex++];
                         payload = {
                             sessionId: dbSessionId,
                             instruction,
+                            model: agentConfig.model,
+                            cdpUrl: notteBrowser.cdpUrl,
+                            browserSessionId: notteBrowser.browserSessionId,
+                            liveViewUrl: notteBrowser.liveViewUrl,
                         };
                         break;
+                    }
                     case "stagehand":
                         // Stagehand is a Next.js route, not Python
                         endpoint = `/api/agent/stagehand`;
@@ -508,6 +532,28 @@ export async function POST(request: NextRequest) {
                             ...(stagehandFileData ? { fileData: stagehandFileData } : {}),
                         };
                         break;
+                    case "claude-code":
+                    case "codex":
+                        endpoint = `/api/agent/${agentConfig.agent}`;
+                        isLocalEndpoint = true;
+                        payload = {
+                            instruction,
+                            sessionId: dbSessionId,
+                            mcpType: agentConfig.mcpType || "playwright",
+                        };
+                        break;
+                    case "playwright-mcp":
+                    case "chrome-devtools-mcp": {
+                        const selectedClient = agentConfig.model === "codex" ? "codex" : "claude-code";
+                        endpoint = `/api/agent/${selectedClient}`;
+                        isLocalEndpoint = true;
+                        payload = {
+                            instruction,
+                            sessionId: dbSessionId,
+                            mcpType: agentConfig.agent === "chrome-devtools-mcp" ? "chrome-devtools" : "playwright",
+                        };
+                        break;
+                    }
                     default:
                         throw new Error(`Unknown agent: ${agentConfig.agent}`);
                 }
@@ -631,4 +677,3 @@ export async function POST(request: NextRequest) {
         );
     }
 }
-

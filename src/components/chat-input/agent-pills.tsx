@@ -19,7 +19,6 @@ export function AgentPills({
         <>
             {agentConfigs.filter(c => c.agent !== "smooth").map((config, index) => {
                 const hasProperties = config.agent !== "smooth";
-                const { provider } = formatModelName(config.model);
                 const shortModelName = getShortModelName(config.model);
                 const tooltipText = `${AGENT_LABELS[config.agent]} - ${config.model}${hasProperties ? " (Click to configure)" : ""}`;
 
@@ -53,4 +52,3 @@ export function AgentPills({
         </>
     );
 }
-

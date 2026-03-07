@@ -6,24 +6,21 @@ import { badRequest } from "@/lib/http-errors";
 import { getOrCreateSignedFingerprint } from "@/lib/fingerprint";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 import { createBrowserSession, deleteBrowserSession } from "@/lib/browser";
+import { BrowserUseClient } from "browser-use-sdk";
 
 export const runtime = "nodejs";
 
-// Python agent server URL
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
-
-// Stagehand server URL
 const STAGEHAND_SERVER_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "https://stagehand.thebrowserarena.com";
+const SMOOTH_API_URL = "https://api.smooth.sh/api/v1/task";
 
-// Create a separate Convex client for background tasks (no auth needed)
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-// For explicit headfull session configuration
+const BROWSER_AGENTS = ["stagehand", "browser-use", "claude-code", "codex", "notte"] as const;
+
 const config = {
     browser: {
-        headless: {
-            active: false
-        }
+        headless: { active: false }
     }
 };
 
@@ -48,35 +45,29 @@ export async function POST(request: NextRequest) {
         const model: string | undefined = body.model;
         const agentType: string | undefined = body.agentType;
         const clientFingerprint: string | undefined = body.clientFingerprint;
-        const agents: Array<{ agent: "stagehand" | "browser-use"; model?: string }> | undefined = body.agents;
+        const agents: Array<{ agent: string; model?: string }> | undefined = body.agents;
 
         if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
             return badRequest("Field 'instruction' is required");
         }
 
-        // Validate instruction for prompt injection attempts
         const validationResult = validateInstruction(instruction);
         if (!validationResult.isValid) {
             logValidationFailure(instruction, validationResult, undefined, "demo-route");
             return badRequest(validationResult.error || "Invalid instruction");
         }
 
-        // If multi-agent payload provided, validate cap and supported agents
         const isMulti = Array.isArray(agents) && agents.length > 0;
-        if (isMulti) {
-            if (agents.length > 4) {
-                return NextResponse.json({ error: "Maximum 4 agents allowed for demo" }, { status: 400 });
-            }
-            const unsupported = agents.find(a => !(a.agent === "stagehand" || a.agent === "browser-use"));
-            if (unsupported) {
-                return badRequest("Only 'stagehand' and 'browser-use' are supported in demo mode");
-            }
-        } else {
-            // Backward-compat single-agent validation
-            if (!agentType || !["stagehand", "browser-use"].includes(agentType)) {
-                return badRequest("Field 'agentType' must be 'stagehand' or 'browser-use'");
-            }
+        if (!isMulti && !agentType) {
+            return badRequest("Field 'agentType' is required for single-agent demo");
         }
+        if (isMulti && agents.length > 4) {
+            return NextResponse.json({ error: "Maximum 4 agents allowed for demo" }, { status: 400 });
+        }
+
+        const requestedAgents: Array<{ agent: string; model?: string }> = isMulti
+            ? agents
+            : [{ agent: agentType!, model }];
 
         // clientFingerprint is optional now - we use it for display purposes but not for rate limiting
         // Rate limiting is now based on server-generated signed fingerprint from cookies
@@ -123,26 +114,24 @@ export async function POST(request: NextRequest) {
 
         const demoUserId = "demo-user";
 
-        // Create one browser session per requested agent
         type BuiltAgent = {
-            kind: "stagehand" | "browser-use";
+            kind: string;
             model: string;
-            browserSessionId: string;
-            liveViewUrl: string;
-            cdpUrl: string;
+            browserSessionId?: string;
+            liveViewUrl?: string;
+            cdpUrl?: string;
         };
 
-        const requestedAgents: Array<{ agent: "stagehand" | "browser-use"; model?: string }> = isMulti
-            ? (agents as Array<{ agent: "stagehand" | "browser-use"; model?: string }>)
-            : [{ agent: agentType as "stagehand" | "browser-use", model }];
+        const browserAgents = requestedAgents.filter(a => BROWSER_AGENTS.includes(a.agent as any));
+        const nonBrowserAgents = requestedAgents.filter(a => !BROWSER_AGENTS.includes(a.agent as any));
 
         const builtAgents: BuiltAgent[] = [];
-        for (const a of requestedAgents) {
-            const modelForAgent = a.model ?? (a.agent === "browser-use" ? "browser-use/bu-2.0" : "google/gemini-2.5-flash");
+        for (const a of browserAgents) {
+            const modelForAgent = a.model ?? (a.agent === "browser-use" ? "browser-use/bu-2.0" : a.agent === "notte" ? "gemini/gemini-2.5-flash" : "google/gemini-2.5-flash");
             const profileConfig = {
-                ...(a.agent === "stagehand" ? config : {}),
+                ...(a.agent === "stagehand" || a.agent === "claude-code" || a.agent === "codex" ? config : {}),
                 browser: {
-                    ...(a.agent === "stagehand" ? config.browser : {}),
+                    ...(a.agent === "stagehand" || a.agent === "claude-code" || a.agent === "codex" ? config.browser : {}),
                     profile: {
                         name: `demo-${deviceFingerprint}-${a.agent}-${Math.random().toString(36).slice(2, 8)}`,
                         persist: false,
@@ -153,74 +142,125 @@ export async function POST(request: NextRequest) {
                 console.error("Error creating browser session:", e);
                 return Promise.reject(e);
             });
-
             if (!liveViewUrl || !cdpUrl) {
                 return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
             }
             builtAgents.push({ kind: a.agent, model: modelForAgent, browserSessionId, liveViewUrl, cdpUrl });
         }
 
-        // Create demo session with all agents
-        // Since demo route is unauthenticated, we create agents directly in createDemoSession
-        // instead of using createAgentFromBackend (which is meant for authenticated users or backend services)
-        const first = builtAgents[0];
+        for (const a of nonBrowserAgents) {
+            builtAgents.push({
+                kind: a.agent,
+                model: a.model ?? "",
+            });
+        }
+
+        const firstBrowser = builtAgents.find(b => b.browserSessionId);
         const createResult = await convex.mutation(api.mutations.createDemoSession, {
             instruction,
-            browserData: {
-                sessionId: first.browserSessionId,
-                url: first.liveViewUrl,
-            },
-            agentName: first.kind,
-            model: first.model,
-            // Pass additional agents data to create them all at once
-            additionalAgents: builtAgents.slice(1).map(b => ({
+            browserData: firstBrowser ? {
+                sessionId: firstBrowser.browserSessionId!,
+                url: firstBrowser.liveViewUrl!,
+            } : undefined,
+            agentName: firstBrowser?.kind ?? requestedAgents[0]?.agent ?? "stagehand",
+            model: firstBrowser?.model ?? "google/gemini-2.5-flash",
+            additionalAgents: builtAgents.slice(1).filter(b => b.browserSessionId).map(b => ({
                 name: b.kind,
                 model: b.model,
-                browser: {
-                    sessionId: b.browserSessionId,
-                    url: b.liveViewUrl,
-                },
+                browser: { sessionId: b.browserSessionId!, url: b.liveViewUrl! },
             })),
         });
 
-        const { sessionId: dbSessionId, agentIds } = createResult;
-        if (!agentIds || agentIds.length === 0) {
+        const { sessionId: dbSessionId, agentIds: initialAgentIds } = createResult;
+        const allAgentIds: string[] = [...(initialAgentIds || [])];
+        const smoothTasks: Array<{ agentId: string; taskId: string; apiKey: string }> = [];
+        const buCloudTasks: Array<{ agentId: string; taskId: string; apiKey: string }> = [];
+
+        for (const a of nonBrowserAgents) {
+            if (a.agent === "smooth") {
+                const smoothKey = process.env.SMOOTH_API_KEY;
+                if (!smoothKey) {
+                    console.error("SMOOTH_API_KEY not configured for demo");
+                    continue;
+                }
+                try {
+                    const taskResp = await fetch(SMOOTH_API_URL, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "apikey": smoothKey },
+                        body: JSON.stringify({ task: instruction, device: "desktop" }),
+                    });
+                    if (!taskResp.ok) continue;
+                    const taskData = await taskResp.json();
+                    const taskId = taskData?.r?.id;
+                    const liveUrl = taskData?.r?.live_url || "";
+                    if (taskId) {
+                        const agentId = await convex.mutation(api.mutations.createAgentFromBackend, {
+                            sessionId: dbSessionId,
+                            name: "smooth",
+                            model: "smooth",
+                            browser: { sessionId: taskId, url: liveUrl },
+                        });
+                        allAgentIds.push(agentId);
+                        smoothTasks.push({ agentId, taskId, apiKey: smoothKey });
+                    }
+                } catch (e) {
+                    console.error("Smooth demo agent creation failed:", e);
+                }
+            } else if (a.agent === "browser-use-cloud") {
+                const buKey = process.env.BROWSER_USE_API_KEY;
+                if (!buKey) {
+                    console.error("BROWSER_USE_API_KEY not configured for demo");
+                    continue;
+                }
+                try {
+                    const client = new BrowserUseClient({ apiKey: buKey });
+                    const task = await client.tasks.createTask({ task: instruction, llm: "browser-use-llm" });
+                    const taskId = task.id;
+                    const agentId = await convex.mutation(api.mutations.createAgentFromBackend, {
+                        sessionId: dbSessionId,
+                        name: "browser-use-cloud",
+                        model: a.model || "browser-use-llm",
+                        browser: { sessionId: taskId, url: "" },
+                    });
+                    allAgentIds.push(agentId);
+                    buCloudTasks.push({ agentId, taskId, apiKey: buKey });
+                } catch (e) {
+                    console.error("Browser-Use Cloud demo agent creation failed:", e);
+                }
+            }
+        }
+
+        if (allAgentIds.length === 0) {
             return NextResponse.json({ error: "Failed to create agents" }, { status: 500 });
         }
 
-        // Associate the session with the demo usage record
         await convex.mutation(api.mutations.associateDemoSession, {
             usageId: claimResult.usageId,
             sessionId: dbSessionId,
         });
 
-        const allAgentIds = agentIds;
-
-        // Execute each agent in background
+        const browserBuiltAgents = builtAgents.filter(b => b.browserSessionId);
         after(async () => {
-            await Promise.all(builtAgents.map(async (b, idx) => {
+            await Promise.all(browserBuiltAgents.map(async (b, idx) => {
                 const agentId = allAgentIds[idx];
+                if (!agentId) return;
                 try {
+                    const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
                     if (b.kind === "stagehand") {
-                        const modelString = b.model;
-                        const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
                         if (!agentServerApiKey) {
                             console.error("AGENT_SERVER_API_KEY is not configured");
+                            return;
                         }
-
                         const resp = await fetch(`${STAGEHAND_SERVER_URL}/agent/stagehand`, {
                             method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "Authorization": `Bearer ${agentServerApiKey}`,
-                            },
+                            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${agentServerApiKey}` },
                             body: JSON.stringify({
                                 sessionId: dbSessionId,
                                 instruction,
-                                model: modelString,
+                                model: b.model,
                                 cdpUrl: b.cdpUrl,
                                 liveViewUrl: b.liveViewUrl,
-                                agentId: agentId,
+                                agentId,
                                 userId: demoUserId,
                                 keys: {
                                     openai: process.env.OPENAI_API_KEY,
@@ -230,39 +270,36 @@ export async function POST(request: NextRequest) {
                                 },
                             }),
                         });
-
                         if (!resp.ok) {
                             await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
                                 agentId,
                                 status: "failed",
                                 error: "Stagehand server execution failed",
                             });
-                            await deleteBrowserSession(b.browserSessionId);
+                            await deleteBrowserSession(b.browserSessionId!);
                         } else {
-                            const agentData = await resp.json();
-                            console.log("Stagehand execution completed", agentData);
+                            await resp.json();
                         }
-                    } else {
-                        const providerModel = b.model || "browser-use/bu-2.0";
-                        const agentServerApiKey = process.env.AGENT_SERVER_API_KEY;
+                    } else if (b.kind === "browser-use") {
                         if (!agentServerApiKey) {
                             console.error("AGENT_SERVER_API_KEY is not configured");
+                            return;
                         }
                         const agentResponse = await fetch(`${AGENT_SERVER_URL}/agent/browser-use`, {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
-                                ...(agentServerApiKey ? { "Authorization": `Bearer ${agentServerApiKey}` } : {}),
+                                "Authorization": `Bearer ${agentServerApiKey}`,
                             },
                             body: JSON.stringify({
                                 sessionId: dbSessionId,
                                 instruction,
-                                providerModel,
+                                providerModel: b.model || "browser-use/bu-2.0",
                                 browserSessionId: b.browserSessionId,
                                 cdpUrl: b.cdpUrl,
                                 liveViewUrl: b.liveViewUrl,
                                 userId: demoUserId,
-                                agentId: agentId,
+                                agentId,
                             }),
                         });
                         if (!agentResponse.ok) {
@@ -271,10 +308,66 @@ export async function POST(request: NextRequest) {
                                 status: "failed",
                                 error: "Python agent execution failed",
                             });
-                            await deleteBrowserSession(b.browserSessionId);
+                            await deleteBrowserSession(b.browserSessionId!);
                         } else {
-                            const agentData = await agentResponse.json();
-                            console.log("Browser-Use execution completed", agentData);
+                            await agentResponse.json();
+                        }
+                    } else if (b.kind === "notte") {
+                        if (!agentServerApiKey) {
+                            console.error("AGENT_SERVER_API_KEY is not configured");
+                            return;
+                        }
+                        const notteResp = await fetch(`${AGENT_SERVER_URL}/agent/notte`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${agentServerApiKey}`,
+                            },
+                            body: JSON.stringify({
+                                sessionId: dbSessionId,
+                                instruction,
+                                model: b.model,
+                                cdpUrl: b.cdpUrl,
+                                browserSessionId: b.browserSessionId,
+                                liveViewUrl: b.liveViewUrl,
+                            }),
+                        });
+                        if (!notteResp.ok) {
+                            await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
+                                agentId,
+                                status: "failed",
+                                error: "Notte agent execution failed",
+                            });
+                            await deleteBrowserSession(b.browserSessionId!);
+                        } else {
+                            await notteResp.json();
+                        }
+                    } else if (b.kind === "claude-code" || b.kind === "codex") {
+                        if (!agentServerApiKey) {
+                            console.error("AGENT_SERVER_API_KEY is not configured");
+                            return;
+                        }
+                        const resp = await fetch(`${STAGEHAND_SERVER_URL}/agent/${b.kind}`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${agentServerApiKey}` },
+                            body: JSON.stringify({
+                                sessionId: dbSessionId,
+                                instruction,
+                                cdpUrl: b.cdpUrl,
+                                liveViewUrl: b.liveViewUrl,
+                                agentId,
+                                mcpType: "playwright",
+                            }),
+                        });
+                        if (!resp.ok) {
+                            await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
+                                agentId,
+                                status: "failed",
+                                error: `${b.kind} execution failed`,
+                            });
+                            await deleteBrowserSession(b.browserSessionId!);
+                        } else {
+                            await resp.json();
                         }
                     }
                 } catch (error) {
@@ -284,12 +377,88 @@ export async function POST(request: NextRequest) {
                             agentId,
                             status: "failed",
                         });
-                        await deleteBrowserSession(b.browserSessionId);
+                        if (b.browserSessionId) await deleteBrowserSession(b.browserSessionId);
                     } catch (cleanupError) {
                         console.error("❌ Error cleaning up session:", cleanupError);
                     }
                 }
             }));
+
+            for (const { agentId, taskId, apiKey } of smoothTasks) {
+                (async () => {
+                    try {
+                        for (let i = 0; i < 100000; i++) {
+                            const r = await fetch(`${SMOOTH_API_URL}/${taskId}`, {
+                                headers: { "Content-Type": "application/json", "apikey": apiKey },
+                            });
+                            if (!r.ok) throw new Error("Smooth status fetch failed");
+                            const data = await r.json();
+                            const status = data?.r;
+                            if (status?.live_url) {
+                                await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
+                                    agentId,
+                                    url: status.live_url,
+                                });
+                            }
+                            if (["done", "failed", "cancelled"].includes(status?.status)) {
+                                await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
+                                    agentId,
+                                    result: { agent: "smooth", ...status, success: status?.status === "done" },
+                                    status: status?.status === "done" ? "completed" : "failed",
+                                });
+                                if (status?.recording_url) {
+                                    await convexBackend.mutation(api.mutations.updateAgentRecordingUrlFromBackend, {
+                                        agentId,
+                                        recordingUrl: status.recording_url,
+                                    });
+                                }
+                                return;
+                            }
+                            await new Promise(r => setTimeout(r, 3000));
+                        }
+                    } catch (e) {
+                        console.error("Smooth demo polling failed:", e);
+                        await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
+                            agentId,
+                            status: "failed",
+                        });
+                    }
+                })();
+            }
+
+            for (const { agentId, taskId, apiKey } of buCloudTasks) {
+                (async () => {
+                    try {
+                        const client = new BrowserUseClient({ apiKey });
+                        for (let i = 0; i < 600; i++) {
+                            const taskView = await client.tasks.getTask({ task_id: taskId });
+                            const status = (taskView as any).status;
+                            const liveUrl = (taskView as any).session?.liveUrl || (taskView as any).liveUrl || "";
+                            if (liveUrl) {
+                                await convexBackend.mutation(api.mutations.updateAgentBrowserUrlFromBackend, {
+                                    agentId,
+                                    url: liveUrl,
+                                });
+                            }
+                            if (status === "completed" || status === "failed") {
+                                await convexBackend.mutation(api.mutations.updateAgentResultFromBackend, {
+                                    agentId,
+                                    result: taskView,
+                                    status: status === "completed" ? "completed" : "failed",
+                                });
+                                return;
+                            }
+                            await new Promise(r => setTimeout(r, 1000));
+                        }
+                    } catch (e) {
+                        console.error("Browser-Use Cloud demo polling failed:", e);
+                        await convexBackend.mutation(api.mutations.updateAgentStatusFromBackend, {
+                            agentId,
+                            status: "failed",
+                        });
+                    }
+                })();
+            }
         });
 
         // Return session info immediately with cookie set
