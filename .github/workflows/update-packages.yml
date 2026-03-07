@@ -2,24 +2,21 @@ name: Monitor and Update Packages
 
 on:
   schedule:
-    # Run every day at 9 AM UTC
-    - cron: '0 9 * * *'
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
   workflow_dispatch: # Allows manual triggering
 
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 jobs:
   monitor-packages:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Need full history for git-based version checks
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -37,216 +34,104 @@ jobs:
         with:
           version: 'latest'
 
-      - name: Check browser-use (Git-based)
-        id: check-browser-use
+      - name: Check for updates
+        id: check
         run: |
-          cd agents
-          
-          # Get current commit from pyproject.toml (check if pinned to a specific commit)
-          browser_use_line=$(grep 'browser-use @ git+' pyproject.toml || echo "")
-          
-          # Extract current ref (commit hash after @ or "main" if no @)
-          if echo "$browser_use_line" | grep -q '@'; then
-            current_ref=$(echo "$browser_use_line" | sed 's/.*@//' | sed 's/".*//' | tr -d ' ')
-          else
-            current_ref="main" # Tracking main branch
-          fi
-          
-          echo "Current browser-use ref: $current_ref"
-          
-          # Get latest commit from GitHub API
-          latest_commit=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/browser-use/browser-use/commits/main | \
-            jq -r '.sha')
-          
-          latest_short=$(echo "$latest_commit" | cut -c1-7)
-          
-          # Check if update is needed
-          if [ "$current_ref" == "main" ]; then
-            # If tracking main, we need to update uv.lock to get latest
-            echo "browser-use tracks main branch - will update uv.lock"
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "current=main" >> $GITHUB_OUTPUT
-            echo "latest=$latest_short" >> $GITHUB_OUTPUT
-          elif [ "${current_ref:0:7}" != "$latest_short" ]; then
-            echo "browser-use needs update: ${current_ref:0:7} -> $latest_short"
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "current=${current_ref:0:7}" >> $GITHUB_OUTPUT
-            echo "latest=$latest_short" >> $GITHUB_OUTPUT
-          else
-            echo "browser-use is up to date"
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+          updates=""
+          needs_update=false
+
+          # Check notte-sdk
+          current_notte=$(grep -o 'notte-sdk>=[0-9.]*' agents/pyproject.toml | sed 's/notte-sdk>=//')
+          latest_notte=$(curl -s https://pypi.org/pypi/notte-sdk/json | jq -r '.info.version')
+          echo "notte-sdk: $current_notte -> $latest_notte"
+          if [ "$current_notte" != "$latest_notte" ]; then
+            updates="${updates}- notte-sdk: ${current_notte} -> ${latest_notte}\n"
+            needs_update=true
           fi
 
-      - name: Check notte-sdk (PyPI)
-        id: check-notte
-        run: |
-          cd agents
-          
-          # Get current version from pyproject.toml
-          current_version=$(grep -oP 'notte-sdk>=\K[0-9.]+' pyproject.toml || echo "")
-          
-          # Get latest version from PyPI
-          latest_version=$(curl -s https://pypi.org/pypi/notte-sdk/json | jq -r '.info.version')
-          
-          if [ "$current_version" != "$latest_version" ]; then
-            echo "notte-sdk needs update: $current_version -> $latest_version"
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "current=$current_version" >> $GITHUB_OUTPUT
-            echo "latest=$latest_version" >> $GITHUB_OUTPUT
-          else
-            echo "notte-sdk is up to date"
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+          # Check stagehand (root)
+          current_sh_root=$(node -e "console.log(require('./package.json').dependencies['@browserbasehq/stagehand'].replace('^',''))" 2>/dev/null || echo "unknown")
+          latest_sh=$(npm view @browserbasehq/stagehand version)
+          echo "stagehand (root): $current_sh_root -> $latest_sh"
+          if [ "$current_sh_root" != "$latest_sh" ]; then
+            updates="${updates}- @browserbasehq/stagehand (root): ${current_sh_root} -> ${latest_sh}\n"
+            needs_update=true
           fi
 
-      - name: Check @browserbasehq/stagehand (npm - root)
-        id: check-stagehand-root
-        run: |
-          current_version=$(grep -oP '@browserbasehq/stagehand": "^\K[0-9.]+' package.json || echo "")
-          latest_version=$(npm view @browserbasehq/stagehand version)
-          
-          if [ "$current_version" != "$latest_version" ]; then
-            echo "stagehand (root) needs update: $current_version -> $latest_version"
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "current=$current_version" >> $GITHUB_OUTPUT
-            echo "latest=$latest_version" >> $GITHUB_OUTPUT
-          else
-            echo "stagehand (root) is up to date"
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+          # Check stagehand (stagehand folder)
+          current_sh_folder=$(node -e "console.log(require('./stagehand/package.json').dependencies['@browserbasehq/stagehand'].replace('^',''))" 2>/dev/null || echo "unknown")
+          echo "stagehand (stagehand/): $current_sh_folder -> $latest_sh"
+          if [ "$current_sh_folder" != "$latest_sh" ]; then
+            updates="${updates}- @browserbasehq/stagehand (stagehand/): ${current_sh_folder} -> ${latest_sh}\n"
+            needs_update=true
           fi
 
-      - name: Check @browserbasehq/stagehand (npm - stagehand folder)
-        id: check-stagehand-folder
-        run: |
-          cd stagehand
-          current_version=$(grep -oP '@browserbasehq/stagehand": "^\K[0-9.]+' package.json || echo "")
-          latest_version=$(npm view @browserbasehq/stagehand version)
-          
-          if [ "$current_version" != "$latest_version" ]; then
-            echo "stagehand (folder) needs update: $current_version -> $latest_version"
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "current=$current_version" >> $GITHUB_OUTPUT
-            echo "latest=$latest_version" >> $GITHUB_OUTPUT
-          else
-            echo "stagehand (folder) is up to date"
-            echo "needs_update=false" >> $GITHUB_OUTPUT
-          fi
+          # browser-use tracks git main — always refresh lock
+          needs_update=true
+          updates="${updates}- browser-use: updated to latest main\n"
+
+          echo "needs_update=$needs_update" >> $GITHUB_OUTPUT
+          {
+            echo "updates<<UPDATES_EOF"
+            echo -e "$updates"
+            echo "UPDATES_EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Update packages and create PR
-        id: create-pr
-        if: |
-          steps.check-browser-use.outputs.needs_update == 'true' ||
-          steps.check-notte.outputs.needs_update == 'true' ||
-          steps.check-stagehand-root.outputs.needs_update == 'true' ||
-          steps.check-stagehand-folder.outputs.needs_update == 'true'
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATES: ${{ steps.check.outputs.updates }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Create branch name with timestamp
-          branch_name="update-packages-$(date +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          branch_name="auto/update-packages-$(date +%Y%m%d)"
           git checkout -b "$branch_name"
-          
-          updates=""
-          
-          # Update browser-use if needed
-          if [ "${{ steps.check-browser-use.outputs.needs_update }}" == "true" ]; then
-            # Update uv.lock to get the latest commit from main branch
-            cd agents && uv lock --upgrade && cd ..
-            updates="$updates- browser-use: ${{ steps.check-browser-use.outputs.current }} -> ${{ steps.check-browser-use.outputs.latest }}\n"
-          fi
-          
-          # Update notte-sdk if needed
-          if [ "${{ steps.check-notte.outputs.needs_update }}" == "true" ]; then
-            latest="${{ steps.check-notte.outputs.latest }}"
-            sed -i "s/notte-sdk>=[0-9.]*/notte-sdk>=$latest/" agents/pyproject.toml
-            # Update uv.lock
-            cd agents && uv lock && cd ..
-            updates="$updates- notte-sdk: ${{ steps.check-notte.outputs.current }} -> $latest\n"
-          fi
-          
-          # Update stagehand in root if needed
-          if [ "${{ steps.check-stagehand-root.outputs.needs_update }}" == "true" ]; then
-            latest="${{ steps.check-stagehand-root.outputs.latest }}"
-            npm install @browserbasehq/stagehand@$latest
-            updates="$updates- @browserbasehq/stagehand (root): ${{ steps.check-stagehand-root.outputs.current }} -> $latest\n"
-          fi
-          
-          # Update stagehand in stagehand folder if needed
-          if [ "${{ steps.check-stagehand-folder.outputs.needs_update }}" == "true" ]; then
-            cd stagehand
-            latest="${{ steps.check-stagehand-folder.outputs.latest }}"
-            npm install @browserbasehq/stagehand@$latest
-            cd ..
-            updates="$updates- @browserbasehq/stagehand (stagehand/): ${{ steps.check-stagehand-folder.outputs.current }} -> $latest\n"
-          fi
-          
-          # Commit changes
+
+          # Update notte-sdk version in pyproject.toml
+          latest_notte=$(curl -s https://pypi.org/pypi/notte-sdk/json | jq -r '.info.version')
+          sed -i "s/notte-sdk>=[0-9.]*/notte-sdk>=$latest_notte/" agents/pyproject.toml
+
+          # Update uv.lock (also picks up latest browser-use from main)
+          cd agents && uv lock --upgrade && cd ..
+
+          # Update stagehand in both locations
+          latest_sh=$(npm view @browserbasehq/stagehand version)
+          npm install "@browserbasehq/stagehand@$latest_sh"
+          cd stagehand && npm install "@browserbasehq/stagehand@$latest_sh" && cd ..
+
+          # Commit and push
           git add -A
-          git commit -m "chore: update packages
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
 
-$updates
+          git commit -m "chore: update packages (browser-use, notte-sdk, stagehand)
 
-Auto-generated by GitHub Actions"
-          
-          # Push branch
+          $UPDATES
+          Auto-generated by GitHub Actions"
+
           git push origin "$branch_name"
-          
-          # Store outputs for PR creation
-          echo "branch=$branch_name" >> $GITHUB_OUTPUT
-          echo -e "updates<<EOF\n$updates\nEOF" >> $GITHUB_OUTPUT
 
-      - name: Create Pull Request
-        if: steps.create-pr.outputs.branch != ''
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const branch = '${{ steps.create-pr.outputs.branch }}';
-            const updates = `${{ steps.create-pr.outputs.updates }}`;
-            
-            // Create PR
-            const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '📦 Update packages: browser-use, notte, stagehand',
-              head: branch,
-              base: 'main',
-              body: `## 📦 Package Updates Available
+          # Create PR using gh CLI
+          gh pr create \
+            --title "chore: update packages (browser-use, notte-sdk, stagehand)" \
+            --body "## Package Updates
 
-The following packages have new versions:
+          $UPDATES
+          ### Files changed
+          - agents/pyproject.toml & agents/uv.lock — Python deps
+          - package.json & package-lock.json — npm deps (root)
+          - stagehand/package.json & stagehand/package-lock.json — npm deps (stagehand)
 
-${updates}
+          ---
+          *Auto-generated by the update-packages workflow*"
 
-### Changes made:
-- \`agents/pyproject.toml\` - Updated Python dependencies
-- \`package.json\` and \`package-lock.json\` - Updated npm dependencies (root)
-- \`stagehand/package.json\` and \`stagehand/package-lock.json\` - Updated npm dependencies (stagehand)
-
-Please review and test before merging.
-
----
-*This PR was created automatically by the Monitor Package Updates workflow*`,
-              labels: ['package-updates', 'dependencies', 'automated']
-            });
-            
-            console.log(`Created PR #${pr.number}: ${pr.html_url}`);
-            
-            // Add summary
-            core.summary.addHeading('📦 Package Updates Found').addRaw(`
-Created PR #${pr.number} with the following updates:
-
-${updates}
-
-`).addLink('View Pull Request', pr.html_url).write();
-
-      - name: Summary (no updates)
-        if: steps.create-pr.outputs.branch == ''
+      - name: Summary
+        env:
+          NEEDS_UPDATE: ${{ steps.check.outputs.needs_update }}
         run: |
-          echo "### ✅ All packages are up to date" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Package | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| browser-use | ${{ steps.check-browser-use.outputs.needs_update == 'true' && 'Needs update' || 'Up to date' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| notte-sdk | ${{ steps.check-notte.outputs.needs_update == 'true' && 'Needs update' || 'Up to date' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| @browserbasehq/stagehand (root) | ${{ steps.check-stagehand-root.outputs.needs_update == 'true' && 'Needs update' || 'Up to date' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| @browserbasehq/stagehand (stagehand) | ${{ steps.check-stagehand-folder.outputs.needs_update == 'true' && 'Needs update' || 'Up to date' }} |" >> $GITHUB_STEP_SUMMARY
+          if [ "$NEEDS_UPDATE" == "true" ]; then
+            echo "### Package updates found — PR created" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### All packages are up to date" >> $GITHUB_STEP_SUMMARY
+          fi

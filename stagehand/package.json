@@ -10,7 +10,7 @@
     "@ai-sdk/openai": "^2.0.64",
     "@ai-sdk/provider": "^2.0.0",
     "@anthropic-ai/claude-agent-sdk": "^0.2.70",
-    "@browserbasehq/stagehand": "^3.0.6",
+    "@browserbasehq/stagehand": "^3.1.0",
     "@openai/codex-sdk": "^0.111.0",
     "@openrouter/ai-sdk-provider": "^1.2.0",
     "@playwright/mcp": "^0.0.68",
