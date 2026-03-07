@@ -556,7 +556,7 @@ function SessionAgentsDisplay({
                     {agent.name === "chrome-devtools-mcp" && (
                         <ChromeDevtoolsLogo className="h-3 w-3" />
                     )}
-                    {agent.name in AGENT_LABELS ? AGENT_LABELS[agent.name as keyof typeof AGENT_LABELS] : agent.name}
+                    {Object.hasOwn(AGENT_LABELS, agent.name) ? AGENT_LABELS[agent.name as keyof typeof AGENT_LABELS] : agent.name}
                 </Badge>
             ))}
         </div>

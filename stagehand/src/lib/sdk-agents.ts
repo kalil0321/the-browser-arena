@@ -106,7 +106,10 @@ export async function runSdkAgentAndPersist(params: RunSdkAgentParams): Promise<
     await convex.updateAgentResult(agentId, payload, 'completed')
     return { agentId }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : (typeof error === 'string' ? error : JSON.stringify(error))
+    let message: string
+    if (error instanceof Error) message = error.message
+    else if (typeof error === 'string') message = error
+    else try { message = JSON.stringify(error) } catch { message = String(error) }
     await convex.updateAgentResult(
       agentId,
       {
