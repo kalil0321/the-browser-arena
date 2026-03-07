@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const mcpTypeSchema = z.enum(["playwright", "chrome-devtools"])
+
 export const bodySchema = z.object({
   sessionId: z.string().min(1),
   instruction: z.string().min(1),
@@ -15,6 +17,15 @@ export const bodySchema = z.object({
     .optional(),
   fileData: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
   secrets: z.record(z.string(), z.string()).optional(),
+})
+
+export const sdkAgentBodySchema = z.object({
+  sessionId: z.string().min(1),
+  instruction: z.string().min(1),
+  cdpUrl: z.string().min(1),
+  liveViewUrl: z.string().url().optional(),
+  agentId: z.string().optional(),
+  mcpType: mcpTypeSchema,
 })
 
 
@@ -96,4 +107,3 @@ export function validateSecrets(secrets: Record<string, string> | undefined): { 
 
   return { isValid: true }
 }
-

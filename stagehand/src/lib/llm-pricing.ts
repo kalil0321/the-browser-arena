@@ -25,6 +25,11 @@ const pricing: Record<string, { in: number; out: number; cached: number }> = {
         out: 8.0 / 1_000_000,
         cached: 0.5 / 1_000_000,
     },
+    'openai/gpt-5.4': {
+        in: 2.5 / 1_000_000,
+        out: 15.0 / 1_000_000,
+        cached: 0.25 / 1_000_000,
+    },
     'anthropic/claude-sonnet-4-6': {
         in: 3.0 / 1_000_000,
         out: 15.0 / 1_000_000,

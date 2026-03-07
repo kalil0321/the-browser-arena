@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AgentProfileContent } from "./agent-profile-content";
 
-const VALID_AGENTS = ["browser-use", "stagehand", "smooth", "notte"] as const;
+const VALID_AGENTS = ["browser-use", "stagehand", "smooth", "notte", "claude-code", "codex"] as const;
 
 type AgentType = (typeof VALID_AGENTS)[number];
 
@@ -33,6 +33,18 @@ const AGENT_INFO: Record<
         description:
             "An AI browser agent focused on reliable web task completion. Notte provides robust browser automation with support for complex multi-step workflows and intelligent error recovery.",
         website: "https://notte.cc",
+    },
+    "claude-code": {
+        name: "Claude Code",
+        description:
+            "An Anthropic-powered coding agent running through the Claude Agent SDK, configured here to browse with Playwright MCP or Chrome DevTools MCP against external CDP sessions.",
+        website: "https://docs.claude.com/en/api/agent-sdk/overview",
+    },
+    codex: {
+        name: "Codex",
+        description:
+            "An OpenAI coding agent running through the Codex SDK, configured here to use Playwright MCP or Chrome DevTools MCP for browser-driven tasks.",
+        website: "https://developers.openai.com/codex",
     },
 };
 

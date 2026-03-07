@@ -5,7 +5,7 @@
  * Used to decide whether to show browser live views during battles.
  */
 
-export type Framework = "browser-use" | "stagehand" | "smooth" | "notte";
+export type Framework = "browser-use" | "stagehand" | "smooth" | "notte" | "claude-code" | "codex";
 
 /**
  * Get framework from agent type
@@ -18,6 +18,8 @@ export function getFramework(agentType: string): Framework {
     if (agentType.includes("stagehand")) return "stagehand";
     if (agentType === "smooth") return "smooth";
     if (agentType === "notte") return "notte";
+    if (agentType === "claude-code") return "claude-code";
+    if (agentType === "codex") return "codex";
     throw new Error(`Unknown agent type: ${agentType}`);
 }
 
@@ -50,6 +52,8 @@ export function getAgentDisplayName(agentType: string): string {
     if (agentType === "stagehand") return "Stagehand";
     if (agentType === "smooth") return "Smooth";
     if (agentType === "notte") return "Notte";
+    if (agentType === "claude-code") return "Claude Code";
+    if (agentType === "codex") return "Codex";
     return agentType;
 }
 
@@ -60,7 +64,9 @@ export const SUPPORTED_FRAMEWORKS: Framework[] = [
     "browser-use",
     "stagehand",
     "smooth",
-    "notte"
+    "notte",
+    "claude-code",
+    "codex",
 ];
 
 /**
@@ -79,5 +85,9 @@ export function getAgentTypesForFramework(framework: Framework): string[] {
             return ["smooth"];
         case "notte":
             return ["notte"];
+        case "claude-code":
+            return ["claude-code"];
+        case "codex":
+            return ["codex"];
     }
 }

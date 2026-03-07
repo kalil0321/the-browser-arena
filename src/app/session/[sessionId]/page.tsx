@@ -12,6 +12,8 @@ import Link from "next/link";
 import { BrowserUseLogo } from "@/components/logos/bu";
 import { SmoothLogo } from "@/components/logos/smooth";
 import { StagehandLogo } from "@/components/logos/stagehand";
+import { ClaudeLogo } from "@/components/logos/claude";
+import { OpenAI } from "@/components/logos/openai";
 import { Copy, Check } from "lucide-react";
 
 export default function SessionPage() {
@@ -193,8 +195,16 @@ export default function SessionPage() {
                                                 {agent.name === "stagehand" && (
                                                     <StagehandLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                                                 )}
+                                                {agent.name === "claude-code" && (
+                                                    <ClaudeLogo className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                                                )}
+                                                {agent.name === "codex" && (
+                                                    <OpenAI className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                                                )}
                                                 <span className="data-[state=active]:border-current transition-colors truncate max-w-[100px] sm:max-w-[120px]" title={agent.name}>
                                                     {agent.name === "browser-use-cloud" ? "BU Cloud" :
+                                                        agent.name === "claude-code" ? "Claude Code" :
+                                                            agent.name === "codex" ? "Codex" :
                                                         agent.name}
                                                 </span>
                                                 {agent.sdkVersion && (

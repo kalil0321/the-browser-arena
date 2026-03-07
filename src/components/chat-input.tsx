@@ -40,7 +40,7 @@ const validateAgentConfigs = (configs: any): configs is AgentConfig[] => {
         }
 
         // Check if agent type is valid
-        const validAgentTypes: AgentType[] = ["stagehand", "smooth", "browser-use", "browser-use-cloud", "notte"];
+        const validAgentTypes: AgentType[] = ["stagehand", "smooth", "browser-use", "browser-use-cloud", "notte", "claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"];
         if (!validAgentTypes.includes(config.agent)) {
             return false;
         }
@@ -66,40 +66,55 @@ const validateAgentConfigs = (configs: any): configs is AgentConfig[] => {
         if (config.executionModel && !validModels.includes(config.executionModel)) {
             return false;
         }
+
+        if (config.mcpType && !["playwright", "chrome-devtools"].includes(config.mcpType)) {
+            return false;
+        }
     }
 
     return true;
 };
 
-// Helper function to load agent configs from localStorage
-const loadAgentConfigsFromCache = (): AgentConfig[] => {
-    if (typeof window === "undefined") {
-        return [
-            { id: `agent-${Date.now()}-1`, agent: "stagehand", model: "google/gemini-2.5-flash" },
-            { id: `agent-${Date.now()}-2`, agent: "browser-use", model: "browser-use/bu-2.0" }
-        ];
+const normalizeAgentConfig = (config: AgentConfig): AgentConfig => {
+    if (config.agent === "claude-code" || config.agent === "codex") {
+        const mcpType = config.mcpType === "chrome-devtools" ? "chrome-devtools" : "playwright";
+        return {
+            ...config,
+            agent: mcpType === "chrome-devtools" ? "chrome-devtools-mcp" : "playwright-mcp",
+            model: config.agent,
+            mcpType,
+            thinkingModel: undefined,
+            executionModel: undefined,
+        };
     }
+    return config;
+};
+
+// Stable default configs used for both SSR and initial client render to avoid hydration mismatch
+const DEFAULT_AGENT_CONFIGS: AgentConfig[] = [
+    { id: "agent-default-1", agent: "stagehand", model: "google/gemini-2.5-flash" },
+    { id: "agent-default-2", agent: "browser-use", model: "browser-use/bu-1.0" }
+];
+
+// Helper function to load agent configs from localStorage (client-only)
+const loadAgentConfigsFromCache = (): AgentConfig[] | null => {
+    if (typeof window === "undefined") return null;
 
     try {
         const cached = localStorage.getItem("agent_configs_cache");
         if (cached) {
             const parsed = JSON.parse(cached);
             if (validateAgentConfigs(parsed)) {
-                // Ensure each config has an id
-                return parsed.map((config: AgentConfig) => ({
-                    ...config,
-                    id: config.id || `agent-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+                return parsed.map((config: AgentConfig, i: number) => ({
+                    ...normalizeAgentConfig(config),
+                    id: config.id || `agent-cached-${i}`
                 }));
             }
         }
     } catch (error) {
         console.error("Failed to load agent configs from cache:", error);
     }
-    // Return default config
-    return [
-        { id: `agent-${Date.now()}-1`, agent: "stagehand", model: "google/gemini-2.5-flash" },
-        { id: `agent-${Date.now()}-2`, agent: "browser-use", model: "browser-use/bu-1.0" }
-    ];
+    return null;
 };
 
 interface ChatInputProps {
@@ -135,10 +150,16 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
 
-    // Agent configuration state - initialize from cache if available
-    const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>(() => {
-        return loadAgentConfigsFromCache();
-    });
+    // Agent configuration state - use stable defaults for SSR, hydrate from cache in useEffect
+    const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>(DEFAULT_AGENT_CONFIGS);
+
+    // Hydrate agent configs from localStorage after mount to avoid hydration mismatch
+    useEffect(() => {
+        const cached = loadAgentConfigsFromCache();
+        if (cached) {
+            setAgentConfigs(cached);
+        }
+    }, []);
 
     // Privacy state (removed for now)
     const [isPrivate, setIsPrivate] = useState(false);
@@ -482,24 +503,12 @@ export function ChatInput({ onStateChange, onAgentPresenceChange }: ChatInputPro
     const handleDemoSubmit = async () => {
         setIsLoading(true);
         try {
-            const demoAgentsSupported = agentConfigs.every(c => c.agent === "stagehand" || c.agent === "browser-use");
-            if (!demoAgentsSupported) {
-                toast.error("Demo mode currently supports Stagehand and Browser-Use agents only.", {
-                    duration: 4000,
-                });
-                setIsLoading(false);
-                return;
-            }
-
-            // Build allowed agents for demo (stagehand, browser-use) and cap to 4
-
-
             const isMulti = agentConfigs.length > 1;
 
             const payload = isMulti
                 ? {
                     instruction: input,
-                    agents: agentConfigs.map(c => ({ agent: c.agent as "stagehand" | "browser-use", model: c.model })),
+                    agents: agentConfigs.map(c => ({ agent: c.agent, model: c.model })),
                     clientFingerprint: clientFingerprint,
                 }
                 : {

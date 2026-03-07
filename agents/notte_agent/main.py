@@ -9,10 +9,10 @@ logger = logging.getLogger("notte-agent")
 
 # Extract SDK version at module load time
 try:
-    import notte_sdk
-    SDK_VERSION = getattr(notte_sdk, '__version__', None) or '>=1.7.15'
-except:
-    SDK_VERSION = '>=1.7.15'
+    from importlib.metadata import version
+    SDK_VERSION = version("notte-sdk")
+except Exception:
+    SDK_VERSION = 'unknown'
 
 
 def get_debug_info_with_polling(
@@ -167,6 +167,7 @@ async def run_notte(
     agent_id: str = None,
     convex_client=None,
     reasoning_model: str = None,
+    cdp_url: str = None,
 ):
     """
     Run Notte agent with the given prompt
@@ -179,6 +180,7 @@ async def run_notte(
         agent_id: Agent ID for updating Convex (optional)
         convex_client: Convex client for updating browser URL (optional)
         reasoning_model: The model to use for reasoning (optional)
+        cdp_url: External CDP WebSocket URL (e.g., from Browserbase). If provided, notte uses this browser instead of its own.
 
     Returns:
         Tuple of (Notte agent result, usage summary, timings dict, browser_url)
@@ -191,114 +193,48 @@ async def run_notte(
 
     async def execute_notte_agent():
         def _run_agent(notte_client_ref, agent_id_ref, convex_client_ref):
-            # Use existing session if provided, otherwise create new one
-            if notte_session_id:
-                session = notte_client_ref.Session(session_id=notte_session_id)
-                # Get browser URL for existing session
-                debug_info = get_debug_info_with_polling(session, notte_session_id)
-                browser_url = ""
-                if debug_info:
-                    browser_url = getattr(debug_info, "debug_url", "") or ""
-                    logger.info(
-                        f"[Session {session_id[:8]}] Initial browser_url from debug_url: {browser_url}"
-                    )
-                    if not browser_url:
-                        # Construct viewer URL from debug_info
-                        ws_recording = getattr(debug_info, "ws", None)
-                        logger.info(
-                            f"[Session {session_id[:8]}] ws_recording: {ws_recording}"
-                        )
-                        if ws_recording and hasattr(ws_recording, "recording"):
-                            recording = getattr(ws_recording, "recording", None)
-                            logger.info(
-                                f"[Session {session_id[:8]}] ws_recording.recording: {recording}"
-                            )
-                            if recording:
-                                browser_url = f"https://api.notte.cc/sessions/viewer/index.html?ws={recording}"
-                        else:
-                            # Fallback: construct from cdp_url
-                            try:
-                                cdp_url = session.cdp_url()
-                                logger.info(
-                                    f"[Session {session_id[:8]}] cdp_url: {cdp_url}"
-                                )
-                                if cdp_url:
-                                    browser_url = f"https://api.notte.cc/sessions/viewer/index.html?ws={cdp_url.split('?')[0]}/recording{cdp_url.split('?')[1] if '?' in cdp_url else ''}"
-                            except Exception as cdp_error:
-                                logger.warning(
-                                    f"[Session {session_id[:8]}] Failed to get cdp_url: {cdp_error}",
-                                    exc_info=True,
-                                )
+            browser_url = ""
+
+            # Create session based on what's provided
+            if cdp_url:
+                # External browser via CDP (e.g., Browserbase)
                 logger.info(
-                    f"[Session {session_id[:8]}] Final browser_url: {browser_url}"
+                    f"[Session {session_id[:8]}] Using external CDP browser: {cdp_url[:50]}..."
                 )
-                # Update Convex with browser URL as soon as it's available
-                if browser_url and agent_id_ref and convex_client_ref:
-                    try:
-                        convex_client_ref.mutation(
-                            "mutations:updateAgentBrowserUrlFromBackend",
-                            {
-                                "agentId": agent_id_ref,
-                                "url": browser_url,
-                            },
-                        )
-                        logger.info(
-                            f"[Session {session_id[:8]}] Updated browser URL in Convex immediately"
-                        )
-                    except Exception as url_update_error:
-                        logger.warning(
-                            f"[Session {session_id[:8]}] Failed to update browser URL in Convex: {url_update_error}",
-                            exc_info=True,
-                        )
-                if not browser_url:
-                    logger.warning(
-                        f"[Session {session_id[:8]}] Could not get browser URL for existing session"
-                    )
+                session = notte_client_ref.Session(cdp_url=cdp_url)
+            elif notte_session_id:
+                # Existing notte session
+                session = notte_client_ref.Session(session_id=notte_session_id)
             else:
+                # New notte-managed session
                 session = notte_client_ref.Session(open_viewer=False)
                 session.start()
-                notte_session_id_actual = session.session_id
-                # Get browser URL for new session with polling
-                debug_info = get_debug_info_with_polling(
-                    session, notte_session_id_actual
-                )
-                browser_url = ""
+
+            # Get browser URL for notte-managed sessions (CDP sessions already have live view from caller)
+            if not cdp_url:
+                actual_session_id = notte_session_id or session.session_id
+                debug_info = get_debug_info_with_polling(session, actual_session_id)
                 if debug_info:
                     browser_url = getattr(debug_info, "debug_url", "") or ""
-                    logger.info(
-                        f"[Session {session_id[:8]}] Initial browser_url from debug_url: {browser_url}"
-                    )
                     if not browser_url:
-                        # Construct viewer URL from debug_info
                         ws_recording = getattr(debug_info, "ws", None)
-                        logger.info(
-                            f"[Session {session_id[:8]}] ws_recording: {ws_recording}"
-                        )
                         if ws_recording and hasattr(ws_recording, "recording"):
                             recording = getattr(ws_recording, "recording", None)
-                            logger.info(
-                                f"[Session {session_id[:8]}] ws_recording.recording: {recording}"
-                            )
                             if recording:
                                 browser_url = f"https://api.notte.cc/sessions/viewer/index.html?ws={recording}"
                         else:
-                            # Fallback: construct from cdp_url
                             try:
-                                cdp_url = session.cdp_url()
-                                logger.info(
-                                    f"[Session {session_id[:8]}] cdp_url: {cdp_url}"
-                                )
-                                if cdp_url:
-                                    browser_url = f"https://api.notte.cc/sessions/viewer/index.html?ws={cdp_url.split('?')[0]}/recording{cdp_url.split('?')[1] if '?' in cdp_url else ''}"
+                                session_cdp = session.cdp_url()
+                                if session_cdp:
+                                    browser_url = f"https://api.notte.cc/sessions/viewer/index.html?ws={session_cdp.split('?')[0]}/recording{session_cdp.split('?')[1] if '?' in session_cdp else ''}"
                             except Exception as cdp_error:
                                 logger.warning(
                                     f"[Session {session_id[:8]}] Failed to get cdp_url: {cdp_error}",
                                     exc_info=True,
                                 )
                 logger.info(
-                    f"[Session {session_id[:8]}] Final browser_url: {browser_url}"
+                    f"[Session {session_id[:8]}] Browser URL: {browser_url}"
                 )
-                # Update Convex with browser URL as soon as it's available
                 if browser_url and agent_id_ref and convex_client_ref:
                     try:
                         convex_client_ref.mutation(
@@ -308,18 +244,11 @@ async def run_notte(
                                 "url": browser_url,
                             },
                         )
-                        logger.info(
-                            f"[Session {session_id[:8]}] Updated browser URL in Convex immediately"
-                        )
                     except Exception as url_update_error:
                         logger.warning(
-                            f"[Session {session_id[:8]}] Failed to update browser URL in Convex: {url_update_error}",
+                            f"[Session {session_id[:8]}] Failed to update browser URL: {url_update_error}",
                             exc_info=True,
                         )
-                if not browser_url:
-                    logger.warning(
-                        f"[Session {session_id[:8]}] Could not get browser URL for new session"
-                    )
 
             agent = notte_client_ref.Agent(
                 session=session,
@@ -329,100 +258,57 @@ async def run_notte(
                 logger.info(f"[Session {session_id[:8]}] Executing Notte agent")
                 response = agent.run(task=prompt)
 
-                # Log response details
                 logger.info(f"[Session {session_id[:8]}] Agent run completed")
-                logger.info(
-                    f"[Session {session_id[:8]}] Response type: {type(response)}"
-                )
-                logger.info(
-                    f"[Session {session_id[:8]}] Response is None: {response is None}"
-                )
-
                 if response is not None:
-                    logger.info(
-                        f"[Session {session_id[:8]}] Response attributes: {dir(response)}"
-                    )
-                    if hasattr(response, "__dict__"):
-                        logger.info(
-                            f"[Session {session_id[:8]}] Response dict keys: {list(response.__dict__.keys())}"
-                        )
-                    # Log key attributes
-                    for attr in [
-                        "success",
-                        "status",
-                        "answer",
-                        "task",
-                        "url",
-                        "agent_id",
-                        "session_id",
-                        "created_at",
-                        "closed_at",
-                        "credit_usage",
-                        "steps",
-                    ]:
+                    for attr in ["success", "status", "answer", "credit_usage", "steps"]:
                         if hasattr(response, attr):
                             value = getattr(response, attr)
+                            if attr == "steps":
+                                value = f"[{len(value)} steps]" if value else "[]"
                             logger.info(
                                 f"[Session {session_id[:8]}] Response.{attr}: {value}"
                             )
                 else:
                     logger.warning(
-                        f"[Session {session_id[:8]}] Response is None! Attempting to get result from agent..."
+                        f"[Session {session_id[:8]}] Response is None! Polling for result..."
                     )
-                    # Try to get the result from the agent if response is None
                     try:
-                        # Get agent_id from the agent
-                        agent_id = None
-                        if hasattr(agent, "agent_id"):
-                            agent_id = agent.agent_id
-                            logger.info(
-                                f"[Session {session_id[:8]}] Agent ID: {agent_id}"
-                            )
-
-                        # Try to get status from the agent client
-                        if agent_id and hasattr(notte_client_ref, "agents"):
-                            logger.info(
-                                f"[Session {session_id[:8]}] Polling agent status..."
-                            )
-                            # Poll for status with retries
+                        notte_agent_id = getattr(agent, "agent_id", None)
+                        if notte_agent_id and hasattr(notte_client_ref, "agents"):
                             for poll_attempt in range(10):
                                 try:
                                     status_response = notte_client_ref.agents.status(
-                                        agent_id=agent_id
-                                    )
-                                    logger.info(
-                                        f"[Session {session_id[:8]}] Got status response on attempt {poll_attempt + 1}: {type(status_response)}"
+                                        agent_id=notte_agent_id
                                     )
                                     if status_response:
                                         response = status_response
                                         logger.info(
-                                            f"[Session {session_id[:8]}] Successfully retrieved response from status"
+                                            f"[Session {session_id[:8]}] Retrieved response from status poll"
                                         )
                                         break
-                                except Exception as status_error:
-                                    logger.debug(
-                                        f"[Session {session_id[:8]}] Status poll attempt {poll_attempt + 1} failed: {status_error}"
-                                    )
+                                except Exception:
                                     if poll_attempt < 9:
                                         time.sleep(1.0)
                     except Exception as result_error:
                         logger.warning(
-                            f"[Session {session_id[:8]}] Failed to get result from agent: {result_error}",
+                            f"[Session {session_id[:8]}] Failed to poll result: {result_error}",
                             exc_info=True,
                         )
 
                 return response, session.session_id, browser_url
             finally:
-                try:
-                    session.stop()
-                    logger.info(
-                        f"[Session {session_id[:8]}] Notte session {session.session_id[:8]} stopped"
-                    )
-                except Exception as stop_error:
-                    logger.warning(
-                        f"[Session {session_id[:8]}] Failed to stop Notte session: {stop_error}",
-                        exc_info=True,
-                    )
+                # Only stop notte-managed sessions, not external CDP sessions
+                if not cdp_url:
+                    try:
+                        session.stop()
+                        logger.info(
+                            f"[Session {session_id[:8]}] Notte session stopped"
+                        )
+                    except Exception as stop_error:
+                        logger.warning(
+                            f"[Session {session_id[:8]}] Failed to stop Notte session: {stop_error}",
+                            exc_info=True,
+                        )
 
         return await asyncio.to_thread(
             _run_agent, notte_client, agent_id, convex_client

@@ -5,10 +5,13 @@ import { SmoothPanel } from "./panels/smooth-panel";
 import { BUPanel } from "./panels/bu-panel";
 import { StagehandPanel } from "./panels/stagehand-panel";
 import { NottePanel } from "./panels/notte-panel";
+import { SdkAgentPanel } from "./panels/sdk-agent-panel";
 import { BrowserUseLogo } from "./logos/bu";
 import { SmoothLogo } from "./logos/smooth";
 import { StagehandLogo } from "./logos/stagehand";
 import { NotteLogo } from "./logos/notte";
+import { ClaudeLogo } from "./logos/claude";
+import { OpenAI } from "./logos/openai";
 import { XCircle, AlertTriangle } from "lucide-react";
 
 const truncateText = (text: string, maxLength: number = 100): string => {
@@ -93,6 +96,12 @@ export function AgentPanel({ agent }: AgentPanelProps) {
         if (name === "browser-use-cloud") {
             return "BU Cloud";
         }
+        if (name === "claude-code") {
+            return "Claude Code";
+        }
+        if (name === "codex") {
+            return "Codex";
+        }
         return name;
     };
 
@@ -113,6 +122,12 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                     )}
                     {agent.name === "notte" && (
                         <NotteLogo className="h-4 w-4 shrink-0" />
+                    )}
+                    {agent.name === "claude-code" && (
+                        <ClaudeLogo className="h-4 w-4 shrink-0" />
+                    )}
+                    {agent.name === "codex" && (
+                        <OpenAI className="h-4 w-4 shrink-0" />
                     )}
                     <h3 className="text-sm font-medium capitalize truncate min-w-0" title={agent.name}>
                         {getDisplayName(agent.name)}
@@ -291,8 +306,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && <BUPanel agent={agent} />}
                                 {agent.name === "stagehand" && <StagehandPanel agent={agent} />}
                                 {agent.name === "notte" && <NottePanel agent={agent} />}
+                                {(agent.name === "claude-code" || agent.name === "codex") && <SdkAgentPanel agent={agent} />}
 
-                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "notte"].includes(agent.name) && (
+                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "notte", "claude-code", "codex"].includes(agent.name) && (
                                     <div className="space-y-3">
                                         <div className="bg-card rounded-lg p-4">
                                             <h4 className="text-xs font-medium mb-2 uppercase tracking-wide">Result</h4>

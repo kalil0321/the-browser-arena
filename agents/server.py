@@ -29,8 +29,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, field_validator
 
 # Import agent functions
-from browser_use_agent import run_browser_use
-from notte_agent import run_notte
+from browser_use_agent import run_browser_use, SDK_VERSION as BU_SDK_VERSION
+from notte_agent import run_notte, SDK_VERSION as NOTTE_SDK_VERSION
 from instruction_validation import validate_instruction_field
 from notte_sdk import NotteClient
 
@@ -265,7 +265,16 @@ class NotteAgentRequest(BaseModel):
     )
     model: Optional[str] = Field(
         None,
-        description="The model to use for reasoning (e.g., 'vertex_ai/gemini-2.0-flash')",
+        description="The model to use for reasoning (e.g., 'gemini/gemini-2.5-flash')",
+    )
+    cdpUrl: Optional[str] = Field(
+        None, description="CDP WebSocket URL for external browser (e.g., Browserbase)"
+    )
+    browserSessionId: Optional[str] = Field(
+        None, description="External browser session ID"
+    )
+    liveViewUrl: Optional[str] = Field(
+        None, description="Live view URL for the browser session"
     )
 
 
@@ -797,25 +806,6 @@ async def run_browser_use_task(
             )
             actions = []
 
-        # Update agent with SDK version first
-        if sdk_version:
-            try:
-                convex_client.mutation(
-                    "mutations:updateAgentSDKVersion",
-                    {
-                        "agentId": agent_id,
-                        "sdkVersion": sdk_version,
-                    },
-                )
-                logger.info(
-                    f"[Agent {agent_id[:8]}] Updated SDK version: {sdk_version}"
-                )
-            except Exception as version_error:
-                logger.warning(
-                    f"[Agent {agent_id[:8]}] Failed to update SDK version: {version_error}",
-                    exc_info=True,
-                )
-
         # Send payload to backend
         convex_client.mutation(
             "mutations:updateAgentResultFromBackend",
@@ -889,6 +879,7 @@ async def run_notte_task(
     convex_client: ConvexClient,
     notte_session_id: str = None,
     model: str = None,
+    cdp_url: str = None,
 ):
     """Run Notte agent in background and update Convex"""
     task_start_time = time.time()
@@ -936,6 +927,7 @@ async def run_notte_task(
             agent_id=agent_id,
             convex_client=convex_client,
             reasoning_model=model,
+            cdp_url=cdp_url,
         )
 
         # Update browser URL in Convex if available
@@ -952,25 +944,6 @@ async def run_notte_task(
             except Exception as url_update_error:
                 logger.warning(
                     f"[Agent {agent_id[:8]}] Failed to update browser URL in Convex: {url_update_error}",
-                    exc_info=True,
-                )
-
-        # Update agent with SDK version first
-        if sdk_version:
-            try:
-                convex_client.mutation(
-                    "mutations:updateAgentSDKVersion",
-                    {
-                        "agentId": agent_id,
-                        "sdkVersion": sdk_version,
-                    },
-                )
-                logger.info(
-                    f"[Agent {agent_id[:8]}] Updated SDK version: {sdk_version}"
-                )
-            except Exception as version_error:
-                logger.warning(
-                    f"[Agent {agent_id[:8]}] Failed to update SDK version: {version_error}",
                     exc_info=True,
                 )
 
@@ -1133,11 +1106,11 @@ async def run_browser_use_agent(
         # Create agent in Convex (unless agentId is provided, e.g., for demo sessions)
         agent_id = request.agentId
         if not agent_id:
-            # Build payload without sdkVersion (will be updated when agent runs)
             agent_payload = {
                 "sessionId": request.sessionId,
                 "name": "browser-use",
                 "model": request.providerModel,
+                "sdkVersion": BU_SDK_VERSION,
                 "browser": {
                     "sessionId": browser_session_id,
                     "url": live_view_url,
@@ -1212,15 +1185,18 @@ async def run_notte_agent(
     )
 
     try:
-        # Create agent in Convex with placeholder browser URL (will be updated after agent runs)
-        # Build payload without sdkVersion (will be updated when agent runs)
+        browser_session_id = request.browserSessionId or ""
+        live_view_url = request.liveViewUrl or ""
+
+        # Create agent in Convex with browser info
         agent_payload = {
             "sessionId": request.sessionId,
             "name": "notte",
-            "model": "",
+            "model": request.model or "",
+            "sdkVersion": NOTTE_SDK_VERSION,
             "browser": {
-                "sessionId": "",
-                "url": "",
+                "sessionId": browser_session_id,
+                "url": live_view_url,
             },
         }
         agent_id = convex_client.mutation(
@@ -1228,7 +1204,6 @@ async def run_notte_agent(
             agent_payload,
         )
 
-        # Pass notte_session_id=None so Notte handles session creation internally
         asyncio.create_task(
             run_notte_task(
                 instruction=request.instruction,
@@ -1238,18 +1213,19 @@ async def run_notte_agent(
                 convex_client=convex_client,
                 notte_session_id=None,
                 model=request.model,
+                cdp_url=request.cdpUrl,
             )
         )
 
         logger.info(
-            f"[Request {request_id}] Notte agent started - Agent ID: {agent_id[:8]}"
+            f"[Request {request_id}] Notte agent started - Agent ID: {agent_id[:8]}, Browser: {browser_session_id[:8] if browser_session_id else 'notte-managed'}"
         )
 
         return AgentResponse(
             sessionId=request.sessionId,
             agentId=agent_id,
-            browserSessionId="",
-            liveUrl="",
+            browserSessionId=browser_session_id,
+            liveUrl=live_view_url,
         )
     except HTTPException:
         raise
