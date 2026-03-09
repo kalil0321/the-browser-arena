@@ -129,7 +129,7 @@ wheels = [
 
 [[package]]
 name = "anchorbrowser"
-version = "0.11.0"
+version = "0.11.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -141,9 +141,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/96/1e/39ca716d37f9a822cbbd8364262bdd0a90f8e5358fbce6976c4e23c1a089/anchorbrowser-0.11.0.tar.gz", hash = "sha256:f2e08594818477492c0d30bba710b6a71f5f4fc1dd7b4e4d1251389994306797", size = 155303, upload-time = "2026-03-06T08:59:22.698Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/e7/ac4b2cec72ea79bbb89fd1b5941f297fc72c9c6f0bdf939ece4e8204c0c9/anchorbrowser-0.11.1.tar.gz", hash = "sha256:aea137c1b24dd2ba8962f4a4d4623e2df4a3a620e23973bad59b749ca520a876", size = 155309, upload-time = "2026-03-08T07:51:32.994Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/92/85e4c86a884ff052f78816535d5a8ed62085a4818eebc5d479f3e6e9679d/anchorbrowser-0.11.0-py3-none-any.whl", hash = "sha256:bf31191c0e9f67ea343a8075e2ffccc3b26bec4989c701edd6c20b00761ba438", size = 170165, upload-time = "2026-03-06T08:59:21.376Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/f4/a6ab23078b65004312f420999fb67df8a1f2737178f5bec37ec9364fbd4b/anchorbrowser-0.11.1-py3-none-any.whl", hash = "sha256:662b54539c01cfd2be7a45248b808034f73aaf7fa703dfcabe60aaba357510af", size = 170167, upload-time = "2026-03-08T07:51:31.485Z" },
 ]
 
 [[package]]
@@ -242,7 +242,7 @@ wheels = [
 [[package]]
 name = "browser-use"
 version = "0.12.1"
-source = { git = "https://github.com/browser-use/browser-use.git#7a2f5540389d4ef453d3867e377949ed245df3a4" }
+source = { git = "https://github.com/browser-use/browser-use.git#028c2868cf958634828280be0a0727cee4084174" }
 dependencies = [
     { name = "aiohttp" },
     { name = "anthropic" },
