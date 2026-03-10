@@ -5,7 +5,32 @@ import { api } from "./_generated/api";
 
 const http = httpRouter();
 
-authComponent.registerRoutes(http, createAuth);
+const authHandler = httpAction(async (ctx, request) => {
+    const auth = createAuth(ctx);
+    return await auth.handler(request);
+});
+
+http.route({
+    pathPrefix: "/api/auth/",
+    method: "GET",
+    handler: authHandler,
+});
+
+http.route({
+    pathPrefix: "/api/auth/",
+    method: "POST",
+    handler: authHandler,
+});
+
+// Well-known OpenID config redirect
+http.route({
+    path: "/.well-known/openid-configuration",
+    method: "GET",
+    handler: httpAction(async () => {
+        const url = `${process.env.CONVEX_SITE_URL}/api/auth/convex/.well-known/openid-configuration`;
+        return Response.redirect(url, 302);
+    }),
+});
 
 /**
  * HTTP action to upload recording from Python backend
