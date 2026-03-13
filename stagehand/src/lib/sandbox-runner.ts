@@ -7,17 +7,20 @@
 
 import { createRequire } from 'module'
 import { readFileSync, writeFileSync } from 'fs'
+import { execFileSync } from 'child_process'
 import { query, type McpServerConfig, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk'
 import { Codex, type ThreadEvent, type ThreadItem } from '@openai/codex-sdk'
 
 const require = createRequire(import.meta.url)
 
-function getMcpVersion(mcpType: McpType): string {
+type McpType = 'playwright' | 'chrome-devtools' | 'agent-browser'
+
+function getToolVersion(mcpType: McpType): string {
   try {
-    const pkg = mcpType === 'playwright'
-      ? require('@playwright/mcp/package.json')
-      : require('chrome-devtools-mcp/package.json')
-    return pkg?.version || '0.0.0'
+    if (mcpType === 'playwright') return require('@playwright/mcp/package.json')?.version || '0.0.0'
+    if (mcpType === 'chrome-devtools') return require('chrome-devtools-mcp/package.json')?.version || '0.0.0'
+    if (mcpType === 'agent-browser') return require('agent-browser/package.json')?.version || '0.0.0'
+    return '0.0.0'
   } catch {
     return '0.0.0'
   }
@@ -32,13 +35,14 @@ const BASE_DIR = process.env.SANDBOX_BASE_DIR || '/vercel/sandbox'
 
 // Use sandbox-local paths for MCP binaries
 const PLAYWRIGHT_MCP_BIN = `${BASE_DIR}/node_modules/@playwright/mcp/cli.js`
-const CHROME_DEVTOOLS_MCP_BIN = `${BASE_DIR}/node_modules/chrome-devtools-mcp/build/src/index.js`
+const CHROME_DEVTOOLS_MCP_BIN = `${BASE_DIR}/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js`
+const AGENT_BROWSER_BIN = `${BASE_DIR}/node_modules/.bin/agent-browser`
 
 export interface RunnerParams {
   agentType: 'claude-code' | 'codex'
   instruction: string
   cdpUrl: string
-  mcpType: 'playwright' | 'chrome-devtools'
+  mcpType: McpType
   requestId: string
 }
 
@@ -51,8 +55,6 @@ export interface RunnerResult {
   usage: { input_tokens: number; output_tokens: number; cached_tokens: number }
   sdkCostUsd?: number
 }
-
-type McpType = 'playwright' | 'chrome-devtools'
 
 function pushLog(logs: string[], line: string | undefined | null) {
   if (!line) return
@@ -80,12 +82,46 @@ function extractClaudeText(content: unknown): string {
     .trim()
 }
 
-function buildMcpSystemPrompt(mcpType: McpType): string {
+// ── System prompts ──────────────────────────────────────────────────────────
+
+function buildSystemPrompt(mcpType: McpType): string {
+  if (mcpType === 'agent-browser') {
+    return AGENT_BROWSER_SYSTEM_PROMPT
+  }
   const toolName = mcpType === 'playwright' ? 'Playwright MCP' : 'Chrome DevTools MCP'
   return `You are a browser automation agent with access to ${toolName} tools. A browser is already open with a page loaded. You operate in a single-tab environment — do not open new tabs. Provide a direct, factual answer based on what you observe on the page.`
 }
 
-function createStdioMcpConfig(mcpType: McpType, cdpUrl: string): Record<string, McpServerConfig> {
+const AGENT_BROWSER_SYSTEM_PROMPT = `You are a browser automation agent. A remote browser is already connected via the agent-browser CLI. You control the browser by running agent-browser commands via the Bash tool.
+
+## Available commands
+- agent-browser snapshot -i — get interactive elements with refs (@e1, @e2, etc.)
+- agent-browser snapshot -i -C — include cursor-interactive elements too
+- agent-browser click @e1 — click an element by ref
+- agent-browser type @e1 "text" — type into an element
+- agent-browser fill @e1 "text" — clear and fill an element
+- agent-browser press Enter — press a key
+- agent-browser scroll down [px] — scroll the page
+- agent-browser open <url> — navigate to a URL
+- agent-browser screenshot — take a screenshot (returns base64)
+- agent-browser get text — get page text
+- agent-browser get url — get current URL
+- agent-browser get title — get page title
+- agent-browser wait <selector|ms> — wait for element or time
+- agent-browser find role button "Submit" click — find and interact with elements
+- agent-browser eval "document.title" — run JavaScript
+
+## Workflow
+1. Use "agent-browser snapshot -i" to see the page and available interactive elements
+2. Use element refs (@e1, @e2) to interact with elements
+3. After actions, take another snapshot to verify the result
+4. Provide a direct, factual answer based on what you observe
+
+Do not open new tabs. Do not close the browser.`
+
+// ── MCP config (playwright / chrome-devtools only) ──────────────────────────
+
+function createStdioMcpConfig(mcpType: 'playwright' | 'chrome-devtools', cdpUrl: string): Record<string, McpServerConfig> {
   const commonEnv = {
     CI: '1',
     CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: '1',
@@ -116,12 +152,12 @@ function createStdioMcpConfig(mcpType: McpType, cdpUrl: string): Record<string, 
   }
 }
 
-const DISALLOWED_TOOLS: Record<McpType, string[]> = {
+const DISALLOWED_TOOLS: Record<'playwright' | 'chrome-devtools', string[]> = {
   playwright: ['mcp__playwright__browser_close'],
   'chrome-devtools': ['mcp__chrome-devtools__new_page', 'mcp__chrome-devtools__close_page'],
 }
 
-function createCodexMcpConfig(mcpType: McpType, cdpUrl: string) {
+function createCodexMcpConfig(mcpType: 'playwright' | 'chrome-devtools', cdpUrl: string) {
   const [serverName, serverConfig] = Object.entries(createStdioMcpConfig(mcpType, cdpUrl))[0]
   if (serverConfig.type !== 'stdio') {
     throw new Error(`Unexpected MCP transport for ${serverName}`)
@@ -139,22 +175,54 @@ function createCodexMcpConfig(mcpType: McpType, cdpUrl: string) {
   }
 }
 
+// ── agent-browser connect helper ────────────────────────────────────────────
+
+function connectAgentBrowser(cdpUrl: string, logs: string[]) {
+  try {
+    const output = execFileSync(
+      AGENT_BROWSER_BIN,
+      ['connect', cdpUrl],
+      { cwd: BASE_DIR, timeout: 30_000, encoding: 'utf-8', env: { ...process.env, CI: '1' } },
+    )
+    pushLog(logs, `connect: ${output.trim()}`)
+    console.log(`[agent-browser] Connected to remote browser`)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`agent-browser connect failed: ${msg}`)
+  }
+}
+
+// ── Claude runner ───────────────────────────────────────────────────────────
+
 async function runClaude(params: RunnerParams): Promise<RunnerResult> {
   const abortController = new AbortController()
   const timeout = setTimeout(() => abortController.abort(), TIMEOUT_MS)
   const startTime = Date.now()
   const logs: string[] = []
+  const systemPrompt = buildSystemPrompt(params.mcpType)
+  const isAgentBrowser = params.mcpType === 'agent-browser'
+
+  // For agent-browser, connect first then give Claude the Bash tool.
+  // For MCP types, configure MCP servers.
+  if (isAgentBrowser) {
+    connectAgentBrowser(params.cdpUrl, logs)
+  }
+
   const mcpServerName = params.mcpType === 'playwright' ? 'playwright' : 'chrome-devtools'
-  const systemPrompt = buildMcpSystemPrompt(params.mcpType)
 
   const stream = query({
     prompt: `${systemPrompt}\n\n## Task\n${params.instruction.trim()}\n\nReturn the final answer to the user once the task is complete.`,
     options: {
       cwd: BASE_DIR,
-      mcpServers: createStdioMcpConfig(params.mcpType, params.cdpUrl),
       model: 'claude-sonnet-4-6',
-      tools: [`mcp__${mcpServerName}__*`],
-      disallowedTools: DISALLOWED_TOOLS[params.mcpType],
+      ...(isAgentBrowser
+        ? { tools: ['Bash'] }
+        : {
+            mcpServers: createStdioMcpConfig(params.mcpType as 'playwright' | 'chrome-devtools', params.cdpUrl),
+            tools: [`mcp__${mcpServerName}__*`],
+            disallowedTools: DISALLOWED_TOOLS[params.mcpType as 'playwright' | 'chrome-devtools'],
+          }
+      ),
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       env: {
@@ -217,7 +285,7 @@ async function runClaude(params: RunnerParams): Promise<RunnerResult> {
       resultSubtype: finalResult.subtype,
       numTurns: finalResult.num_turns,
       stopReason: finalResult.stop_reason,
-      mcpVersion: getMcpVersion(params.mcpType),
+      toolVersion: getToolVersion(params.mcpType),
     },
     usage: {
       input_tokens: finalResult.usage?.input_tokens || 0,
@@ -230,6 +298,8 @@ async function runClaude(params: RunnerParams): Promise<RunnerResult> {
   }
 }
 
+// ── Codex runner ────────────────────────────────────────────────────────────
+
 async function runCodex(params: RunnerParams): Promise<RunnerResult> {
   const abortController = new AbortController()
   const timeout = setTimeout(() => abortController.abort(), TIMEOUT_MS)
@@ -237,12 +307,19 @@ async function runCodex(params: RunnerParams): Promise<RunnerResult> {
   const logs: string[] = []
   const itemOrder: string[] = []
   const itemById = new Map<string, ThreadItem>()
+  const isAgentBrowser = params.mcpType === 'agent-browser'
+
+  // For agent-browser, connect to the remote browser before starting Codex.
+  if (isAgentBrowser) {
+    connectAgentBrowser(params.cdpUrl, logs)
+  }
 
   const codex = new Codex({
     apiKey: process.env.OPENAI_API_KEY,
-    config: {
-      mcp_servers: createCodexMcpConfig(params.mcpType, params.cdpUrl),
-    },
+    ...(isAgentBrowser
+      ? {}
+      : { config: { mcp_servers: createCodexMcpConfig(params.mcpType as 'playwright' | 'chrome-devtools', params.cdpUrl) } }
+    ),
   })
 
   const thread = codex.startThread({
@@ -258,7 +335,7 @@ async function runCodex(params: RunnerParams): Promise<RunnerResult> {
   let failureMessage = ''
 
   try {
-    const systemPrompt = buildMcpSystemPrompt(params.mcpType)
+    const systemPrompt = buildSystemPrompt(params.mcpType)
     const { events } = await thread.runStreamed(
       `${systemPrompt}\n\n## Task\n${params.instruction.trim()}\n\nReturn the final answer to the user once the task is complete.`,
       { signal: abortController.signal },
@@ -328,7 +405,7 @@ async function runCodex(params: RunnerParams): Promise<RunnerResult> {
     metadata: {
       model: 'gpt-5.4',
       failureMessage: failureMessage || undefined,
-      mcpVersion: getMcpVersion(params.mcpType),
+      toolVersion: getToolVersion(params.mcpType),
     },
     usage: {
       input_tokens: u.input_tokens,
@@ -338,11 +415,13 @@ async function runCodex(params: RunnerParams): Promise<RunnerResult> {
   }
 }
 
+// ── Main ────────────────────────────────────────────────────────────────────
+
 async function main() {
   const paramsRaw = readFileSync(`${BASE_DIR}/params.json`, 'utf-8')
   const params: RunnerParams = JSON.parse(paramsRaw)
 
-  console.log(`[sandbox-runner] Starting ${params.agentType} agent for request ${params.requestId}`)
+  console.log(`[sandbox-runner] Starting ${params.agentType} agent (${params.mcpType}) for request ${params.requestId}`)
   console.log(`[sandbox-runner] ANTHROPIC_API_KEY set: ${!!process.env.ANTHROPIC_API_KEY}`)
   console.log(`[sandbox-runner] OPENAI_API_KEY set: ${!!process.env.OPENAI_API_KEY}`)
   console.log(`[sandbox-runner] Node version: ${process.version}`)

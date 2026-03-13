@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const mcpTypeSchema = z.enum(["playwright", "chrome-devtools"])
+export const mcpTypeSchema = z.enum(["playwright", "chrome-devtools", "agent-browser"])
 
 export const bodySchema = z.object({
   sessionId: z.string().min(1),

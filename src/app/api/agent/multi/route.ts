@@ -11,9 +11,9 @@ import { BrowserSession, createBrowserSession, deleteBrowserSession } from "@/li
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL || "http://localhost:8080";
 
 interface AgentConfig {
-    agent: "stagehand" | "smooth" | "browser-use" | "browser-use-cloud" | "notte" | "claude-code" | "codex" | "playwright-mcp" | "chrome-devtools-mcp";
+    agent: "stagehand" | "smooth" | "browser-use" | "browser-use-cloud" | "notte" | "claude-code" | "codex" | "playwright-mcp" | "chrome-devtools-mcp" | "agent-browser-mcp";
     model: string;
-    mcpType?: "playwright" | "chrome-devtools";
+    mcpType?: "playwright" | "chrome-devtools" | "agent-browser";
     secrets?: Record<string, string>; // For browser-use: key-value pairs of secrets
     thinkingModel?: string; // For stagehand: model used for thinking/planning
     executionModel?: string; // For stagehand: model used for execution
@@ -31,7 +31,7 @@ interface RequiredKeys {
 const SDK_CLIENT_MODELS = new Set(["claude-code", "codex"]);
 
 function isSdkAgent(agent: AgentConfig["agent"]): boolean {
-    return agent === "claude-code" || agent === "codex" || agent === "playwright-mcp" || agent === "chrome-devtools-mcp";
+    return agent === "claude-code" || agent === "codex" || agent === "playwright-mcp" || agent === "chrome-devtools-mcp" || agent === "agent-browser-mcp";
 }
 
 /**
@@ -52,6 +52,7 @@ function getRequiredKeysForAgent(agentConfig: AgentConfig): RequiredKeys {
         case "codex":
         case "playwright-mcp":
         case "chrome-devtools-mcp":
+        case "agent-browser-mcp":
             // Uses server-side credentials
             break;
         case "stagehand":
@@ -543,14 +544,20 @@ export async function POST(request: NextRequest) {
                         };
                         break;
                     case "playwright-mcp":
-                    case "chrome-devtools-mcp": {
+                    case "chrome-devtools-mcp":
+                    case "agent-browser-mcp": {
                         const selectedClient = agentConfig.model === "codex" ? "codex" : "claude-code";
                         endpoint = `/api/agent/${selectedClient}`;
                         isLocalEndpoint = true;
+                        const mcpTypeMap: Record<string, string> = {
+                            "playwright-mcp": "playwright",
+                            "chrome-devtools-mcp": "chrome-devtools",
+                            "agent-browser-mcp": "agent-browser",
+                        };
                         payload = {
                             instruction,
                             sessionId: dbSessionId,
-                            mcpType: agentConfig.agent === "chrome-devtools-mcp" ? "chrome-devtools" : "playwright",
+                            mcpType: mcpTypeMap[agentConfig.agent],
                             agentName: agentConfig.agent,
                             sdkClient: selectedClient,
                         };

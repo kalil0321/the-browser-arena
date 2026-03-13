@@ -74,7 +74,7 @@ export async function runAgentInSandbox(params: SandboxAgentParams): Promise<San
         'cd /vercel/sandbox',
         'npm init -y',
         'node -e "const p=require(\'./package.json\'); p.type=\'module\'; require(\'fs\').writeFileSync(\'package.json\', JSON.stringify(p,null,2))"',
-        'npm install @anthropic-ai/claude-agent-sdk @openai/codex-sdk @playwright/mcp chrome-devtools-mcp 2>&1',
+        'npm install @anthropic-ai/claude-agent-sdk @openai/codex-sdk @playwright/mcp chrome-devtools-mcp agent-browser 2>&1',
       ].join(' && ')],
       stdout: process.stdout,
       stderr: process.stderr,

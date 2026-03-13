@@ -13,7 +13,7 @@ const STAGEHAND_SERVER_URL = process.env.NODE_ENV === "development"
 const convexBackend = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export type SdkAgentType = "claude-code" | "codex";
-export type McpType = "playwright" | "chrome-devtools";
+export type McpType = "playwright" | "chrome-devtools" | "agent-browser";
 
 const SDK_AGENT_MODELS: Record<SdkAgentType, string> = {
     "claude-code": "anthropic/claude-sonnet-4-6",
@@ -29,7 +29,7 @@ const config = {
 };
 
 function isMcpType(value: unknown): value is McpType {
-    return value === "playwright" || value === "chrome-devtools";
+    return value === "playwright" || value === "chrome-devtools" || value === "agent-browser";
 }
 
 export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAgentType) {
@@ -45,7 +45,7 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             instruction?: string;
             sessionId?: string;
             mcpType?: McpType;
-            agentName?: "playwright-mcp" | "chrome-devtools-mcp";
+            agentName?: "playwright-mcp" | "chrome-devtools-mcp" | "agent-browser-mcp";
             sdkClient?: "claude-code" | "codex";
         };
 
@@ -121,10 +121,10 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
                 );
             }
 
-            const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+            const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp" || requestedAgentName === "agent-browser-mcp")
                 ? requestedAgentName
                 : agentType;
-            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp" || requestedAgentName === "agent-browser-mcp")
                 && requestedSdkClient && (requestedSdkClient === "claude-code" || requestedSdkClient === "codex")
                 ? requestedSdkClient
                 : undefined;
@@ -140,10 +140,10 @@ export async function handleSdkAgentRoute(request: NextRequest, agentType: SdkAg
             }) as string;
             dbSessionId = existingSessionId;
         } else {
-            const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+            const agentDisplayName = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp" || requestedAgentName === "agent-browser-mcp")
                 ? requestedAgentName
                 : agentType;
-            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp")
+            const sdkClient = (requestedAgentName === "playwright-mcp" || requestedAgentName === "chrome-devtools-mcp" || requestedAgentName === "agent-browser-mcp")
                 && requestedSdkClient && (requestedSdkClient === "claude-code" || requestedSdkClient === "codex")
                 ? requestedSdkClient
                 : undefined;

@@ -7,7 +7,7 @@ import { runAgentInSandbox } from './vercel-sandbox.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export type SdkAgentType = 'claude-code' | 'codex'
-export type McpType = 'playwright' | 'chrome-devtools'
+export type McpType = 'playwright' | 'chrome-devtools' | 'agent-browser'
 
 export const SDK_AGENT_MODELS: Record<SdkAgentType, { record: string; runtime: string }> = {
   'claude-code': {
