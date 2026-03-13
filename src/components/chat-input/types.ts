@@ -7,8 +7,9 @@ export type AgentType =
     | "claude-code"
     | "codex"
     | "playwright-mcp"
-    | "chrome-devtools-mcp";
-export type McpType = "playwright" | "chrome-devtools";
+    | "chrome-devtools-mcp"
+    | "agent-browser-mcp";
+export type McpType = "playwright" | "chrome-devtools" | "agent-browser";
 
 export type ModelType =
     | "google/gemini-2.5-flash"
@@ -62,6 +63,7 @@ export const AGENT_LABELS: Record<AgentType, string> = {
     "codex": "Codex",
     "playwright-mcp": "Playwright MCP",
     "chrome-devtools-mcp": "Chrome DevTools MCP",
+    "agent-browser-mcp": "Agent Browser",
 };
 
 export const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
@@ -83,6 +85,7 @@ export const MODEL_OPTIONS: Record<AgentType, ModelType[]> = {
     "codex": [],
     "playwright-mcp": ["claude-code", "codex"],
     "chrome-devtools-mcp": ["claude-code", "codex"],
+    "agent-browser-mcp": ["claude-code", "codex"],
 };
 
 export interface ChatInputState {

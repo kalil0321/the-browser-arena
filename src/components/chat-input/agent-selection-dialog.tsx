@@ -14,6 +14,7 @@ import { StagehandLogo } from "@/components/logos/stagehand";
 import { NotteLogo } from "@/components/logos/notte";
 import { PlaywrightLogo } from "@/components/logos/playwright";
 import { ChromeDevtoolsLogo } from "@/components/logos/chrome-devtools";
+import { AgentBrowserLogo } from "@/components/logos/agent-browser";
 import { formatModelName, getProviderName, ProviderLogo } from "./helpers";
 
 interface AgentSelectionDialogProps {
@@ -30,14 +31,20 @@ const AVAILABLE_AGENT_TYPES: AgentType[] = [
     "notte",
     "playwright-mcp",
     "chrome-devtools-mcp",
+    "agent-browser-mcp",
 ];
 
 function normalizeConfig(config: AgentConfig): AgentConfig {
     if (config.agent === "claude-code" || config.agent === "codex") {
-        const mcpType = config.mcpType === "chrome-devtools" ? "chrome-devtools" : "playwright";
+        const mcpType = config.mcpType === "chrome-devtools" ? "chrome-devtools" : config.mcpType === "agent-browser" ? "agent-browser" : "playwright";
+        const agentMap: Record<string, AgentType> = {
+            "chrome-devtools": "chrome-devtools-mcp",
+            "agent-browser": "agent-browser-mcp",
+            "playwright": "playwright-mcp",
+        };
         return {
             ...config,
-            agent: mcpType === "chrome-devtools" ? "chrome-devtools-mcp" : "playwright-mcp",
+            agent: agentMap[mcpType],
             model: config.agent,
             mcpType,
         };
@@ -87,6 +94,7 @@ export function AgentSelectionDialog({
                 model: defaultModel as ModelType,
                 ...(agent === "playwright-mcp" ? { mcpType: "playwright" as const } : {}),
                 ...(agent === "chrome-devtools-mcp" ? { mcpType: "chrome-devtools" as const } : {}),
+                ...(agent === "agent-browser-mcp" ? { mcpType: "agent-browser" as const } : {}),
             },
         ]);
     };
@@ -128,6 +136,9 @@ export function AgentSelectionDialog({
         }
         if (agentType === "chrome-devtools-mcp") {
             return <ChromeDevtoolsLogo className="h-3.5 w-3.5" />;
+        }
+        if (agentType === "agent-browser-mcp") {
+            return <AgentBrowserLogo className="h-3.5 w-3.5" />;
         }
         return null;
     };

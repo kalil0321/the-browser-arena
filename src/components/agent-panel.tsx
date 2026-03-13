@@ -14,6 +14,7 @@ import { ClaudeLogo } from "./logos/claude";
 import { OpenAI } from "./logos/openai";
 import { PlaywrightLogo } from "./logos/playwright";
 import { ChromeDevtoolsLogo } from "./logos/chrome-devtools";
+import { AgentBrowserLogo } from "./logos/agent-browser";
 import { AGENT_LABELS } from "./chat-input/types";
 import { XCircle, AlertTriangle } from "lucide-react";
 
@@ -131,10 +132,13 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                     {agent.name === "chrome-devtools-mcp" && (
                         <ChromeDevtoolsLogo className="h-4 w-4 shrink-0" />
                     )}
-                    {["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) ? (
+                    {agent.name === "agent-browser-mcp" && (
+                        <AgentBrowserLogo className="h-4 w-4 shrink-0" />
+                    )}
+                    {["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp"].includes(agent.name) ? (
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 flex items-center gap-1.5 max-w-[200px] truncate" title={agent.sdkVersion ? `SDK v${agent.sdkVersion}${agent.result?.metadata?.mcpVersion ? ` · MCP v${agent.result.metadata.mcpVersion}` : ""}` : undefined}>
                             <span className="truncate">{getDisplayName(agent.name)}</span>
-                            {["playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) && agent.sdkClient && (
+                            {["playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp"].includes(agent.name) && agent.sdkClient && (
                                 <span className="shrink-0">· {agent.sdkClient === "codex" ? "Codex" : "Claude Code"}</span>
                             )}
                             {agent.model && (
@@ -323,9 +327,9 @@ export function AgentPanel({ agent }: AgentPanelProps) {
                                 {(agent.name === "browser-use" || agent.name === "browser_use" || agent.name === "browser-use-cloud") && <BUPanel agent={agent} />}
                                 {agent.name === "stagehand" && <StagehandPanel agent={agent} />}
                                 {agent.name === "notte" && <NottePanel agent={agent} />}
-                                {(agent.name === "claude-code" || agent.name === "codex" || agent.name === "playwright-mcp" || agent.name === "chrome-devtools-mcp") && <SdkAgentPanel agent={agent} />}
+                                {(agent.name === "claude-code" || agent.name === "codex" || agent.name === "playwright-mcp" || agent.name === "chrome-devtools-mcp" || agent.name === "agent-browser-mcp") && <SdkAgentPanel agent={agent} />}
 
-                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "notte", "claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) && (
+                                {!["smooth", "browser-use", "browser_use", "browser-use-cloud", "stagehand", "notte", "claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp"].includes(agent.name) && (
                                     <div className="space-y-3">
                                         <div className="bg-card rounded-lg p-4">
                                             <h4 className="text-xs font-medium mb-2 uppercase tracking-wide">Result</h4>

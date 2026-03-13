@@ -23,6 +23,7 @@ import { ClaudeLogo } from "@/components/logos/claude";
 import { OpenAI } from "@/components/logos/openai";
 import { PlaywrightLogo } from "@/components/logos/playwright";
 import { ChromeDevtoolsLogo } from "@/components/logos/chrome-devtools";
+import { AgentBrowserLogo } from "@/components/logos/agent-browser";
 import { AGENT_LABELS } from "@/components/chat-input/types";
 import { useMemo, useState } from "react";
 import {
@@ -555,6 +556,9 @@ function SessionAgentsDisplay({
                     )}
                     {agent.name === "chrome-devtools-mcp" && (
                         <ChromeDevtoolsLogo className="h-3 w-3" />
+                    )}
+                    {agent.name === "agent-browser-mcp" && (
+                        <AgentBrowserLogo className="h-3 w-3" />
                     )}
                     {Object.hasOwn(AGENT_LABELS, agent.name) ? AGENT_LABELS[agent.name as keyof typeof AGENT_LABELS] : agent.name}
                 </Badge>

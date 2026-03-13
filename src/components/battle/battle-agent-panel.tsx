@@ -255,10 +255,10 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                                 {label}
                             </h3>
                         </>
-                    ) : ["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) ? (
+                    ) : ["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp"].includes(agent.name) ? (
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded shrink-0 flex items-center gap-1.5 max-w-[200px] truncate" title={agent.sdkVersion ? `SDK v${agent.sdkVersion}${agent.result?.metadata?.mcpVersion ? ` · MCP v${agent.result.metadata.mcpVersion}` : ""}` : undefined}>
                             <span className="truncate">{agent.name in AGENT_LABELS ? AGENT_LABELS[agent.name as keyof typeof AGENT_LABELS] : agent.name}</span>
-                            {["playwright-mcp", "chrome-devtools-mcp"].includes(agent.name) && agent.sdkClient && (
+                            {["playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp"].includes(agent.name) && agent.sdkClient && (
                                 <span className="shrink-0">· {agent.sdkClient === "codex" ? "Codex" : "Claude Code"}</span>
                             )}
                             {agent.sdkVersion && (
@@ -451,7 +451,7 @@ export function BattleAgentPanel({ agent, label, hideIdentity, showBrowserView, 
                             const isBrowserUse = agentType === "browser-use" || agentType === "browser_use" || agentType === "browser-use-cloud";
                             const isSmooth = agentType === "smooth";
                             const isNotte = agentType === "notte";
-                            const isSdkAgent = ["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp"].includes(agentType);
+                            const isSdkAgent = ["claude-code", "codex", "playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp"].includes(agentType);
 
                             return (
                                 <div className="p-4 overflow-y-auto max-h-full">
