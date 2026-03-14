@@ -81,27 +81,25 @@ export function SdkAgentPanel({ agent }: SdkAgentPanelProps) {
 
     return (
         <div className="space-y-4">
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            <div className="grid gap-3 grid-cols-3">
                 <div className="rounded-lg border border-border bg-card p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">MCP</p>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {result.mcpType === "agent-browser" ? "Tool · Client" : "MCP · Client"}
+                    </p>
                     <p className="mt-1 text-sm font-medium text-foreground">
-                        {result.mcpType === "chrome-devtools" ? "Chrome DevTools" : "Playwright"}
+                        {result.mcpType === "chrome-devtools" ? "Chrome DevTools" : result.mcpType === "agent-browser" ? "Agent Browser" : "Playwright"}
                         {(result.metadata as { mcpVersion?: string })?.mcpVersion && (
                             <span className="ml-1 text-xs text-muted-foreground font-mono">v{(result.metadata as { mcpVersion: string }).mcpVersion}</span>
                         )}
+                        {agent.sdkClient && (
+                            <span className="text-muted-foreground font-normal"> · {agent.sdkClient === "codex" ? "Codex" : "Claude Code"}
+                                {agent.sdkVersion && (
+                                    <span className="ml-0.5 text-xs font-mono">v{agent.sdkVersion}</span>
+                                )}
+                            </span>
+                        )}
                     </p>
                 </div>
-                {agent.sdkClient && (
-                    <div className="rounded-lg border border-border bg-card p-3">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Client</p>
-                        <p className="mt-1 text-sm font-medium text-foreground">
-                            {agent.sdkClient === "codex" ? "Codex" : "Claude Code"}
-                            {agent.sdkVersion && (
-                                <span className="ml-1 text-xs text-muted-foreground font-mono">v{agent.sdkVersion}</span>
-                            )}
-                        </p>
-                    </div>
-                )}
                 <div className="rounded-lg border border-border bg-card p-3">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Duration</p>
                     <p className="mt-1 text-sm font-medium text-foreground">
@@ -109,15 +107,12 @@ export function SdkAgentPanel({ agent }: SdkAgentPanelProps) {
                     </p>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Tokens</p>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Tokens · Cost</p>
                     <p className="mt-1 text-sm font-medium text-foreground">
                         {usage.total_tokens ?? "N/A"}
-                    </p>
-                </div>
-                <div className="rounded-lg border border-border bg-card p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Cost</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">
-                        {typeof usage.total_cost === "number" ? `$${usage.total_cost.toFixed(4)}` : "N/A"}
+                        {typeof usage.total_cost === "number" && (
+                            <span className="text-muted-foreground font-normal"> · ${usage.total_cost.toFixed(4)}</span>
+                        )}
                     </p>
                 </div>
             </div>
