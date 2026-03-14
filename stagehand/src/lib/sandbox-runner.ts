@@ -177,14 +177,12 @@ function createCodexMcpConfig(mcpType: 'playwright' | 'chrome-devtools', cdpUrl:
 
 // ── agent-browser connect helper ────────────────────────────────────────────
 
-// Normalize CDP URL so the path is explicit (some WS servers reject bare `wss://host?query`)
+// Normalize CDP URL so the path is explicit (some WS servers reject bare `wss://host?query`).
+// `new URL(...).toString()` always includes the `/` before `?`, turning
+// `wss://host?q` into `wss://host/?q` which is required by agent-browser.
 function normalizeCdpUrl(cdpUrl: string): string {
   try {
-    const url = new URL(cdpUrl)
-    if (!url.pathname || url.pathname === '') {
-      url.pathname = '/'
-      return url.toString()
-    }
+    return new URL(cdpUrl).toString()
   } catch { /* leave as-is if unparseable */ }
   return cdpUrl
 }
