@@ -82,11 +82,11 @@ export function SdkAgentPanel({ agent }: SdkAgentPanelProps) {
     return (
         <div className="space-y-4">
             <div className="grid gap-3 grid-cols-3">
-                <div className="rounded-lg border border-border bg-card p-3">
+                <div className="rounded-lg border border-border bg-card p-3 min-w-0">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                         {result.mcpType === "agent-browser" ? "Tool · Client" : "MCP · Client"}
                     </p>
-                    <p className="mt-1 text-sm font-medium text-foreground">
+                    <p className="mt-1 text-sm font-medium text-foreground truncate" title={`${result.mcpType === "chrome-devtools" ? "Chrome DevTools" : result.mcpType === "agent-browser" ? "Agent Browser" : "Playwright"}${agent.sdkClient ? ` · ${agent.sdkClient === "codex" ? "Codex" : "Claude Code"}${agent.sdkVersion ? ` v${agent.sdkVersion}` : ""}` : ""}`}>
                         {result.mcpType === "chrome-devtools" ? "Chrome DevTools" : result.mcpType === "agent-browser" ? "Agent Browser" : "Playwright"}
                         {(result.metadata as { mcpVersion?: string })?.mcpVersion && (
                             <span className="ml-1 text-xs text-muted-foreground font-mono">v{(result.metadata as { mcpVersion: string }).mcpVersion}</span>
@@ -100,15 +100,15 @@ export function SdkAgentPanel({ agent }: SdkAgentPanelProps) {
                         )}
                     </p>
                 </div>
-                <div className="rounded-lg border border-border bg-card p-3">
+                <div className="rounded-lg border border-border bg-card p-3 min-w-0">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Duration</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">
+                    <p className="mt-1 text-sm font-medium text-foreground truncate">
                         {typeof result.duration === "number" ? `${result.duration.toFixed(1)}s` : "N/A"}
                     </p>
                 </div>
-                <div className="rounded-lg border border-border bg-card p-3">
+                <div className="rounded-lg border border-border bg-card p-3 min-w-0">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Tokens · Cost</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">
+                    <p className="mt-1 text-sm font-medium text-foreground truncate">
                         {usage.total_tokens ?? "N/A"}
                         {typeof usage.total_cost === "number" && (
                             <span className="text-muted-foreground font-normal"> · ${usage.total_cost.toFixed(4)}</span>
