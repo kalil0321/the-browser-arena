@@ -35,7 +35,7 @@ const BASE_DIR = process.env.SANDBOX_BASE_DIR || '/vercel/sandbox'
 
 // Use sandbox-local paths for MCP binaries
 const PLAYWRIGHT_MCP_BIN = `${BASE_DIR}/node_modules/@playwright/mcp/cli.js`
-const CHROME_DEVTOOLS_MCP_BIN = `${BASE_DIR}/node_modules/chrome-devtools-mcp/build/src/index.js`
+const CHROME_DEVTOOLS_MCP_BIN = `${BASE_DIR}/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js`
 const AGENT_BROWSER_BIN = `${BASE_DIR}/node_modules/.bin/agent-browser`
 
 export interface RunnerParams {
@@ -146,7 +146,7 @@ function createStdioMcpConfig(mcpType: 'playwright' | 'chrome-devtools', cdpUrl:
     'chrome-devtools': {
       type: 'stdio',
       command: process.execPath,
-      args: [CHROME_DEVTOOLS_MCP_BIN, connectionFlag, cdpUrl],
+      args: [CHROME_DEVTOOLS_MCP_BIN, connectionFlag, cdpUrl, '--no-usage-statistics'],
       env: commonEnv,
     },
   }
