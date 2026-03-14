@@ -177,19 +177,45 @@ function createCodexMcpConfig(mcpType: 'playwright' | 'chrome-devtools', cdpUrl:
 
 // ── agent-browser connect helper ────────────────────────────────────────────
 
-function connectAgentBrowser(cdpUrl: string, logs: string[]) {
+// Normalize CDP URL so the path is explicit (some WS servers reject bare `wss://host?query`)
+function normalizeCdpUrl(cdpUrl: string): string {
   try {
-    const output = execFileSync(
-      AGENT_BROWSER_BIN,
-      ['connect', cdpUrl],
-      { cwd: BASE_DIR, timeout: 30_000, encoding: 'utf-8', env: { ...process.env, CI: '1' } },
-    )
-    pushLog(logs, `connect: ${output.trim()}`)
-    console.log(`[agent-browser] Connected to remote browser`)
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`agent-browser connect failed: ${msg}`)
+    const url = new URL(cdpUrl)
+    if (!url.pathname || url.pathname === '') {
+      url.pathname = '/'
+      return url.toString()
+    }
+  } catch { /* leave as-is if unparseable */ }
+  return cdpUrl
+}
+
+function connectAgentBrowser(cdpUrl: string, logs: string[]) {
+  const normalizedUrl = normalizeCdpUrl(cdpUrl)
+  const MAX_ATTEMPTS = 3
+  let lastErr = ''
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      // Brief delay before retry (2s, 4s)
+      const { execSync } = require('child_process') as typeof import('child_process')
+      execSync(`sleep ${attempt * 2}`)
+    }
+    try {
+      const output = execFileSync(
+        AGENT_BROWSER_BIN,
+        ['connect', normalizedUrl],
+        { cwd: BASE_DIR, timeout: 30_000, encoding: 'utf-8', env: { ...process.env, CI: '1' } },
+      )
+      pushLog(logs, `connect (attempt ${attempt}): ${output.trim()}`)
+      console.log(`[agent-browser] Connected to remote browser (attempt ${attempt})`)
+      return
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err)
+      console.warn(`[agent-browser] Connect attempt ${attempt} failed: ${lastErr}`)
+    }
   }
+
+  throw new Error(`agent-browser connect failed after ${MAX_ATTEMPTS} attempts: ${lastErr}`)
 }
 
 // ── Claude runner ───────────────────────────────────────────────────────────
