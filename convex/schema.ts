@@ -92,6 +92,19 @@ export default defineSchema({
         .index("by_user", ["userId"])
         .index("by_status", ["status"]),
 
+    // API keys table - stores hashed API keys for external API access
+    apiKeys: defineTable({
+        userId: v.string(),
+        keyHash: v.string(),
+        keyPrefix: v.string(),
+        label: v.string(),
+        lastUsedAt: v.optional(v.number()),
+        revokedAt: v.optional(v.number()),
+        createdAt: v.number(),
+    })
+        .index("by_user", ["userId"])
+        .index("by_key_hash", ["keyHash"]),
+
     // Battle ratings table - tracks ELO ratings for agent+model combinations
     battleRatings: defineTable({
         agentType: v.string(),      // "browser-use", "stagehand", "smooth", "notte"

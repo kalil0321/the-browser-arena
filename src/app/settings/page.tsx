@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 // Removed Select imports as visibility setting is hidden for now
 import { useConvexAuth } from "convex/react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { getApiKey, setApiKey, removeApiKey, hasApiKey, maskApiKey } from "@/lib/api-keys";
-import { CheckCircle2, XCircle, Key, DollarSign, Zap, Smartphone, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, XCircle, Key, DollarSign, Zap, Smartphone, Eye, EyeOff, Copy, Code2, Trash2 } from "lucide-react";
 
 export default function SettingsPage() {
   // const router = useRouter();
@@ -67,6 +67,17 @@ export default function SettingsPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
+
+  // Developer API Keys
+  const [newKeyLabel, setNewKeyLabel] = useState("");
+  const [newKeyRaw, setNewKeyRaw] = useState<string | null>(null);
+  const [isCreatingKey, setIsCreatingKey] = useState(false);
+  const developerKeys = useQuery(
+    api.apiKeys.listApiKeys,
+    isAuthenticated ? {} : "skip"
+  );
+  const createApiKeyMutation = useMutation(api.apiKeys.createApiKey);
+  const revokeApiKeyMutation = useMutation(api.apiKeys.revokeApiKey);
 
   // App theme (Arena default vs Pro)
   const [appTheme, setAppTheme] = useState<"default" | "pro">("default");
@@ -1301,6 +1312,127 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Developer API Keys Section */}
+            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+              <div className="space-y-6">
+                <div className="flex items-center gap-2">
+                  <Code2 className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-xl font-semibold">Developer API Keys</h2>
+                </div>
+
+                <p className="text-sm text-muted-foreground">
+                  Generate API keys to access the Arena programmatically via the REST API.
+                  Keys are shown only once — copy them immediately.
+                </p>
+
+                {/* Create new key */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Key label (e.g. my-script)"
+                    value={newKeyLabel}
+                    onChange={(e) => setNewKeyLabel(e.target.value)}
+                    className="max-w-xs"
+                  />
+                  <Button
+                    disabled={isCreatingKey || !newKeyLabel.trim() || !isAuthenticated}
+                    onClick={async () => {
+                      setIsCreatingKey(true);
+                      try {
+                        const result = await createApiKeyMutation({ label: newKeyLabel.trim() });
+                        setNewKeyRaw(result.rawKey);
+                        setNewKeyLabel("");
+                        toast.success("API key created");
+                      } catch (e: any) {
+                        toast.error(e.message || "Failed to create key");
+                      } finally {
+                        setIsCreatingKey(false);
+                      }
+                    }}
+                  >
+                    {isCreatingKey ? "Creating..." : "Generate Key"}
+                  </Button>
+                </div>
+
+                {/* Show newly created key */}
+                {newKeyRaw && (
+                  <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 space-y-2">
+                    <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                      Copy your API key now — it won&apos;t be shown again.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-sm font-mono bg-white dark:bg-black rounded px-3 py-2 border select-all break-all">
+                        {newKeyRaw}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(newKeyRaw);
+                          toast.success("Copied to clipboard");
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setNewKeyRaw(null)}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                )}
+
+                {/* Existing keys */}
+                {developerKeys && developerKeys.length > 0 ? (
+                  <div className="space-y-2">
+                    {developerKeys.map((k) => (
+                      <div
+                        key={k._id}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${k.revokedAt ? "opacity-50" : ""}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{k.label}</span>
+                            <code className="text-xs font-mono text-muted-foreground">{k.keyPrefix}...</code>
+                            {k.revokedAt && (
+                              <span className="text-xs text-red-600 dark:text-red-400">Revoked</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Created {new Date(k.createdAt).toLocaleDateString()}
+                            {k.lastUsedAt && ` · Last used ${new Date(k.lastUsedAt).toLocaleDateString()}`}
+                          </div>
+                        </div>
+                        {!k.revokedAt && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await revokeApiKeyMutation({ keyId: k._id });
+                                toast.success("Key revoked");
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to revoke key");
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed p-6 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      No API keys yet. Generate one to get started.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
 
           </div>
         </div>

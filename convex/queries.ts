@@ -32,6 +32,22 @@ export const getUserSessions = query({
 });
 
 /**
+ * Get sessions by userId (for API key auth where there's no cookie session)
+ */
+export const getUserSessionsByUserId = query({
+    args: { userId: v.string() },
+    handler: async (ctx, { userId }) => {
+        const sessions = await ctx.db
+            .query("sessions")
+            .withIndex("by_user", (q) => q.eq("userId", userId))
+            .order("desc")
+            .take(50);
+
+        return sessions;
+    },
+});
+
+/**
  * Get user sessions with pagination
  */
 export const getUserSessionsPaginated = query({

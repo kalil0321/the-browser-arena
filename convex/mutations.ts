@@ -445,11 +445,57 @@ export const cleanupOldSessions = mutation({
  * 
  * TODO: Implement service authentication for backend services to improve security
  */
+export const createSessionFromBackend = mutation({
+    args: {
+        userId: v.string(),
+        instruction: v.string(),
+        isPrivate: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+
+        const sessionId = await ctx.db.insert("sessions", {
+            userId: args.userId,
+            instruction: args.instruction,
+            isPrivate: args.isPrivate ?? false,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        // Increment session count in user stats
+        const existing = await ctx.db
+            .query("userUsageStats")
+            .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                totalSessions: existing.totalSessions + 1,
+                lastSessionAt: now,
+                updatedAt: now,
+            });
+        } else {
+            await ctx.db.insert("userUsageStats", {
+                userId: args.userId,
+                totalCost: 0,
+                totalSessions: 1,
+                totalAgents: 0,
+                lastSessionAt: now,
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+
+        return { sessionId };
+    },
+});
+
 export const createAgentFromBackend = mutation({
     args: {
         sessionId: v.id("sessions"),
         name: v.string(),
         model: v.optional(v.string()),
+        sdkClient: v.optional(v.union(v.literal("claude-code"), v.literal("codex"))),
         sdkVersion: v.optional(v.union(v.string(), v.null())),
         browser: v.object({
             sessionId: v.string(),
@@ -467,16 +513,11 @@ export const createAgentFromBackend = mutation({
         }
 
         // AUTHORIZATION CHECK: If user is authenticated, verify they own the session
-        // This prevents IDOR vulnerability where authenticated users could create agents
-        // in other users' sessions
         if (user) {
             if (session.userId !== user._id) {
                 throw new Error("Unauthorized: You can only create agents for your own sessions");
             }
         }
-        // If no user is authenticated, allow the call (backend service case)
-        // Backend services receive sessionId from authenticated Next.js routes that
-        // already validated the session belongs to the authenticated user
 
         const now = Date.now();
 
@@ -484,6 +525,7 @@ export const createAgentFromBackend = mutation({
             sessionId: args.sessionId,
             name: args.name,
             model: args.model,
+            sdkClient: args.sdkClient,
             sdkVersion: args.sdkVersion ?? undefined,
             status: "running",
             browser: args.browser,

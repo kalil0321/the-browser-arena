@@ -9,6 +9,7 @@
  */
 
 import type * as actions from "../actions.js";
+import type * as apiKeys from "../apiKeys.js";
 import type * as auth from "../auth.js";
 import type * as battles from "../battles.js";
 import type * as betterAuth__generated_api from "../betterAuth/_generated/api.js";
@@ -37,6 +38,7 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   actions: typeof actions;
+  apiKeys: typeof apiKeys;
   auth: typeof auth;
   battles: typeof battles;
   "betterAuth/_generated/api": typeof betterAuth__generated_api;
