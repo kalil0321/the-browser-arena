@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { authenticateRequest } from "@/lib/auth/api-auth";
 import { badRequest } from "@/lib/http-errors";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { validateInstruction, logValidationFailure } from "@/lib/instruction-validation";
 import { BrowserSession, createBrowserSession } from "@/lib/browser";
 
@@ -53,6 +54,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Invalid or missing authentication" } }, { status: 401 });
     }
 
+    const rl = checkRateLimit(auth.userId, "read");
+    if (rl) return rl;
+
     const sessions = await convexBackend.query(api.queries.getUserSessionsByUserId, {
         userId: auth.userId,
     });
@@ -66,6 +70,9 @@ export async function POST(request: NextRequest) {
     if (!auth) {
         return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Invalid or missing authentication" } }, { status: 401 });
     }
+
+    const rl = checkRateLimit(auth.userId, "write");
+    if (rl) return rl;
 
     const body = await request.json();
     const {
