@@ -23,7 +23,7 @@ export async function GET() {
         label: AGENT_LABELS[agent] ?? agent,
         models: MODEL_OPTIONS[agent] ?? [],
         mcpType: MCP_TYPES[agent] ?? null,
-        requiresApiKey: ["stagehand", "browser-use", "browser-use-cloud", "smooth"].includes(agent),
+        supportsByok: ["stagehand", "browser-use", "browser-use-cloud", "smooth", "notte"].includes(agent),
     }));
 
     return NextResponse.json({ data: agents });

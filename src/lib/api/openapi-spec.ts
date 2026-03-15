@@ -1,3 +1,5 @@
+const isDev = process.env.NODE_ENV !== "production";
+
 export const openapiSpec = {
     openapi: "3.1.0",
     info: {
@@ -5,10 +7,14 @@ export const openapiSpec = {
         version: "1.0.0",
         description: "Programmatic access to The Browser Arena — launch browser agents, compare frameworks, and retrieve results.",
     },
-    servers: [
-        { url: "https://www.thebrowserarena.com", description: "Production" },
-        { url: "http://localhost:3000", description: "Local development" },
-    ],
+    servers: isDev
+        ? [
+            { url: "http://localhost:3000", description: "Local development" },
+            { url: "https://www.thebrowserarena.com", description: "Production" },
+        ]
+        : [
+            { url: "https://www.thebrowserarena.com", description: "Production" },
+        ],
     security: [{ BearerAuth: [] }],
     components: {
         securitySchemes: {
@@ -25,14 +31,28 @@ export const openapiSpec = {
                 properties: {
                     agent: {
                         type: "string",
-                        enum: ["playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp", "stagehand", "browser-use", "browser-use-cloud", "notte"],
+                        enum: ["playwright-mcp", "chrome-devtools-mcp", "agent-browser-mcp", "stagehand", "browser-use", "browser-use-cloud", "notte", "smooth", "claude-code", "codex"],
                         description: "Agent framework to use",
                     },
                     model: {
                         type: "string",
-                        enum: ["claude-code", "codex"],
-                        description: "SDK client for MCP agents. Defaults to claude-code.",
+                        description: "For MCP agents: 'claude-code' or 'codex'. For stagehand/browser-use: provider/model string (e.g. 'google/gemini-2.5-flash').",
                     },
+                    thinkingModel: { type: "string", description: "For stagehand: model used for thinking/planning" },
+                    executionModel: { type: "string", description: "For stagehand: model used for execution" },
+                    secrets: { type: "object", additionalProperties: { type: "string" }, description: "For browser-use: key-value secrets" },
+                },
+            },
+            ApiKeys: {
+                type: "object",
+                description: "LLM API keys for agents that require BYOK (stagehand, browser-use, smooth, etc.)",
+                properties: {
+                    openai: { type: "string" },
+                    google: { type: "string" },
+                    anthropic: { type: "string" },
+                    openrouter: { type: "string" },
+                    browserUse: { type: "string" },
+                    smooth: { type: "string" },
                 },
             },
             Session: {
@@ -103,7 +123,7 @@ export const openapiSpec = {
                                                     label: { type: "string" },
                                                     models: { type: "array", items: { type: "string" } },
                                                     mcpType: { type: "string", nullable: true },
-                                                    requiresApiKey: { type: "boolean" },
+                                                    supportsByok: { type: "boolean", description: "Whether this agent supports Bring Your Own Key (optional LLM API keys)" },
                                                 },
                                             },
                                         },
@@ -148,7 +168,7 @@ export const openapiSpec = {
             },
             post: {
                 summary: "Create a session",
-                description: "Creates a new session with the given instruction and launches the specified agents. Currently supports MCP agents (playwright-mcp, chrome-devtools-mcp, agent-browser-mcp) which use server-side credentials.",
+                description: "Creates a new session with the given instruction and launches the specified agents. MCP agents (playwright-mcp, chrome-devtools-mcp, agent-browser-mcp) use server-side credentials. Other agents (stagehand, browser-use, notte, smooth) require LLM API keys via the apiKeys field.",
                 tags: ["Sessions"],
                 requestBody: {
                     required: true,
@@ -166,14 +186,32 @@ export const openapiSpec = {
                                         description: "Agents to launch (max 4)",
                                     },
                                     isPrivate: { type: "boolean", default: false, description: "Whether the session is private" },
+                                    apiKeys: { $ref: "#/components/schemas/ApiKeys" },
                                 },
                             },
-                            example: {
-                                instruction: "Find the top trending repository on GitHub",
-                                agents: [
-                                    { agent: "playwright-mcp", model: "claude-code" },
-                                    { agent: "chrome-devtools-mcp", model: "codex" },
-                                ],
+                            examples: {
+                                mcp_agents: {
+                                    summary: "MCP agents (no API keys needed)",
+                                    value: {
+                                        instruction: "Find the top trending repository on GitHub",
+                                        agents: [
+                                            { agent: "playwright-mcp", model: "claude-code" },
+                                            { agent: "chrome-devtools-mcp", model: "codex" },
+                                        ],
+                                    },
+                                },
+                                mixed_agents: {
+                                    summary: "Mixed agents with API keys",
+                                    value: {
+                                        instruction: "Find the top trending repository on GitHub",
+                                        agents: [
+                                            { agent: "playwright-mcp", model: "claude-code" },
+                                            { agent: "stagehand", model: "google/gemini-2.5-flash" },
+                                            { agent: "browser-use", model: "anthropic/claude-sonnet-4-6" },
+                                        ],
+                                        apiKeys: { google: "AIza...", anthropic: "sk-ant-..." },
+                                    },
+                                },
                             },
                         },
                     },
