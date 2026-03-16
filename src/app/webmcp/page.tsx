@@ -121,10 +121,10 @@ export default function WebMcpPage() {
         if (!W) return;
 
         const mcp = new W({
-            color: "transparent",
+            color: "#10b981",
             position: "bottom-right",
-            size: "0px",
-            padding: "0px",
+            size: "44px",
+            padding: "24px",
         });
 
         for (const tool of TOOLS) {
@@ -138,16 +138,150 @@ export default function WebMcpPage() {
 
         setToolsRegistered(true);
 
-        // Hide the default widget — we have our own connect UI
-        const hideWidget = () => {
+        // Restyle the widget to match the app's design
+        const styleWidget = () => {
             const el = document.querySelector("[data-webmcp-widget]") as HTMLElement;
-            if (el) {
-                el.style.display = "none";
+            if (!el) return;
+
+            // Style the trigger button
+            const trigger = el.querySelector(".webmcp-trigger") as HTMLElement;
+            if (trigger) {
+                Object.assign(trigger.style, {
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "12px",
+                    backgroundColor: "#10b981",
+                    boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+                    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                });
+                // Replace content with a plug icon using DOM methods
+                trigger.textContent = "";
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                svg.setAttribute("width", "20");
+                svg.setAttribute("height", "20");
+                svg.setAttribute("viewBox", "0 0 24 24");
+                svg.setAttribute("fill", "none");
+                svg.setAttribute("stroke", "white");
+                svg.setAttribute("stroke-width", "2");
+                svg.setAttribute("stroke-linecap", "round");
+                svg.setAttribute("stroke-linejoin", "round");
+                const path1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path1.setAttribute("d", "M12 22v-5");
+                const path2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path2.setAttribute("d", "M9 8V2");
+                const path3 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path3.setAttribute("d", "M15 8V2");
+                const path4 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path4.setAttribute("d", "M18 8H6a2 2 0 0 0-2 2v2c0 3.3 2.7 6 6 6h4c3.3 0 6-2.7 6-6v-2a2 2 0 0 0-2-2Z");
+                svg.appendChild(path1);
+                svg.appendChild(path2);
+                svg.appendChild(path3);
+                svg.appendChild(path4);
+                trigger.appendChild(svg);
+
+                trigger.onmouseenter = () => {
+                    trigger.style.transform = "scale(1.08)";
+                    trigger.style.boxShadow = "0 6px 16px rgba(16, 185, 129, 0.4)";
+                };
+                trigger.onmouseleave = () => {
+                    trigger.style.transform = "scale(1)";
+                    trigger.style.boxShadow = "0 4px 12px rgba(16, 185, 129, 0.3)";
+                };
+            }
+
+            // Style the content panel
+            const content = el.querySelector(".webmcp-content") as HTMLElement;
+            if (content) {
+                Object.assign(content.style, {
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "12px",
+                    padding: "16px",
+                    boxShadow: "0 8px 30px rgba(0, 0, 0, 0.3)",
+                    width: "300px",
+                    color: "hsl(var(--foreground))",
+                    fontFamily: "var(--font-sans, system-ui, sans-serif)",
+                });
+            }
+
+            // Style status bar
+            const status = el.querySelector(".webmcp-status") as HTMLElement;
+            if (status) {
+                Object.assign(status.style, {
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    padding: "8px 12px",
+                    fontFamily: "var(--font-mono, monospace)",
+                });
+            }
+
+            // Style token input
+            const input = el.querySelector(".webmcp-token-input") as HTMLElement;
+            if (input) {
+                Object.assign(input.style, {
+                    backgroundColor: "hsl(var(--muted))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px 0 0 8px",
+                    color: "hsl(var(--foreground))",
+                    padding: "8px 12px",
+                    fontSize: "12px",
+                    fontFamily: "var(--font-mono, monospace)",
+                });
+            }
+
+            // Style connect button
+            const connectBtn = el.querySelector(".webmcp-connect-btn") as HTMLElement;
+            if (connectBtn) {
+                Object.assign(connectBtn.style, {
+                    backgroundColor: "#10b981",
+                    borderRadius: "0 8px 8px 0",
+                    padding: "8px 16px",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    transition: "opacity 0.15s ease",
+                });
+                connectBtn.onmouseenter = () => { connectBtn.style.opacity = "0.85"; };
+                connectBtn.onmouseleave = () => { connectBtn.style.opacity = "1"; };
+            }
+
+            // Style disconnect button
+            const disconnectBtn = el.querySelector(".webmcp-disconnect-btn") as HTMLElement;
+            if (disconnectBtn) {
+                Object.assign(disconnectBtn.style, {
+                    backgroundColor: "hsl(var(--destructive))",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                });
+            }
+
+            // Style registered items panel
+            const items = el.querySelector(".webmcp-registered-items") as HTMLElement;
+            if (items) {
+                Object.assign(items.style, {
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    backgroundColor: "hsl(var(--muted) / 0.3)",
+                    fontSize: "12px",
+                });
+            }
+
+            // Style close button
+            const closeBtn = el.querySelector(".webmcp-close") as HTMLElement;
+            if (closeBtn) {
+                Object.assign(closeBtn.style, {
+                    color: "hsl(var(--muted-foreground))",
+                    fontSize: "18px",
+                });
             }
         };
-        hideWidget();
-        // Re-check in case it renders after
-        const observer = new MutationObserver(hideWidget);
+
+        styleWidget();
+        const observer = new MutationObserver(styleWidget);
         observer.observe(document.body, { childList: true, subtree: true });
 
         return () => {
@@ -156,16 +290,6 @@ export default function WebMcpPage() {
             if (el) el.remove();
         };
     }, [widgetReady, isAuthenticated]);
-
-    // Custom connect handler that programmatically triggers the widget connect
-    const handleConnect = () => {
-        const el = document.querySelector("[data-webmcp-widget]") as HTMLElement;
-        if (el) {
-            el.style.display = "flex";
-            const trigger = el.querySelector(".webmcp-trigger") as HTMLElement;
-            if (trigger) trigger.click();
-        }
-    };
 
     if (isLoading) {
         return (
@@ -230,15 +354,10 @@ export default function WebMcpPage() {
                                     <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${toolsRegistered ? "bg-green-500" : "bg-yellow-500 animate-pulse"}`} />
                                     <span className="text-sm">
                                         {toolsRegistered
-                                            ? `${TOOLS.length} tools registered`
+                                            ? `${TOOLS.length} tools registered — click the green button in the bottom-right to connect`
                                             : "Loading WebMCP widget..."}
                                     </span>
                                 </div>
-                                {toolsRegistered && (
-                                    <Button variant="outline" size="sm" onClick={handleConnect}>
-                                        Open connection widget
-                                    </Button>
-                                )}
                             </div>
                         </div>
 
