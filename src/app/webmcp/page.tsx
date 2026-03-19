@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useConvexAuth } from "convex/react";
 import Script from "next/script";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -110,12 +109,11 @@ async function handleToolCall(name: string, args: any): Promise<any> {
 }
 
 export default function WebMcpPage() {
-    const { isAuthenticated, isLoading } = useConvexAuth();
     const [widgetReady, setWidgetReady] = useState(false);
     const [toolsRegistered, setToolsRegistered] = useState(false);
 
     useEffect(() => {
-        if (!widgetReady || !isAuthenticated) return;
+        if (!widgetReady) return;
 
         const W = (window as any).WebMCP;
         if (!W) return;
@@ -138,10 +136,20 @@ export default function WebMcpPage() {
 
         setToolsRegistered(true);
 
-        // Restyle the widget to match the app's design
-        const styleWidget = () => {
+        // Restyle the widget to match the app's design. Returns true if widget was found.
+        const styleWidget = (): boolean => {
             const el = document.querySelector("[data-webmcp-widget]") as HTMLElement;
-            if (!el) return;
+            if (!el) return false;
+
+            // Read computed CSS variable values for use in inline styles
+            const root = document.documentElement;
+            const cs = getComputedStyle(root);
+            const cardBg = cs.getPropertyValue("--color-card").trim() || "#1c1c1c";
+            const borderColor = cs.getPropertyValue("--color-border").trim() || "#333";
+            const fgColor = cs.getPropertyValue("--color-foreground").trim() || "#fff";
+            const mutedBg = cs.getPropertyValue("--color-muted").trim() || "#2a2a2a";
+            const mutedFg = cs.getPropertyValue("--color-muted-foreground").trim() || "#999";
+            const destructiveBg = cs.getPropertyValue("--color-destructive").trim() || "#dc2626";
 
             // Style the trigger button
             const trigger = el.querySelector(".webmcp-trigger") as HTMLElement;
@@ -196,13 +204,13 @@ export default function WebMcpPage() {
             const content = el.querySelector(".webmcp-content") as HTMLElement;
             if (content) {
                 Object.assign(content.style, {
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
+                    backgroundColor: cardBg,
+                    border: `1px solid ${borderColor}`,
                     borderRadius: "12px",
                     padding: "16px",
                     boxShadow: "0 8px 30px rgba(0, 0, 0, 0.3)",
                     width: "300px",
-                    color: "hsl(var(--foreground))",
+                    color: fgColor,
                     fontFamily: "var(--font-sans, system-ui, sans-serif)",
                 });
             }
@@ -222,10 +230,10 @@ export default function WebMcpPage() {
             const input = el.querySelector(".webmcp-token-input") as HTMLElement;
             if (input) {
                 Object.assign(input.style, {
-                    backgroundColor: "hsl(var(--muted))",
-                    border: "1px solid hsl(var(--border))",
+                    backgroundColor: mutedBg,
+                    border: `1px solid ${borderColor}`,
                     borderRadius: "8px 0 0 8px",
-                    color: "hsl(var(--foreground))",
+                    color: fgColor,
                     padding: "8px 12px",
                     fontSize: "12px",
                     fontFamily: "var(--font-mono, monospace)",
@@ -252,7 +260,7 @@ export default function WebMcpPage() {
             const disconnectBtn = el.querySelector(".webmcp-disconnect-btn") as HTMLElement;
             if (disconnectBtn) {
                 Object.assign(disconnectBtn.style, {
-                    backgroundColor: "hsl(var(--destructive))",
+                    backgroundColor: destructiveBg,
                     borderRadius: "8px",
                     fontSize: "12px",
                     fontWeight: "500",
@@ -263,9 +271,9 @@ export default function WebMcpPage() {
             const items = el.querySelector(".webmcp-registered-items") as HTMLElement;
             if (items) {
                 Object.assign(items.style, {
-                    border: "1px solid hsl(var(--border))",
+                    border: `1px solid ${borderColor}`,
                     borderRadius: "8px",
-                    backgroundColor: "hsl(var(--muted) / 0.3)",
+                    backgroundColor: mutedBg,
                     fontSize: "12px",
                 });
             }
@@ -274,47 +282,32 @@ export default function WebMcpPage() {
             const closeBtn = el.querySelector(".webmcp-close") as HTMLElement;
             if (closeBtn) {
                 Object.assign(closeBtn.style, {
-                    color: "hsl(var(--muted-foreground))",
+                    color: mutedFg,
                     fontSize: "18px",
                 });
             }
+
+            return true;
         };
 
-        styleWidget();
-        const observer = new MutationObserver(styleWidget);
-        observer.observe(document.body, { childList: true, subtree: true });
+        // Style once, then watch for the widget to appear if it hasn't yet
+        if (!styleWidget()) {
+            const observer = new MutationObserver(() => {
+                if (styleWidget()) observer.disconnect();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            return () => {
+                observer.disconnect();
+                const el = document.querySelector("[data-webmcp-widget]") as HTMLElement;
+                if (el) el.remove();
+            };
+        }
 
         return () => {
-            observer.disconnect();
             const el = document.querySelector("[data-webmcp-widget]") as HTMLElement;
             if (el) el.remove();
         };
-    }, [widgetReady, isAuthenticated]);
-
-    if (isLoading) {
-        return (
-            <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-foreground" />
-                </div>
-            </SidebarInset>
-        );
-    }
-
-    if (!isAuthenticated) {
-        return (
-            <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center space-y-4 max-w-md px-6">
-                        <h1 className="text-2xl font-bold">WebMCP</h1>
-                        <p className="text-muted-foreground">
-                            Sign in to connect external AI agents to The Browser Arena.
-                        </p>
-                    </div>
-                </div>
-            </SidebarInset>
-        );
-    }
+    }, [widgetReady]);
 
     return (
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
