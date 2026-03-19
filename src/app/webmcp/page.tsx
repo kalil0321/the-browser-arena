@@ -40,7 +40,7 @@ const TOOLS = [
     },
     {
         name: "get_session",
-        description: "Get session details including all agents and their current status/results.",
+        description: "Get session details including all agents and their current status/results. Poll this every ~5s until all agents have status 'completed' or 'failed'.",
         inputSchema: {
             type: "object",
             properties: { sessionId: { type: "string" } },
@@ -54,18 +54,6 @@ const TOOLS = [
             type: "object",
             properties: { agentId: { type: "string" } },
             required: ["agentId"],
-        },
-    },
-    {
-        name: "wait_for_completion",
-        description: "Wait for all agents to complete. Polls every 2s, max 120s.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                sessionId: { type: "string" },
-                timeout: { type: "number", description: "Max wait in seconds (default: 120)" },
-            },
-            required: ["sessionId"],
         },
     },
     {
@@ -94,11 +82,6 @@ async function handleToolCall(name: string, args: any): Promise<any> {
         case "get_agent_result":
             res = await fetch(`/api/v1/agents/${args.agentId}`);
             break;
-        case "wait_for_completion": {
-            const qs = args.timeout ? `?timeout=${args.timeout}` : "";
-            res = await fetch(`/api/v1/sessions/${args.sessionId}/wait${qs}`);
-            break;
-        }
         case "list_sessions":
             res = await fetch("/api/v1/sessions");
             break;
@@ -375,14 +358,14 @@ export default function WebMcpPage() {
                                             <p className="text-sm">Install the WebMCP bridge in your MCP client</p>
                                             <div className="flex items-center gap-2">
                                                 <code className="px-3 py-1.5 bg-muted rounded text-xs font-mono">
-                                                    npx -y @jason.today/webmcp@latest --config claude
+                                                    claude mcp add --scope user webmcp -- npx -y @jason.today/webmcp@latest --mcp
                                                 </code>
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
                                                     className="h-7 w-7 p-0"
                                                     onClick={() => {
-                                                        navigator.clipboard.writeText("npx -y @jason.today/webmcp@latest --config claude");
+                                                        navigator.clipboard.writeText("claude mcp add --scope user webmcp -- npx -y @jason.today/webmcp@latest --mcp");
                                                         toast.success("Copied");
                                                     }}
                                                 >

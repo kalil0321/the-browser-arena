@@ -270,24 +270,5 @@ export const openapiSpec = {
                 },
             },
         },
-        "/api/v1/sessions/{sessionId}/wait": {
-            get: {
-                summary: "Wait for session completion",
-                description: "Long-polls until all agents in the session have completed or failed. Returns immediately if already done. Max wait: 120 seconds.",
-                tags: ["Sessions"],
-                parameters: [
-                    { name: "sessionId", in: "path", required: true, schema: { type: "string" } },
-                    { name: "timeout", in: "query", required: false, schema: { type: "integer", default: 120 }, description: "Max wait time in seconds (max 120)" },
-                ],
-                responses: {
-                    "200": {
-                        description: "Session with agents (completed field indicates if all done)",
-                        content: { "application/json": { schema: { type: "object", properties: { data: { type: "object" } } } } },
-                    },
-                    "401": { description: "Unauthorized" },
-                    "404": { description: "Not found" },
-                },
-            },
-        },
     },
 };
