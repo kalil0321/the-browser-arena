@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConvexAuth } from "convex/react";
 import Script from "next/script";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -92,11 +93,12 @@ async function handleToolCall(name: string, args: any): Promise<any> {
 }
 
 export default function WebMcpPage() {
+    const { isAuthenticated, isLoading } = useConvexAuth();
     const [widgetReady, setWidgetReady] = useState(false);
     const [toolsRegistered, setToolsRegistered] = useState(false);
 
     useEffect(() => {
-        if (!widgetReady) return;
+        if (!widgetReady || !isAuthenticated) return;
 
         const W = (window as any).WebMCP;
         if (!W) return;
@@ -290,7 +292,32 @@ export default function WebMcpPage() {
             const el = document.querySelector("[data-webmcp-widget]") as HTMLElement;
             if (el) el.remove();
         };
-    }, [widgetReady]);
+    }, [widgetReady, isAuthenticated]);
+
+    if (isLoading) {
+        return (
+            <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-foreground" />
+                </div>
+            </SidebarInset>
+        );
+    }
+
+    if (!isAuthenticated) {
+        return (
+            <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center space-y-4 max-w-md px-6">
+                        <h1 className="text-2xl font-bold">WebMCP</h1>
+                        <p className="text-muted-foreground">
+                            Sign in to connect external AI agents to The Browser Arena.
+                        </p>
+                    </div>
+                </div>
+            </SidebarInset>
+        );
+    }
 
     return (
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-background text-foreground">
