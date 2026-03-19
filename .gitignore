@@ -72,3 +72,4 @@ build/
 *.egg
 
 PRIVATE.md
+.playwright-mcp
