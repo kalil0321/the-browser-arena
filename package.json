@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@browserbasehq/sdk": "^2.6.0",
-    "@browserbasehq/stagehand": "^3.1.0",
+    "@browserbasehq/stagehand": "^3.2.0",
     "@convex-dev/better-auth": "^0.9.6",
     "@fingerprintjs/fingerprintjs": "^4.6.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
