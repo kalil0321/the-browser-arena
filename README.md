@@ -141,6 +141,31 @@ Contributions are welcome! Here's how you can help:
 2. 💡 **Suggest features** - Share your ideas for improvements
 3. 🔀 **Submit PRs** - Fix bugs or add new features
 
+## 🙏 Acknowledgments
+
+We want to give credit to **BrowserArena** by Sagnik Anupam, Davis Brown, Shuo Li, Eric Wong, Hamed Hassani, and Osbert Bastani, who independently introduced a similar idea earlier in their paper *"BrowserArena: Evaluating LLM Agents on Real-World Web Navigation Tasks"* (October 2025).
+
+This project was developed independently and without knowledge of their work at the time. We learned of it after the fact and want to acknowledge their prior contribution to the same research direction.
+
+- 📄 Paper: [arXiv:2510.02418](https://arxiv.org/abs/2510.02418)
+- 💻 Repository: [sagnikanupam/browserarena](https://github.com/sagnikanupam/browserarena)
+
+If you use this project in academic work, please also consider citing their paper:
+
+```bibtex
+@misc{anupam2025browserarenaevaluatingllmagents,
+  title={BrowserArena: Evaluating LLM Agents on Real-World Web Navigation Tasks},
+  author={Sagnik Anupam and Davis Brown and Shuo Li and Eric Wong and Hamed Hassani and Osbert Bastani},
+  year={2025},
+  eprint={2510.02418},
+  archivePrefix={arXiv},
+  primaryClass={cs.AI},
+  url={https://arxiv.org/abs/2510.02418}
+}
+```
+
+---
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
