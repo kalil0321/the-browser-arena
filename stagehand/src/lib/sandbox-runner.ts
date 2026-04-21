@@ -52,7 +52,16 @@ export interface RunnerResult {
   success: boolean
   duration: number
   metadata: Record<string, unknown>
-  usage: { input_tokens: number; output_tokens: number; cached_tokens: number }
+  // Convention: `input_tokens` is the UNCACHED input only (Anthropic-style).
+  // For Codex we normalize by subtracting `cached_input_tokens` from the raw
+  // OpenAI-style `input_tokens` so both agents share one shape.
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cached_tokens: number
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
+  }
   sdkCostUsd?: number
 }
 
@@ -317,6 +326,8 @@ async function runClaude(params: RunnerParams): Promise<RunnerResult> {
       cached_tokens:
         (finalResult.usage?.cache_creation_input_tokens || 0) +
         (finalResult.usage?.cache_read_input_tokens || 0),
+      cache_creation_input_tokens: finalResult.usage?.cache_creation_input_tokens || 0,
+      cache_read_input_tokens: finalResult.usage?.cache_read_input_tokens || 0,
     },
     sdkCostUsd: finalResult.total_cost_usd || 0,
   }
@@ -431,8 +442,11 @@ async function runCodex(params: RunnerParams): Promise<RunnerResult> {
       failureMessage: failureMessage || undefined,
       toolVersion: getToolVersion(params.mcpType),
     },
+    // OpenAI/Codex convention: `input_tokens` already includes `cached_input_tokens`.
+    // Normalize to the Anthropic convention (uncached-only) so `computeCost`
+    // doesn't double-charge the cached portion.
     usage: {
-      input_tokens: u.input_tokens,
+      input_tokens: Math.max(0, u.input_tokens - u.cached_input_tokens),
       output_tokens: u.output_tokens,
       cached_tokens: u.cached_input_tokens,
     },

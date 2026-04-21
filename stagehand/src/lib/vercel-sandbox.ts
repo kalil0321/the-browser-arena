@@ -141,10 +141,21 @@ export async function runAgentInSandbox(params: SandboxAgentParams): Promise<San
         input_tokens: result.usage.input_tokens,
         output_tokens: result.usage.output_tokens,
         cached_tokens: result.usage.cached_tokens,
-        total_tokens: result.usage.input_tokens + result.usage.output_tokens,
+        // `input_tokens` is uncached-only (see sandbox-runner normalization),
+        // so the displayed total must add cached tokens back in.
+        total_tokens:
+          result.usage.input_tokens +
+          result.usage.output_tokens +
+          (result.usage.cached_tokens || 0),
         total_cost: totalCost,
         llm_cost: llmCost,
         browser_cost: browserCost,
+        ...(result.usage.cache_creation_input_tokens != null && {
+          cache_creation_input_tokens: result.usage.cache_creation_input_tokens,
+        }),
+        ...(result.usage.cache_read_input_tokens != null && {
+          cache_read_input_tokens: result.usage.cache_read_input_tokens,
+        }),
       },
       cost: totalCost,
       duration: result.duration,
